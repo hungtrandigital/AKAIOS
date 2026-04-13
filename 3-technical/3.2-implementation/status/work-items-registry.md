@@ -1,0 +1,182 @@
+# Work-Item Registry — Master Index
+
+**Purpose:** Centralized, real-time index of all work items across the organization (epics, slices, tasks, bugs, experiments, research). Use this to navigate, track progress, and understand cross-domain dependencies.
+
+**Last Updated:** 2025-12-13  
+**Scope:** Active + recently completed work items
+
+---
+
+## Active Epics (Product)
+
+| ID | Title | Status | Owner | Created | Slices | Bugs | Related Domains | Plan |
+|----|-------|--------|-------|---------|--------|------|----------------|------|
+| PRD-EPIC-001 | [Epic Name] | planned | @product-strategist | YYYY-MM-DD | 0 | 0 | - | `2-product-foundation/product-backlog/backlog.md#epic-1` |
+
+**Notes:**
+- Slices = count of active feature slices (PRD-SLICE-*) belonging to this epic
+- Bugs = count of discovered bugs (CODE-BUG-*) belonging to this epic
+- Related Domains = which other domains (Marketing, Finance, Ops) have tasks for this epic
+
+---
+
+## Active Feature Slices (Code)
+
+| ID | Title | Epic | Status | Owner | Created | Tasks | Bugs | Plan |
+|----|-------|------|--------|-------|---------|-------|------|------|
+| PRD-SLICE-001 | [Slice Name] | PRD-EPIC-001 | planned | @tech-lead | YYYY-MM-DD | 0 | 0 | `3-technical/3.2-implementation/plans/active/[slice-name].md` |
+
+---
+
+## Active Tasks (by Domain)
+
+### Code Tasks
+
+| ID | Title | Parent | Owner | Status | Created | Folder |
+|----|-------|--------|-------|--------|---------|--------|
+| CODE-TASK-001 | [Task] | PRD-SLICE-001 | @engineer | planned | YYYY-MM-DD | `systems/[system]/` |
+
+### Marketing Tasks
+
+| ID | Title | Parent Epic | Owner | Status | Created | Folder |
+|----|-------|-------------|-------|--------|---------|--------|
+| MKT-TASK-001 | [Task] | PRD-EPIC-001 | @marketing | planned | YYYY-MM-DD | `4-marketing/` |
+
+### Finance Tasks
+
+| ID | Title | Parent Epic | Owner | Status | Created | Folder |
+|----|-------|-------------|-------|--------|---------|--------|
+| FIN-TASK-001 | [Task] | PRD-EPIC-001 | @analyst | planned | YYYY-MM-DD | `5-financing/` |
+
+### Operations Tasks
+
+| ID | Title | Area | Owner | Status | Created |
+|----|-------|------|-------|--------|---------|
+| OPS-TASK-001 | [Task] | HR / Legal / Vendor | @ops | planned | YYYY-MM-DD |
+
+---
+
+## Active Bugs (Code)
+
+| ID | Title | Epic | Slice | Status | Owner | Created | Fixed | Plan |
+|----|-------|------|-------|--------|-------|---------|-------|------|
+| CODE-BUG-001 | [Bug] | PRD-EPIC-001 | PRD-SLICE-001 | open | @engineer | YYYY-MM-DD | - | See "Known Issues" in epic plan |
+
+---
+
+## Active Experiments & Research
+
+### Experiments (Marketing / Product)
+
+| ID | Title | Epic | Owner | Status | Start | End | Success Criteria |
+|----|-------|------|-------|--------|-------|-----|-----------------|
+| MKT-EXPT-001 | [Experiment] | PRD-EPIC-001 | @growth | active | YYYY-MM-DD | YYYY-MM-DD | [Metric Target] |
+
+### Research & Spikes (Technical)
+
+| ID | Title | Type | Owner | Status | Created | Feeds Into |
+|----|-------|------|-------|--------|---------|-----------|
+| RES-SPIKE-001 | [Research] | technical | @architect | planned | YYYY-MM-DD | PRD-EPIC-001 |
+
+---
+
+## Epic Dependency Map
+
+```
+PRD-EPIC-001: [Epic Name] (status)
+├─ Code Slices:
+│  ├─ PRD-SLICE-001: [Slice Name] (status)
+│  │  ├─ Tasks: CODE-TASK-001, CODE-TASK-002, ...
+│  │  └─ Bugs: CODE-BUG-001, CODE-BUG-002, ...
+│  ├─ PRD-SLICE-002: [Slice Name] (status)
+│  │  └─ Tasks: CODE-TASK-003, CODE-TASK-004, ...
+│  └─ PRD-SLICE-003: [Slice Name] (status)
+│     └─ Tasks: CODE-TASK-005, CODE-TASK-006, ...
+├─ Marketing: MKT-TASK-001 ([Task description])
+├─ Finance: FIN-TASK-001 ([Task description])
+└─ Product Research: [Research description]
+```
+
+---
+
+## Recently Completed Work (Last 3 Months)
+
+### Completed Slices
+
+| ID | Title | Epic | Completed | Status |
+|----|-------|------|-----------|--------|
+| PRD-SLICE-001 | [Slice Name] | PRD-EPIC-001 | YYYY-MM-DD | completed |
+
+### Completed Tasks
+
+| ID | Title | Domain | Completed |
+|----|-------|--------|-----------|
+| CODE-TASK-001 | [Task] | code | YYYY-MM-DD |
+| CODE-TASK-002 | [Task] | code | YYYY-MM-DD |
+
+### Completed Bugs
+
+| ID | Title | Epic | Fixed | Fixed By |
+|----|-------|------|-------|----------|
+| CODE-BUG-001 | [Bug] | PRD-EPIC-001 | YYYY-MM-DD | @[engineer] |
+
+---
+
+## How to Use This Registry
+
+### Finding Work Related to an Epic
+1. Look up epic ID (e.g., `PRD-EPIC-001`) in "Active Epics" table
+2. See all related slices, tasks, bugs, and related domains
+3. Click the Plan link to see full epic documentation
+
+### Finding Work Items by Domain
+- **Code:** "Active Feature Slices" and "Code Tasks"
+- **Marketing:** "Marketing Tasks" (sorted by parent epic)
+- **Finance:** "Finance Tasks" (sorted by parent epic)
+- **Operations:** "Operations Tasks"
+- **Research:** "Research & Spikes"
+
+### Tracking Cross-Domain Dependencies
+- See "Epic Dependency Map" to understand which marketing/finance/ops tasks belong to which product epic
+- Use this for milestone planning and resource allocation
+
+### Checking What Happened in a Time Period
+1. Look at "Recently Completed Work" section
+2. Or filter by `created` or `completed` date in any table
+
+---
+
+## Maintaining This Registry
+
+### Monthly (Automated or Manual)
+- [ ] Add new epics as they are created (from `2-product-foundation/product-backlog/backlog.md`)
+- [ ] Move completed items to "Recently Completed Work"
+- [ ] Archive items older than 3 months
+- [ ] Update "Epic Dependency Map" if new slices/tasks added
+
+### Weekly
+- [ ] Update Status column for in-progress items
+- [ ] Add any new bugs discovered
+
+### Per Phase Transition
+- [ ] When epic enters new phase (ideas → plan → execution), update status
+- [ ] When slice completes, move to Completed Slices + update epic's slice count
+
+### Manual Triggers
+- [ ] Product Manager: Update when product backlog changes
+- [ ] Tech Lead: Update when slice status changes
+- [ ] Agents: Add entry immediately when creating new work item
+
+---
+
+## Related Documents
+
+- **[Work-Item Traceability System](../../0-agents/_core/work-item-traceability.md)** - Glossary, ID schema, metadata requirements
+- **[Product Backlog](../../2-product-foundation/product-backlog/backlog.md)** - Canonical epic definitions
+- **[Implementation Plans](../3.2-implementation/plans/README.md)** - Slice & task plans
+- **[Changelog](../../8-governance/changelog.md)** - Historical record of all work (backup)
+- **[Progress Tracking](progress.md)** - Implementation progress & metrics
+
+---
+
+**When in doubt: Check this registry first. It's the single source of truth for "what is happening and where."**

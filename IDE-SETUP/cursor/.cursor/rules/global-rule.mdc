@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+- Read `INDEX.md` to understand structure before acting.
+- Follow `0-agents/_core/global-rules.md` and the mode doc (`0-agents/mode/[mode].md`).
+- Use the correct agent workflow from `0-agents/agents/*.md`.
+- Keep code in `systems/[system-name]/` (all projects).
+- Do not create files outside the defined structure.
+- Use orchestration handoff format when finishing.

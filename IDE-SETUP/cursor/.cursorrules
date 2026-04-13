@@ -1,0 +1,22 @@
+# Cursor Rules Template (copy to project root when using Cursor)
+
+## Usage
+- Copy this file to the project root as `.cursorrules` when using Cursor IDE.
+- This file guides Cursor AI on the factory structure and rules.
+
+## Rules
+1) Read `INDEX.md` first to understand structure.
+2) Follow `0-agents/_core/global-rules.md`.
+3) Select the correct mode (`0-agents/mode/[mode].md`): chat, ideas, plan, execution, review, or fix.
+4) Use the right agent workflow (`0-agents/agents/*.md`).
+5) Keep code under `systems/[system-name]/` (all projects).
+6) Do not create files outside the defined structure.
+7) Update `INDEX.md` and `8-governance/changelog.md` after structural changes.
+8) Use orchestration handoff format when finishing.
+
+## Success Criteria
+- ✅ Followed agent workflow and mode rules
+- ✅ Files in correct locations
+- ✅ Documentation updated
+- ✅ INDEX.md and changelog updated
+- ✅ Handoff provided
