@@ -1,53 +1,135 @@
 # Primary Workflow — AI-First Startup Factory
 
-This workflow is the default operating system for coordinated, multi-agent work in this repository.
+**Version:** v3.2
 
-**Always:** activate relevant skills from `0-agents/agents/skills/` when the task matches.
-**Always:** let a core factory agent own routing/governance, and pull in `0-agents/agents/agency-agents/` specialists when the task benefits from deeper domain execution.
+This workflow is the **default operating system** for all work in this repository. AI must follow this sequence—no skipping, no guessing.
 
-## 1) Pick the Right Mode (do this first)
+---
 
-- `chat` → Q&A, scope alignment, no repo modifications
-- `ideas` → research/brainstorming in `1-ideas/`
-- `plan` → roadmaps/specs/backlogs in `2-product-foundation/` + `3-technical/`
-- `code` → implementation in `systems/[system-name]/`
-- `review` → QA-only (no new features)
-- `fix` → bug fixes and problem resolution
-- `deliver` → orchestrate end-to-end until complete
+## Step 1: Pick the Right Mode (ALWAYS START HERE)
 
-## 2) Product & Business Inputs (when building anything new)
+**DO NOT assume the mode. Ask the user or wait for them to specify.**
 
-- @business-analyst → market + unit economics + realistic assumptions (with sources)
-- @product-strategist → requirements + acceptance criteria + success metrics
+| User Wants | → | Use Mode |
+|----------|---|---------|
+| Q&A, clarify scope | → | **[chat](mode/chat.md)** |
+| Research, validate ideas | → | **[ideas](mode/ideas.md)** |
+| Specs, roadmaps, architecture | → | **[plan](mode/plan.md)** |
+| Code, tests, infrastructure | → | **[code](mode/code.md)** |
+| Designs, marketing assets | → | **[execution](mode/execution.md)** |
+| Bug fixes, debugging | → | **[fix](mode/fix.md)** |
+| Reviews, QA | → | **[review](mode/review.md)** |
+| Full autonomous delivery | → | **[deliver](mode/deliver.md)** |
+| New project setup | → | **[boost](mode/boost.md)** |
+| Adapt existing project | → | **[refactor](mode/refactor.md)** |
 
-**Output must include:** measurable KPIs, leading indicators, and explicit assumptions (avoid single-point “perfect” projections).
+**Rule:** Wait for user to specify mode. If unclear, ask.
 
-## 3) Architecture (before code)
+---
 
-- @system-architecture → tech stack + domain specs + API contracts + NFRs + ADRs
+## Step 2: Product & Business Inputs (only if building something new)
 
-**Gate:** if any mandatory architecture doc is missing, stop and request it (do not guess).
+- **@business-analyst** → Market research, unit economics, realistic assumptions (with sources)
+- **@product-strategist** → Requirements, acceptance criteria, success metrics
 
-## 4) Plan the Work (before code changes)
+**Output must include:** measurable KPIs, leading indicators, explicit assumptions (no single-point projections)
 
-- Create/update an implementation plan in `3-technical/3.2-implementation/plans/` (check existing first).
-- Keep the plan task-oriented and test-first.
+---
 
-## 5) Implement & Verify
+## Step 3: Architecture (before code — REQUIRED)
 
-- @fullstack-engineer → implement in `systems/[system-name]/` following design standards and API contracts
-- Run the stack’s compile/lint/tests locally (no “green by cheating”)
-- Use `debugging` + `sequential-thinking` skills when diagnosing failures
+**@system-architecture** creates:
+- Tech stack selection
+- Domain specs
+- API contracts
+- NFRs (Non-Functional Requirements)
+- ADRs (Architecture Decision Records)
 
-## 6) Review & Governance
+**Gate:** If any mandatory architecture doc is missing → STOP and request it (do not guess)
 
-- @code-reviewer → approve/reject with explicit blockers
-- @docs-guardian → verify docs structure, links, and domain spec updates (implementation-level)
+---
+
+## Step 4: Plan the Work (before code changes)
+
+- Check existing plans in `3-technical/3.2-implementation/plans/`
+- Create/update implementation plan with metadata (status, type, priority, dates, epic, system)
+- Keep plan task-oriented and test-first
+
+---
+
+## Step 5: Implement & Verify
+
+- **@fullstack-engineer** → Implement in `systems/[system-name]/`
+- Run compile/lint/tests locally (no "green by cheating")
+- Use `debugging` + `sequential-thinking` skills when diagnosing
+
+---
+
+## Step 6: Review & Governance
+
+- **@code-reviewer** → Approve/reject with explicit blockers
+- **@docs-guardian** → Verify docs structure, links, domain specs
 
 **Always update after changes:**
 - `8-governance/changelog.md`
-- `3-technical/3.2-implementation/status/progress.md` (when code-related)
+- `3-technical/3.2-implementation/status/progress.md` (if code-related)
 
-## 7) Handoff
+---
 
-End every session with the handoff block defined in `0-agents/workflows/orchestration-protocol.md`.
+## Step 7: Handoff
+
+End every session with the **Orchestration Handoff Format** from the current mode file:
+
+```markdown
+### ORCHESTRATION HANDOFF
+
+**Task completed**: [Yes/No/Partial]  
+**Feature/Epic**: [Description]
+
+**Files created/modified**:
+- `[path1]`
+- `[path2]`
+
+**Next recommended agent**: @agent-name  
+**Next task**: "[Clear task]"  
+**Priority**: [High/Medium/Low]
+
+**Blockers/Issues**: [None / List]
+```
+
+---
+
+## Mode Files
+
+All mode files share the same structure:
+- [chat.md](mode/chat.md) - Conversation, scope finalization
+- [ideas.md](mode/ideas.md) - Research, validation
+- [plan.md](mode/plan.md) - Specifications, roadmaps
+- [execution.md](mode/execution.md) - Designs, creative deliverables
+- [code.md](mode/code.md) - Implementation, tests
+- [review.md](mode/review.md) - QA, reviews
+- [fix.md](mode/fix.md) - Bug fixes, debugging
+- [boost.md](mode/boost.md) - Project initialization
+- [deliver.md](mode/deliver.md) - Autonomous delivery
+- [refactor.md](mode/refactor.md) - Adapt existing projects
+
+---
+
+## Summary
+
+| Step | Action | Key Output |
+|------|--------|------------|
+| 1 | **Pick Mode** | Wait for user specification |
+| 2 | Business Inputs | KPIs, requirements |
+| 3 | Architecture | Domain specs, API contracts |
+| 4 | Plan | Implementation plan |
+| 5 | Implement | Code in `systems/[system-name]/` |
+| 6 | Review | Approval/rejection |
+| 7 | Handoff | Standard format |
+
+---
+
+**Remember:** 
+- Step 1 is ALWAYS first—wait for mode specification
+- No skipping steps
+- Use standardized handoff format from mode files

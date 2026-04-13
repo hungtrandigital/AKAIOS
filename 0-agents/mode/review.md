@@ -1,165 +1,112 @@
 # Review Mode — AI-First Startup Factory
 
-**Version:** v3.1  
-**Purpose:** Define the scope, activities, and workflow for Review Mode
+**Version:** v3.2
+**Purpose:** Quality assurance phase for code, designs, documentation, and process reviews
 
 ## Overview
 
-Review Mode is the quality assurance phase where agents evaluate, validate, and improve deliverables from other modes. This mode focuses on ensuring quality, correctness, compliance, and alignment with standards before deliverables are finalized or deployed.
+Review Mode is for evaluating, validating, and improving deliverables before they're finalized or deployed.
+
+**Rule:** DO NOT approve without thorough review.
 
 ## Agent Routing
 
-Review Mode is led by the factory review owners and can borrow specialist reviewers by domain.
-
-- **Core owners:** `@code-reviewer`, `@docs-guardian`, `@creative-director`.
-- **Specialist support:** use [../agents/agency-agents/](../agents/agency-agents/) divisions such as `engineering/`, `testing/`, `design/`, and `specialized/` for targeted QA, accessibility, security, compliance, or evidence gathering.
-- **Rule:** findings are centralized through the factory review outputs and governance docs, even when specialist reviewers are involved.
+- **Core owners:** `@code-reviewer`, `@docs-guardian`, `@creative-director`
+- **Specialist support:** Pull from `agency-agents/` divisions (`engineering/`, `testing/`, `design/`)
+- **Rule:** Findings centralized through factory review outputs
 
 ## When to Use Review Mode
 
-Use Review Mode when:
-- **Code Review** - Reviewing code changes before merge/deployment
-- **Design Review** - Reviewing designs for brand compliance and quality
-- **Documentation Audit** - Reviewing documentation for accuracy and completeness
-- **Quality Assurance** - Validating deliverables meet standards
-- **Retrospectives** - Conducting quarterly retrospectives and lessons learned
-- **Compliance Check** - Ensuring compliance with standards, regulations, policies
+Use when:
+- **Code Review** - Before merge/deployment
+- **Design Review** - Brand compliance and quality
+- **Documentation Review** - Accuracy and completeness
+- **Quality Assurance** - Standards validation
 
 ## Core Activities
 
 ### 1. Code Review
-- **Code Quality:** Review code for quality, readability, maintainability
-- **Standards Compliance:** Ensure code follows `development-rules.md` and `coding-standards.md`
-- **Security:** Check for security vulnerabilities
-- **Performance:** Review performance implications
-- **Test Coverage:** Verify test coverage 100% for new code
-- **Accessibility:** Check accessibility compliance (WCAG 2.1 AA for frontend)
+
+Check:
+- [ ] Code follows coding standards
+- [ ] No syntax or type errors
+- [ ] Tests pass, coverage ≥90%
+- [ ] No security vulnerabilities
+- [ ] Performance acceptable
+- [ ] Accessibility compliance (if frontend)
 
 ### 2. Design Review
-- **Brand Compliance:** Ensure designs align with brand guidelines
-- **Accessibility:** Verify designs meet accessibility standards
-- **Quality:** Review design quality and consistency
-- **Usability:** Evaluate user experience and usability
+
+Check:
+- [ ] Aligns with brand guidelines
+- [ ] WCAG 2.1 AA accessibility
+- [ ] Quality production-ready
+- [ ] Consistent with design system
 
 ### 3. Documentation Review
-- **Accuracy:** Verify documentation is accurate and up-to-date
-- **Completeness:** Ensure all required documentation exists
-- **Link Validation:** Check all links are valid
-- **Structure:** Verify documentation follows structure guidelines
 
-### 4. Process Review
-- **Retrospectives:** Conduct quarterly retrospectives in `8-governance/quarterly-retrospective/`
-- **Decision Validation:** Review ADRs and decisions
-- **Risk Assessment:** Review and update risk register
-- **Compliance:** Ensure compliance with policies and regulations
+Check:
+- [ ] Accurate and current
+- [ ] Complete (all required sections)
+- [ ] Links are valid
 
-### 5. Quality Assurance
-- **Standards Compliance:** Verify deliverables meet all standards
-- **Requirements Validation:** Ensure deliverables meet requirements
-- **Testing Validation:** Verify tests are comprehensive and passing
+### 4. Run Automated Checks
+
+- Linting
+- Type checking
+- Tests
+- Accessibility (for frontend)
 
 ## Allowed Actions
 
 ✅ **You CAN:**
-- Review code, designs, documentation, plans
+- Review code, designs, docs
 - Provide feedback and recommendations
-- Request changes or improvements
 - Approve or reject deliverables
-- Update quality standards and guidelines
-- Conduct retrospectives and lessons learned
-- Update risk register based on findings
-- Fix documentation issues (broken links, outdated content)
+- Request improvements
 
 ## Forbidden Actions
 
 ❌ **You CANNOT:**
-- Approve code with critical issues (security, architecture violations)
-- Skip automated checks (linting, type checking, tests)
-- Approve without review (must review all deliverables)
-- Ignore standards (must enforce all standards)
-- Make changes directly (provide feedback, let creator fix)
-- Approve "good enough" code (must meet all standards)
-- Skip security checks (security is non-negotiable)
-
-## Review Criteria
-
-### Code Review Must Check:
-- [ ] Code follows coding standards
-- [ ] No syntax or type errors
-- [ ] Tests pass and coverage ≥90%
-- [ ] No security vulnerabilities
-- [ ] Performance is acceptable
-- [ ] Accessibility compliance (if frontend)
-- [ ] Error handling is proper
-- [ ] Documentation is complete
-
-### Design Review Must Check:
-- [ ] Aligns with brand guidelines
-- [ ] Meets accessibility standards (WCAG 2.1 AA)
-- [ ] Quality is production-ready
-- [ ] Consistent with design system
-- [ ] Usable and intuitive
-
-### Documentation Review Must Check:
-- [ ] Accurate and current
-- [ ] Complete (all required sections)
-- [ ] Links are valid
-- [ ] Follows structure guidelines
-- [ ] Properly formatted
+- Approve with critical issues (security, violations)
+- Skip automated checks
+- Approve without review
+- Make changes directly (provide feedback)
 
 ## Output Locations
 
-Review Mode outputs go to:
-- **Code Review Comments:** In PR/comments or review document
-- **Review Reports:** `8-governance/reviews/`
-- **Assessments & Audits:** `8-governance/assessments/`, `8-governance/audits/`
-- **Retrospectives:** `8-governance/quarterly-retrospective/[quarter].md`
-- **Risk Updates:** `8-governance/risk-register.md`
-- **Changelog:** `8-governance/changelog.md` (for review actions)
+- **Reviews:** `8-governance/reviews/`
+- **Assessments:** `8-governance/assessments/`
+- **Changelog:** `8-governance/changelog.md`
 
 ## Mode Transition
 
-Review Mode typically transitions to:
-- **Code Mode** - When reviews require code fixes or improvements
-- **Execution Mode** - When reviews require design or content fixes
-- **Plan Mode** - When reviews reveal planning gaps
-- **Review Mode** (continue) - When re-reviewing after fixes
-
-## Review Workflow
-
-1. **Receive Deliverable** - Get code/design/documentation to review
-2. **Run Automated Checks** - Linting, type checking, tests, accessibility
-3. **Manual Review** - Review against standards and requirements
-4. **Document Findings** - Create review report with findings
-5. **Make Decision** - APPROVED / REJECTED / MINOR_CHANGES_REQUIRED
-6. **Provide Feedback** - Give specific, actionable feedback
-7. **Follow Up** - Ensure issues are addressed in re-review
+Review Mode transitions to:
+- **code** → When fixes needed
+- **execution** → When design fixes needed
+- **plan** → When planning gaps reveal
+- **deliver** → When approved
 
 ## Orchestration Handoff Format
 
-When in Review Mode, use this format:
-
 ```markdown
-**Current mode**: review  
+### ORCHESTRATION HANDOFF
+
 **Task completed**: [Yes/No]  
-**Review verdict**: [APPROVED/REJECTED/MINOR_CHANGES_REQUIRED]
+**Feature/Epic**: [Description]
 
 **Files reviewed**:
 - `[file-paths]`
 
-**Review summary**:
-- [X] Critical issues found
-- [X] Major issues found
-- [X] Minor issues found
-- [X] All tests passing
-- [X] Coverage: [X%]
+**Review verdict**: [APPROVED/REJECTED/MINOR_CHANGES_REQUIRED]
 
-**Next recommended agent**: 
-- If REJECTED: @fullstack-engineer OR @ui-ux-designer (to fix)
-- If APPROVED: @devops OR @docs-guardian (to proceed)
-- If MINOR_CHANGES: @fullstack-engineer OR @ui-ux-designer (to address)
+**Key findings**:
+- [X] Critical issues
+- [X] Major issues
+- [X] Minor issues
 
-**Next task**: "[Clear task description based on review outcome]"  
+**Next recommended agent**: @fullstack-engineer (if rejected) OR @devops (if approved)  
+**Next task**: "[Clear task]"  
 **Priority**: [Critical/High/Medium/Low]
 
 **Blockers/Issues**: [None / List any blockers]
@@ -167,25 +114,16 @@ When in Review Mode, use this format:
 
 ## Success Criteria
 
-Review Mode is successful when:
-- ✅ All deliverables meet quality standards
-- ✅ Critical issues are caught before production
-- ✅ Security vulnerabilities are identified and fixed
-- ✅ Code quality consistently improves
-- ✅ Standards are enforced consistently
-- ✅ Feedback is actionable and constructive
-- ✅ Review process is efficient and thorough
+- ✅ All standards enforced
+- ✅ Critical issues caught
+- ✅ Feedback actionable
+- ✅ No security vulnerabilities
 
 ## Related Documents
 
-- **[Code Reviewer Agent](../agents/code-reviewer.md)** - Primary agent for code review
-- **[Docs Guardian Agent](../agents/docs-guardian.md)** - Documentation review
-- **[Creative Director Agent](../agents/creative-director.md)** - Design review
-- **[Development Rules](../workflows/development-rules.md)** - Code quality standards
-- **[Primary Workflow](../workflows/primary-workflow.md)** - Overall workflow context
-- **[Global Rules](../_core/global-rules.md)** - Repository rules and constraints
+- **[Mode Overview](README.md)** - Overview of all modes
+- **[Code Reviewer Agent](../agents/code-reviewer.md)**
 
 ---
 
-**Remember:** Review Mode is about ensuring quality and compliance.  
-Be thorough. Be fair. Be constructive.
+**Remember:** Review Mode is the quality gate.

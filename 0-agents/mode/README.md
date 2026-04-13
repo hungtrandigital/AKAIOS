@@ -67,18 +67,31 @@ Specialists can deepen the work. They do **not** override:
 
 ## General Rules
 
-- Agents must always declare the current mode in orchestration handoff.
+- When in any mode, use the standardized Orchestration Handoff Format from that mode's file.
 - A mode controls both **scope** and **placement**.
 - Core agents own canonical repo updates.
 - Specialists from `agency-agents` are selected inside the mode, not instead of the mode.
 - Chat is the default mode when no structured work is requested.
 
-## Orchestration Handoff
+## Mode Declaration
 
-All agents must declare:
+When in any mode, the orchestration handoff should align with the standardized format in each mode file.
 
 ```markdown
-**Current mode**: [chat|ideas|plan|execution|code|review|fix|boost|deliver|refactor]
+### ORCHESTRATION HANDOFF
+
+**Task completed**: [Yes/No/Partial]  
+**Feature/Epic**: [Description]
+
+**Files created/modified**:
+- `[path1]`
+- `[path2]`
+
+**Next recommended agent**: @agent-name  
+**Next task**: "[Clear task]"  
+**Priority**: [High/Medium/Low]
+
+**Blockers/Issues**: [None / List]
 ```
 
 ## Related Documents
