@@ -18,7 +18,7 @@ Each core agent definition now includes a **Specialist Routing** section that po
 
 ### 2. Specialist Library
 
-[agents/agency-agents/README.md](agents/agency-agents/README.md) is the **vendored specialist library**. It is now plain repository content and no longer a nested Git repo. It contains 150+ domain playbooks grouped into divisions such as:
+[agents/agency-agents/README.md](agents/agency-agents/README.md) is the **vendored specialist library**. It is now plain repository content and no longer carries nested Git metadata or upstream GitHub automation files inside this repo. It contains 150+ domain playbooks grouped into divisions such as:
 - `academic/`
 - `design/`
 - `engineering/`

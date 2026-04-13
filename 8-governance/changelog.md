@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardized core-agent routing docs so the responsibility matrix and agent definitions now map common task types to recommended `agency-agents` specialists, keeping routing aligned across `INDEX.md`, modes, and agents.
 - Replaced the hardcoded tree label `factory/` with `[project-root]/` in the canonical structure docs so the template reads correctly when reused under any repository name and does not imply a literal folder named `factory`.
 - Standardized boost/workflow scaffolds and product/marketing docs around the same `[project-root]/` and current-folder conventions, including a real `2-product-foundation/requirements/README.md` skeleton and removal of stale `4-marketing/channels/` assumptions.
+- Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
 - Cleared remaining references to legacy numbered product foundation paths (plan/boost scaffolds) and added a redirect notice in the old backlog file to point to `product-backlog/backlog.md`.
