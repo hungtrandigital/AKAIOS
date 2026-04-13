@@ -258,6 +258,7 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 ## Quick Links
 
 ### Critical Files (Read First)
+- **[USAGE_GUIDE.md](USAGE_GUIDE.md)** - Quick start guide for using this factory
 - **[IDE-SETUP/cursor/.cursorrules](IDE-SETUP/cursor/.cursorrules)** - Cursor rules for this project
 - **[0-agents/_core/global-rules.md](0-agents/_core/global-rules.md)** - Non-negotiable repository rules
 - **[0-agents/_core/file-placement-guide.md](0-agents/_core/file-placement-guide.md)** - Where files belong
