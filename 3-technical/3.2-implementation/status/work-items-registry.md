@@ -2,7 +2,7 @@
 
 **Purpose:** Centralized, real-time index of all work items across the organization (epics, slices, tasks, bugs, experiments, research). Use this to navigate, track progress, and understand cross-domain dependencies.
 
-**Last Updated:** 2025-12-13  
+**Last Updated:** 2026-04-13
 **Scope:** Active + recently completed work items
 
 ---
@@ -11,7 +11,7 @@
 
 | ID | Title | Status | Owner | Created | Slices | Bugs | Related Domains | Plan |
 |----|-------|--------|-------|---------|--------|------|----------------|------|
-| PRD-EPIC-001 | [Epic Name] | planned | @product-strategist | YYYY-MM-DD | 0 | 0 | - | `2-product-foundation/product-backlog/backlog.md#epic-1` |
+| PRD-EPIC-001 | Factory Agent Leadership Orchestration | in-progress | @product-strategist | 2026-04-13 | 1 | 0 | code | `2-product-foundation/product-backlog/backlog.md#epic-1-factory-agent-leadership-orchestration` |
 
 **Notes:**
 - Slices = count of active feature slices (PRD-SLICE-*) belonging to this epic
@@ -24,7 +24,7 @@
 
 | ID | Title | Epic | Status | Owner | Created | Tasks | Bugs | Plan |
 |----|-------|------|--------|-------|---------|-------|------|------|
-| PRD-SLICE-001 | [Slice Name] | PRD-EPIC-001 | planned | @tech-lead | YYYY-MM-DD | 0 | 0 | `3-technical/3.2-implementation/plans/active/[slice-name].md` |
+| PRD-SLICE-001 | Standardize Core-Agent Leadership Orchestration | PRD-EPIC-001 | in-progress | @docs-guardian | 2026-04-13 | 2 | 0 | `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md` |
 
 ---
 
@@ -34,7 +34,8 @@
 
 | ID | Title | Parent | Owner | Status | Created | Folder |
 |----|-------|--------|-------|--------|---------|--------|
-| CODE-TASK-001 | [Task] | PRD-SLICE-001 | @engineer | planned | YYYY-MM-DD | `systems/[system]/` |
+| CODE-TASK-001 | Add leader-orchestration contract to all core agents | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/` |
+| CODE-TASK-002 | Align specialist-to-skill pairings with the real skill library | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/skills/` |
 
 ### Marketing Tasks
 
@@ -83,18 +84,14 @@
 ## Epic Dependency Map
 
 ```
-PRD-EPIC-001: [Epic Name] (status)
+PRD-EPIC-001: Factory Agent Leadership Orchestration (in-progress)
 ├─ Code Slices:
-│  ├─ PRD-SLICE-001: [Slice Name] (status)
-│  │  ├─ Tasks: CODE-TASK-001, CODE-TASK-002, ...
-│  │  └─ Bugs: CODE-BUG-001, CODE-BUG-002, ...
-│  ├─ PRD-SLICE-002: [Slice Name] (status)
-│  │  └─ Tasks: CODE-TASK-003, CODE-TASK-004, ...
-│  └─ PRD-SLICE-003: [Slice Name] (status)
-│     └─ Tasks: CODE-TASK-005, CODE-TASK-006, ...
-├─ Marketing: MKT-TASK-001 ([Task description])
-├─ Finance: FIN-TASK-001 ([Task description])
-└─ Product Research: [Research description]
+│  └─ PRD-SLICE-001: Standardize Core-Agent Leadership Orchestration (in-progress)
+│     ├─ Tasks: CODE-TASK-001, CODE-TASK-002
+│     └─ Bugs: none currently documented
+├─ Marketing: none
+├─ Finance: none
+└─ Product Research: user-requested factory optimization context
 ```
 
 ---

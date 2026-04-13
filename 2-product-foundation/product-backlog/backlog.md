@@ -17,45 +17,50 @@ This document contains the product backlog organized by epics and user stories. 
 
 ## Epics
 
-### Epic 1: [Epic Name]
+### Epic 1: Factory Agent Leadership Orchestration
 
 **Work-Item Metadata:**
 ```yaml
 id: PRD-EPIC-001
-title: "[Epic Name]"
+title: "Factory Agent Leadership Orchestration"
 type: epic
 domain: product
-status: planned | active | in-progress | completed
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
-priority: high | medium | low
-owner: @product-strategist or @product-manager
-phases: [ideas, plan, execution, code, review]
-related_domain_tasks: [MKT-TASK-031, FIN-TASK-012]
+status: in-progress
+created: 2026-04-13
+updated: 2026-04-13
+priority: high
+owner: @product-strategist
+phases: [ideas, plan, review]
+related_domain_tasks: [PRD-SLICE-001]
 ```
 
-**Status:** *Not Started / In Progress / Completed*  
-**Priority:** *High / Medium / Low*
+**Status:** *In Progress*
+**Priority:** *High*
 
 **Description:**
-*Brief description of the epic, vision, and success criteria*
+Standardize the factory's outer/core agents as the reusable leader layer for multi-project delivery. Each core agent must preserve the current process, folder discipline, and sequential steps while explicitly orchestrating one or more `agency-agents` specialists plus the matching local skills from `0-agents/agents/skills/`.
+
+**Success Metrics:**
+- All core agents in `0-agents/agents/*.md` describe leader ownership explicitly.
+- Every core agent maps narrow specialist pull-ins to real local skills that already exist in `0-agents/agents/skills/`.
+- No changes are made to the existing mode files or workflow files as part of this optimization.
+- The resulting agent stack is reusable across multiple projects without breaking current factory governance.
 
 **User Stories (Feature Slices):**
-- [ ] Story 1 (PRD-SLICE-001): *Description*
-  - [ ] Task 1 (CODE-TASK-001): Implement backend API
-  - [ ] Task 2 (CODE-TASK-002): Write tests
-- [ ] Story 2 (PRD-SLICE-002): *Description*
-- [ ] Story 3 (PRD-SLICE-003): *Description*
+- [ ] Story 1 (PRD-SLICE-001): Standardize leader orchestration rules across all core agents
+  - [ ] Task 1 (CODE-TASK-001): Add explicit leader-orchestration guidance without changing the existing workflow order
+  - [ ] Task 2 (CODE-TASK-002): Align specialist-to-skill pairings with the real skill library in `0-agents/agents/skills/`
+- [ ] Story 2 (PRD-SLICE-002): Keep the current mode and workflow layer unchanged while improving agent depth
+- [ ] Story 3 (PRD-SLICE-003): Improve handoff quality so the factory can be reused across many projects
 
 **Related Documents:**
-- [PRD Link](../requirements/)
-- [Technical Spec Link](../../3-technical/3.1-system-foundation/architecture/domain-specs.md)
-- [Implementation Plan](../../3-technical/3.2-implementation/plans/epics/[epic-slug]/plan.md)
+- [Active Slice Plan](../../3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md)
+- [Agent Stack Overview](../../0-agents/README.md)
+- [Technical Implementation Status](../../3-technical/3.2-implementation/status/work-items-registry.md)
 - [Cross-Domain Tasks](../../3-technical/3.2-implementation/status/work-items-registry.md)
 
 **Known Issues (Bugs Found During Execution):**
-- CODE-BUG-042: [Bug description] → Fixed YYYY-MM-DD by @engineer-name
-- CODE-BUG-043: [Bug description] → Open / In Progress
+- None currently documented.
 
 ---
 
@@ -94,4 +99,3 @@ related_domain_tasks: [MKT-TASK-031, FIN-TASK-012]
 ---
 
 *Update this backlog regularly as new features are identified and priorities change. When creating tasks in other domains (marketing, finance, ops), reference the epic ID from this backlog.*
-

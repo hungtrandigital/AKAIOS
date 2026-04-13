@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
+- Reframed the core agents in `0-agents/agents/` as the reusable leader layer for multi-project work: each core agent now preserves existing process ownership while explicitly pairing `agency-agents` specialists with matching local skills.
+- Registered the factory optimization initiative as `PRD-EPIC-001` / `PRD-SLICE-001` and added the active plan `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md` plus matching registry/index updates.
+- Updated `0-agents/README.md` and `INDEX.md` so the stack description now reflects leader orchestration rather than only specialist routing.
 - Updated all references to the semantic product foundation paths (`2-product-foundation/product-overview.md`, `2-product-foundation/product-backlog/backlog.md`) across core rules, traceability, workflows, status/registry docs, and ideas/governance docs after the directory rename.
 - Archived the deprecated `2-product-foundation/2.2-product-backlog/` directory to `archives/2025-12-15-deprecated-product-backlog/` to keep the active structure clean.
 - Added Backlog Scale Rules to `2-product-foundation/product-backlog/backlog.md` to cap active items, enforce metadata, and define grooming/archival cadence.
