@@ -111,7 +111,7 @@ Refactor Mode transitions to:
 ## Related Documents
 
 - **[Mode Overview](README.md)** - Overview of all modes
-- **[Refactor Agent](../agents/refactor-agent.md)**
+- **[Refactor Agent](../agents/core-agents/refactor-agent.md)**
 
 ---
 

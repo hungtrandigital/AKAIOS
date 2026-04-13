@@ -114,7 +114,7 @@ Chat Mode (Default)
 ## Related Files
 
 - Mode definitions: `0-agents/mode/*.md`
-- Agent definitions: `0-agents/agents/*.md`
+- Agent definitions: `0-agents/agents/core-agents/*.md`
 - Global rules: `0-agents/_core/global-rules.md`
 - Command details: `.cursor/commands/*.md`
 

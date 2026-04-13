@@ -133,7 +133,7 @@ Code Mode transitions to:
 ## Related Documents
 
 - **[Mode Overview](README.md)** - Overview of all modes
-- **[Fullstack Engineer Agent](../agents/fullstack-engineer.md)**
+- **[Fullstack Engineer Agent](../agents/core-agents/fullstack-engineer.md)**
 - **[Primary Workflow](../workflows/primary-workflow.md)**
 
 ---

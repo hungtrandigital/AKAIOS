@@ -118,8 +118,8 @@ Execution Mode transitions to:
 ## Related Documents
 
 - **[Mode Overview](README.md)** - Overview of all modes
-- **[UI/UX Designer Agent](../agents/ui-ux-designer.md)**
-- **[Creative Director Agent](../agents/creative-director.md)**
+- **[UI/UX Designer Agent](../agents/core-agents/ui-ux-designer.md)**
+- **[Creative Director Agent](../agents/core-agents/creative-director.md)**
 
 ---
 

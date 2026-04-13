@@ -136,8 +136,8 @@ Plan Mode transitions to:
 
 ## Related Documents
 
-- **[Product Strategist Agent](../agents/product-strategist.md)**
-- **[System Architecture Agent](../agents/system-architecture.md)**
+- **[Product Strategist Agent](../agents/core-agents/product-strategist.md)**
+- **[System Architecture Agent](../agents/core-agents/system-architecture.md)**
 - **[Primary Workflow](../workflows/primary-workflow.md)**
 
 ---

@@ -21,6 +21,7 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 │   │   ├── hpo.md
 │   │   └── work-item-traceability.md
 │   ├── agents/
+│   │   ├── core-agents/              # Core factory agents (13 agents)
 │   │   ├── agency-agents/            # Vendored specialist library (150+ playbooks)
 │   │   │   ├── README.md
 │   │   │   ├── academic/
@@ -266,8 +267,9 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 - **[0-agents/](0-agents/)** - Core factory agents, specialist library, skills, modes, and workflows
 - **[Mode Overview](0-agents/mode/README.md)** - Mode selection and routing rules
 - **[Modes](0-agents/mode/)** - All available modes (chat, ideas, plan, execution, code, review, fix, boost, deliver, refactor)
-- **[Agents](0-agents/agents/)** - Core factory agent definitions
+- **[Core Agents](0-agents/agents/core-agents/)** - Core factory agent definitions
 - **[Specialist Library](0-agents/agents/agency-agents/README.md)** - Imported domain specialist playbooks
+- **[Active Agent Leadership Plan](3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md)** - Current initiative to standardize core agents as reusable leader agents
 - **[Workflows](0-agents/workflows/)** - Agent coordination workflows
 - **[Agent Responsibility Matrix](0-agents/workflows/agent-responsibility-matrix.md)** - Core-agent ownership and specialist pull-in routing
 - **[Primary Workflow](0-agents/workflows/primary-workflow.md)** - Default execution workflow

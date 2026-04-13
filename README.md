@@ -8,7 +8,7 @@ This repository is a structure-first startup factory template. It is meant to be
 
 The template combines three layers:
 - **Canonical repository structure** defined in [INDEX.md](INDEX.md)
-- **Core factory agents** in [0-agents/agents/](0-agents/agents/) for routing, governance, and domain ownership
+- **Core factory agents** in [0-agents/agents/core-agents/](0-agents/agents/core-agents/) for routing, governance, and domain ownership
 - **Specialist playbooks** in [0-agents/agents/agency-agents/README.md](0-agents/agents/agency-agents/README.md) for deep execution across engineering, design, marketing, product, sales, testing, and operations
 
 ## Why Use This Template?

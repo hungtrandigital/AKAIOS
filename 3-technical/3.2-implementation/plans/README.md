@@ -51,7 +51,7 @@ plans/
 
 | Plan Name | Type | Status | Priority | Created | Last Updated | Epic | System |
 |-----------|------|--------|----------|---------|--------------|------|--------|
-| *[No active plans yet]* | - | - | - | - | - | - | - |
+| [agent-leadership-orchestration.md](active/agent-leadership-orchestration.md) | slice | in-progress | high | 2026-04-13 | 2026-04-13 | PRD-EPIC-001 | `0-agents/agents/` |
 
 ### Completed Plans (Last 3 Months)
 

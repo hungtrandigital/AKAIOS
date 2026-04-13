@@ -30,7 +30,7 @@ Use Refactor Mode when:
 ## Related Documents
 
 - **[Refactor Mode](../../0-agents/mode/refactor.md)** - Mode definition
-- **[Refactor Agent](../../0-agents/agents/refactor-agent.md)** - Agent responsible for refactoring
+- **[Refactor Agent](../../0-agents/agents/core-agents/refactor-agent.md)** - Agent responsible for refactoring
 - **[Refactoring Plan Template](../../shared/templates/refactoring-plan-template.md)** - Template for refactoring plans
 
 ---

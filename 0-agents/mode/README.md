@@ -15,7 +15,7 @@ Modes are the routing layer. They decide when to use the core factory agents, wh
 
 ### Core Factory Agents
 
-Use the agents in [../agents/](../agents/) as the **owners of routing, governance, placement, and canonical documentation**.
+Use the agents in [../agents/core-agents/](../agents/core-agents/) as the **owners of routing, governance, placement, and canonical documentation**.
 
 ### Specialist Library
 

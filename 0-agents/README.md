@@ -8,13 +8,14 @@ This section is the operating system of the repository. It defines how work is r
 
 ### 1. Core Factory Agents
 
-The markdown agents in [agents/](agents/) are the **governance and routing layer**. They own:
+The markdown agents in [agents/](agents/) are the **governance, routing, and leader layer**. They own:
 - task validation
 - file placement and documentation discipline
 - product, architecture, implementation, review, and refactor workflow ownership
+- specialist selection, skill activation, and final synthesis back into canonical files
 
 These are the agents that keep work aligned with `INDEX.md`, mode rules, and governance requirements.
-Each core agent definition now includes a **Specialist Routing** section that points to the relevant `agency-agents` specialists for common task types.
+Each core agent definition now includes a **Specialist Routing** section for task-type mapping and a **Leader Orchestration** section that explains how the core agent keeps ownership while pulling in `agency-agents` specialists plus local skills.
 
 ### 2. Specialist Library
 
@@ -35,7 +36,7 @@ Use this library to deepen execution inside a mode, not to replace factory gover
 
 ### 3. Skills
 
-[agents/skills/](agents/skills/) contains reusable methods such as planning, debugging, research, frontend development, databases, and sequential thinking. Skills are the repeatable techniques; agents are the role owners.
+[agents/skills/](agents/skills/) contains reusable methods such as planning, debugging, research, frontend development, databases, and sequential thinking. Skills are the repeatable techniques; agents are the role owners who decide when and how those techniques are applied.
 
 ## Navigation
 
@@ -49,22 +50,22 @@ Use this library to deepen execution inside a mode, not to replace factory gover
 
 ### Core Agents
 
-- **[agents/](agents/)** - Canonical factory agent definitions
-  - [boost.md](agents/boost.md)
-  - [business-analyst.md](agents/business-analyst.md)
-  - [code-reviewer.md](agents/code-reviewer.md)
-  - [creative-director.md](agents/creative-director.md)
-  - [devops.md](agents/devops.md)
-  - [docs-guardian.md](agents/docs-guardian.md)
-  - [finance-director.md](agents/finance-director.md)
-  - [fullstack-engineer.md](agents/fullstack-engineer.md)
-  - [graphics-designer.md](agents/graphics-designer.md)
-  - [market-research.md](agents/market-research.md)
-  - [marketing-expert.md](agents/marketing-expert.md)
-  - [product-strategist.md](agents/product-strategist.md)
-  - [refactor-agent.md](agents/refactor-agent.md)
-  - [system-architecture.md](agents/system-architecture.md)
-  - [ui-ux-designer.md](agents/ui-ux-designer.md)
+- **[agents/core-agents/](agents/core-agents/)** - Canonical factory agent definitions (factory owners)
+  - [core-agents/boost.md](agents/core-agents/boost.md)
+  - [core-agents/business-analyst.md](agents/core-agents/business-analyst.md)
+  - [core-agents/code-reviewer.md](agents/core-agents/code-reviewer.md)
+  - [core-agents/creative-director.md](agents/core-agents/creative-director.md)
+  - [core-agents/devops.md](agents/core-agents/devops.md)
+  - [core-agents/docs-guardian.md](agents/core-agents/docs-guardian.md)
+  - [core-agents/finance-director.md](agents/core-agents/finance-director.md)
+  - [core-agents/fullstack-engineer.md](agents/core-agents/fullstack-engineer.md)
+  - [core-agents/graphics-designer.md](agents/core-agents/graphics-designer.md)
+  - [core-agents/market-research.md](agents/core-agents/market-research.md)
+  - [core-agents/marketing-expert.md](agents/core-agents/marketing-expert.md)
+  - [core-agents/product-strategist.md](agents/core-agents/product-strategist.md)
+  - [core-agents/refactor-agent.md](agents/core-agents/refactor-agent.md)
+  - [core-agents/system-architecture.md](agents/core-agents/system-architecture.md)
+  - [core-agents/ui-ux-designer.md](agents/core-agents/ui-ux-designer.md)
 
 ### Specialist Library
 
@@ -108,9 +109,9 @@ Use this library to deepen execution inside a mode, not to replace factory gover
 ## Operating Rules
 
 1. Start with a **mode**, not a random agent.
-2. Let a **core factory agent** own routing, placement, and governance.
+2. Let a **core factory agent** own routing, placement, governance, and final synthesis.
 3. Pull in **`agency-agents` specialists** for deeper execution inside that mode.
-4. Activate **skills** whenever a task matches them.
+4. Pair **skills** with specialist pull-ins whenever a task matches them.
 5. Specialists never override `INDEX.md`, file placement, traceability, or docs-guardian rules.
 
 ## Related Sections

@@ -122,7 +122,7 @@ Review Mode transitions to:
 ## Related Documents
 
 - **[Mode Overview](README.md)** - Overview of all modes
-- **[Code Reviewer Agent](../agents/code-reviewer.md)**
+- **[Code Reviewer Agent](../agents/core-agents/code-reviewer.md)**
 
 ---
 
