@@ -1,6 +1,8 @@
 # Campaign Brief Template
 
-Use this template for every new campaign in `4-marketing/channels/[channel]/[YYYY-MM]/campaign-[slug]/brief.md`.
+Use this template only when a campaign needs coordination beyond what fits in `4-marketing/go-to-market.md`.
+
+Before creating a standalone brief file, confirm placement with `@docs-guardian`, then link that brief from both `4-marketing/go-to-market.md` and `4-marketing/performance/registry.md`.
 
 ---
 
@@ -48,7 +50,7 @@ Use this template for every new campaign in `4-marketing/channels/[channel]/[YYY
 - Ad 2: [Description + link]
 - Landing page: [Link or brief]
 
-**Brand Alignment:** [Confirm consistency with `../brand-summary.md` or `shared/assets/brand-guidelines/`]
+**Brand Alignment:** [Confirm consistency with approved brand references in `shared/assets/`]
 
 ---
 
@@ -89,11 +91,11 @@ Use this template for every new campaign in `4-marketing/channels/[channel]/[YYY
 
 ## Links
 
-- Registry Entry: `../../../performance/registry.md`
-- GTM Reference: `../../../go-to-market.md`
-- Assets Folder: `./assets/`
-- Results: `./results.md` (post-campaign)
+- Registry Entry: `4-marketing/performance/registry.md`
+- GTM Reference: `4-marketing/go-to-market.md`
+- Assets Folder: `shared/assets/[campaign-slug]/`
+- Weekly Metrics: `4-marketing/performance/weekly-dashboard.md`
 
 ---
 
-*Update this brief weekly during the campaign. Archive results.md after campaign ends.*
+*Update this brief weekly during the campaign. Record outcomes in `4-marketing/performance/weekly-dashboard.md` and major strategy changes in `4-marketing/history/gtm-changelog.md` instead of inventing ad hoc result files.*

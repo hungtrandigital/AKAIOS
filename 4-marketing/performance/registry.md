@@ -9,13 +9,14 @@
 
 ## Active Campaigns
 
-| ID | Title | Channel | Status | Owner | Start | End | Budget | ROAS | Links |
-|----|-------|---------|--------|-------|-------|-----|--------|------|-------|
-| MKT-TASK-001 | [Campaign Name] | Meta | planned | @marketing | YYYY-MM-DD | - | $- | -% | GTM: `../go-to-market.md` • Brief: `../channels/meta/2025-12/campaign-[slug]/brief.md` |
+| ID | Title | Channel | Parent | Status | Owner | Start | End | Budget | ROAS | Links |
+|----|-------|---------|--------|--------|-------|-------|-----|--------|------|-------|
+| MKT-TASK-001 | [Campaign Name] | Meta | PRD-EPIC-001 | planned | @marketing | YYYY-MM-DD | - | $- | -% | GTM: `../go-to-market.md` • Brief: `-` • Assets: `../../shared/assets/[campaign-slug]/` |
 
 Notes:
 - Each marketing item must declare `parent_epic: PRD-EPIC-XXX` for product traceability.
-- Keep ≤ 10 active campaigns; move paused/past to "Parking Lot" in GTM.
+- Keep <= 10 active campaigns; move paused/past to "Parking Lot" in GTM.
+- If no standalone brief exists, keep campaign detail in `../go-to-market.md` and link assets only.
 
 ---
 

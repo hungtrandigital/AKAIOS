@@ -1,7 +1,7 @@
 # INDEX — AI-First Startup Factory
 
 **Version:** v3.3  
-**Last Updated:** 2026-04-13  
+**Last Updated:** 2026-04-15
 **Structure:** Factory Template + Specialist Agent Library
 
 This document is the single source of truth for the repository structure. Always consult this file to understand where files belong.
@@ -275,6 +275,7 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 - **[Agent Responsibility Matrix](0-agents/workflows/agent-responsibility-matrix.md)** - Core-agent ownership and specialist pull-in routing
 - **[Primary Workflow](0-agents/workflows/primary-workflow.md)** - Default execution workflow
 - **[Orchestration Protocol](0-agents/workflows/orchestration-protocol.md)** - Agent handoff protocol
+- **[Marketing Workflow](0-agents/workflows/marketing.md)** - Marketing discovery, GTM, execution, and measurement workflow
 
 ### Ideas & Research
 - **[1-ideas/](1-ideas/)** - Early-stage ideas and research

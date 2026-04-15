@@ -11,7 +11,7 @@ This document outlines the **initial/early-stage** go-to-market strategy. This i
 ### Target Market
 - *Primary market segments*
 - *Geographic focus*
-- *Link to [personas.md](../4-marketing/personas.md)*
+- *Link to [personas.md](../../4-marketing/personas.md)*
 
 ### Value Proposition
 - *Core value proposition*
@@ -25,7 +25,7 @@ This document outlines the **initial/early-stage** go-to-market strategy. This i
 
 ## Marketing Channels
 
-Initial channel strategy (see [4-marketing/channels/](../../4-marketing/channels/) for details):
+Initial channel strategy. Mature channel strategy belongs in [4-marketing/go-to-market.md](../../4-marketing/go-to-market.md); use [campaign-brief-template.md](../../4-marketing/templates/campaign-brief-template.md) only when a separate brief is justified:
 - *Channel 1*
 - *Channel 2*
 - *Channel 3*
@@ -34,7 +34,7 @@ Initial channel strategy (see [4-marketing/channels/](../../4-marketing/channels
 
 - *Key performance indicators*
 - *Target metrics*
-- *Link to [marketing-analytics.md](../4-marketing/performance/)*
+- *Link to [weekly-dashboard.md](../../4-marketing/performance/weekly-dashboard.md)*
 
 ## Related Documents
 
@@ -47,4 +47,3 @@ Initial channel strategy (see [4-marketing/channels/](../../4-marketing/channels
 ---
 
 *Expand this plan in the 4-marketing section as you develop detailed marketing strategies.*
-

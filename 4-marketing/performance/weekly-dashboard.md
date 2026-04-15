@@ -24,4 +24,5 @@
 
 ## Links
 - GTM: `../go-to-market.md`
-- Registry: `../../3-technical/3.2-implementation/status/work-items-registry.md`
+- Marketing Registry: `registry.md`
+- Technical Registry: `../../3-technical/3.2-implementation/status/work-items-registry.md`
