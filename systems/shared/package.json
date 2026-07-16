@@ -35,7 +35,9 @@
     "prisma:migrate": "prisma migrate dev --schema=src/db/prisma/schema.prisma",
     "prisma:studio": "prisma studio --schema=src/db/prisma/schema.prisma",
     "db:seed": "tsx src/db/seeds/dev-seed.ts",
-    "db:reset": "prisma migrate reset --schema=src/db/prisma/schema.prisma --skip-seed && pnpm db:seed"
+    "db:seed:demo": "tsx src/db/seeds/demo-accounts.ts",
+    "db:seed:all": "pnpm db:seed && pnpm db:seed:demo",
+    "db:reset": "prisma migrate reset --schema=src/db/prisma/schema.prisma --skip-seed && pnpm db:seed:all"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.668.0",

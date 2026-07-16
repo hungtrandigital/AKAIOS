@@ -7,7 +7,13 @@ import { getToken } from '@/lib/api'
 export default function HomePage() {
   const router = useRouter()
   useEffect(() => {
-    router.replace(getToken() ? '/attendance' : '/login')
+    if (!getToken()) {
+      router.replace('/login')
+      return
+    }
+    // Try to detect role from JWT to redirect appropriately
+    // For MVP, all roles land on /attendance (realtime view)
+    router.replace('/attendance')
   }, [router])
   return null
 }

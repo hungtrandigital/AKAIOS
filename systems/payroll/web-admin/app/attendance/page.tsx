@@ -55,6 +55,7 @@ export default function AttendancePage() {
           <p className="muted">{new Date().toLocaleDateString('vi-VN')}</p>
         </div>
         <div className="flex">
+          <Link href="/executive">📊 CEO</Link>
           <Link href="/payroll">Bảng lương</Link>
           <Link href="/projects">Dự án</Link>
           <Link href="/employees">Nhân viên</Link>
