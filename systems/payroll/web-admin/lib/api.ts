@@ -71,7 +71,7 @@ export async function apiFetch<T = any>(
 
 async function tryRefresh(): Promise<boolean> {
   try {
-    const response = await fetch('/api/attendance/v1/auth/refresh', {
+    const response = await fetch('/api/attendance/auth/refresh', {
       method: 'POST',
       credentials: 'include',
     })
@@ -88,7 +88,7 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 export async function apiLogin(email: string, password: string) {
-  const response = await fetch('/api/attendance/v1/auth/admin-login', {
+  const response = await fetch('/api/attendance/auth/admin-login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -104,6 +104,6 @@ export async function apiLogin(email: string, password: string) {
 }
 
 export async function apiLogout() {
-  await fetch('/api/attendance/v1/auth/logout', { method: 'POST', credentials: 'include' })
+  await fetch('/api/attendance/auth/logout', { method: 'POST', credentials: 'include' })
   clearToken()
 }

@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (t) {
       setTokenState(t)
       // Try fetching /me (fire-and-forget)
-      fetch('/api/attendance/v1/auth/me', {
+      fetch('/api/attendance/auth/me', {
         headers: { Authorization: `Bearer ${t}` },
       })
         .then((r) => (r.ok ? r.json() : null))
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = async () => {
     const t = getToken()
     if (!t) return
-    const r = await fetch('/api/attendance/v1/auth/me', {
+    const r = await fetch('/api/attendance/auth/me', {
       headers: { Authorization: `Bearer ${t}` },
     })
     if (r.ok) {
