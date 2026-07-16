@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { apiFetch, apiLogout } from '@/lib/api'
 import { useRouter } from 'next/navigation'
+import { AttendanceOverrideModal } from '@/components/AttendanceOverrideModal'
 
 interface AttendanceRecord {
   id: string
@@ -23,13 +25,14 @@ interface AttendanceRecord {
 export default function AttendancePage() {
   const router = useRouter()
   const today = new Date().toISOString().split('T')[0]
+  const [overrideTarget, setOverrideTarget] = useState<AttendanceRecord | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['attendance', today],
     queryFn: () => apiFetch<{ data: AttendanceRecord[] }>('/attendance/records', {
       query: { from: today, to: today },
     }),
-    refetchInterval: 30_000, // realtime — refresh every 30s
+    refetchInterval: 30_000,
   })
 
   const logout = async () => {
@@ -76,6 +79,7 @@ export default function AttendancePage() {
                 <th>Check-out</th>
                 <th>Tổng giờ</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -88,12 +92,24 @@ export default function AttendancePage() {
                   <td>{r.checkOutAt ? new Date(r.checkOutAt).toLocaleTimeString('vi-VN') : '—'}</td>
                   <td>{r.totalMinutesWorked ? `${Math.round(r.totalMinutesWorked / 60 * 10) / 10}h` : '—'}</td>
                   <td><StatusBadge status={r.status} /></td>
+                  <td>
+                    <button onClick={() => setOverrideTarget(r)} style={{ fontSize: 12, padding: '4px 8px' }}>
+                      Override
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ))}
+
+      {overrideTarget && (
+        <AttendanceOverrideModal
+          record={overrideTarget}
+          onClose={() => setOverrideTarget(null)}
+        />
+      )}
     </div>
   )
 }

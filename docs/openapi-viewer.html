@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AKAIUNSAN API Reference</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css" />
+<style>
+  body { margin: 0; }
+  .header-banner {
+    background: #003366;
+    color: white;
+    padding: 16px 24px;
+    font-family: -apple-system, sans-serif;
+  }
+  .header-banner h1 { margin: 0 0 4px; font-size: 20px; }
+  .header-banner p { margin: 0; opacity: 0.85; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="header-banner">
+  <h1>AKAIUNSAN — Attendance + Payroll API</h1>
+  <p>PRD-EPIC-002 · OpenAPI 3.1 spec from <code>3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml</code></p>
+</div>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+<script>
+window.onload = () => {
+  SwaggerUIBundle({
+    url: '../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml',
+    dom_id: '#swagger-ui',
+    deepLinking: true,
+    presets: [
+      SwaggerUIBundle.presets.apis
+    ],
+    layout: 'StandaloneLayout',
+    docExpansion: 'none',
+    filter: true,
+  })
+}
+</script>
+</body>
+</html>

@@ -8,7 +8,9 @@
     "start": "next start -p 3002",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'web-admin tests deferred'",
+    "test": "playwright test",
+    "test:e2e": "playwright test --reporter=list",
+    "test:e2e:ui": "playwright test --ui",
     "clean": "rm -rf .next .turbo"
   },
   "dependencies": {
@@ -20,6 +22,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",

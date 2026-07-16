@@ -66,3 +66,12 @@ systems/attendance/mobile/android/app/build/
 *.dump
 *.tar.gz
 backups/
+
+# Playwright
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Next.js
+.next/
+out/

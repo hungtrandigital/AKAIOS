@@ -159,6 +159,41 @@ services:
       retries: 3
 
   # =====================================================
+  # WEB ADMIN (Next.js 14)
+  # =====================================================
+  web-admin:
+    build:
+      context: ../../..
+      dockerfile: systems/payroll/web-admin/Dockerfile
+    container_name: ak-web-admin
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    env_file:
+      - ../../../.env
+    environment:
+      - NODE_ENV=production
+      - ATTENDANCE_API_URL=http://attendance-api:3000/api
+      - PAYROLL_API_URL=http://payroll-api:3001/api
+    depends_on:
+      attendance-api:
+        condition: service_healthy
+      payroll-api:
+        condition: service_healthy
+    networks:
+      - ak-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # =====================================================
   # REVERSE PROXY + TLS
   # =====================================================
   caddy:
@@ -177,6 +212,7 @@ services:
     depends_on:
       - attendance-api
       - payroll-api
+      - web-admin
 
 networks:
   ak-net:

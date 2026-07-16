@@ -1,5 +1,6 @@
 // Health check routes for payroll API
 import type { FastifyPluginAsync } from 'fastify'
+import { runAllHealthChecks } from '@ak/shared'
 
 export const healthRoutes: FastifyPluginAsync = async (app) => {
   app.get('/live', async () => ({
@@ -8,12 +9,8 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
     timestamp: new Date().toISOString(),
   }))
 
-  app.get('/ready', async () => ({
-    status: 'ok',
-    checks: {
-      database: 'not-checked',
-      redis: 'not-checked',
-      attendanceApi: 'not-checked',
-    },
-  }))
+  app.get('/ready', async (_request, reply) => {
+    const result = await runAllHealthChecks('payroll-api')
+    return reply.status(result.ok ? 200 : 503).send(result)
+  })
 }

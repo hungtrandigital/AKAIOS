@@ -6,6 +6,15 @@ export { prisma, Prisma } from './db/client.js'
 // Storage
 export { getMinIOClient, ensureBuckets, uploadObject, getPresignedUrl, MINIO_BUCKET_NAMES } from './storage/minio.js'
 
+// Health checks
+export {
+  checkDatabase,
+  checkRedis,
+  checkMinIO,
+  runAllHealthChecks,
+} from './health.js'
+export type { HealthCheckResult, AggregateHealth } from './health.js'
+
 // Auth
 export { issueAccessToken, verifyAccessToken } from './auth/jwt.js'
 export type { JwtClaims, IssueTokenInput } from './auth/jwt.js'

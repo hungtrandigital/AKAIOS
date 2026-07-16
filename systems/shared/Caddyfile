@@ -1,29 +1,41 @@
-# Caddy config for AKAIUNSAN — routes traffic to attendance-api + payroll-api.
+# Caddy config for AKAIUNSAN — routes traffic to attendance-api + payroll-api + web-admin.
 # TLS terminated by Caddy itself (Let's Encrypt via HTTP-01 challenge).
 #
 # Phase 1: HTTP-only (for local dev with `localhost`).
 # Phase 5: Configure real domain (e.g., ak-tunnel.example.com) + DNS-01 challenge.
-#
-# To use: copy this to ./Caddyfile and uncomment HTTPS section when ready.
 
 # ===== DEVELOPMENT (HTTP only) =====
 :80 {
-	# Attendance API
-	reverse_proxy attendance-api:3000 {
+	# Web admin (Next.js) at root path /, /attendance, /payroll, etc.
+	reverse_proxy web-admin:3002 {
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Forwarded-Proto {scheme}
 	}
 
-	# Payroll API — under /payroll path (could also be sub-domain later)
-	reverse_proxy /payroll/* payroll-api:3001
+	# Attendance API at /api/attendance/* and /internal/*
+	reverse_proxy /api/attendance/* attendance-api:3000 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+	reverse_proxy /internal/* attendance-api:3000
 
-	# Web admin (Phase 3+) goes to Next.js container
-	# reverse_proxy /admin/* web-admin:3000
+	# Payroll API at /api/payroll/*
+	reverse_proxy /api/payroll/* payroll-api:3001 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
 }
 
 # ===== PRODUCTION (uncomment when ready) =====
 # ak-tunnel.example.com {
+#   encode zstd gzip
+#   reverse_proxy web-admin:3002
+# }
+#
+# attendance.ak-tunnel.example.com {
 #   encode zstd gzip
 #   reverse_proxy attendance-api:3000
 # }
