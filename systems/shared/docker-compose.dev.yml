@@ -1,0 +1,68 @@
+# Local development docker-compose — infrastructure only (no backends).
+# Run backends locally with `pnpm dev` so you can edit + hot-reload.
+#
+# Usage from repo root:
+#   docker compose -f systems/attendance/docker-compose.dev.yml up -d
+#   pnpm dev
+#
+# Connect:
+#   Postgres: localhost:5432 (user=ak_user, db=ak_main)
+#   Redis:    localhost:6379
+#   MinIO:    localhost:9000 (console: http://localhost:9001, login: ak_admin)
+
+name: ak-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ak-dev-postgres
+    environment:
+      - POSTGRES_USER=ak_user
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=ak_main
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ak_user -d ak_main"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ak-dev-redis
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2024-09-13T03-09-25Z
+    container_name: ak-dev-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      - MINIO_ROOT_USER=ak_admin
+      - MINIO_ROOT_PASSWORD=dev_minio_password
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_dev:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_dev:
+  redis_dev:
+  minio_dev:

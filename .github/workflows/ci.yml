@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =====================================================
+  # Lint + Typecheck + Test (no DB required)
+  # =====================================================
+  quality:
+    name: Lint + Typecheck + Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      JWT_SECRET: ci-test-secret-do-not-use-in-prod-32
+      INTERNAL_API_KEY: ci-test-key-do-not-use-in-prod-32
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      REDIS_URL: redis://localhost:6379
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ROOT_USER: ak_admin
+      MINIO_ROOT_PASSWORD: ci-test-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build all packages
+        run: pnpm build
+
+  # =====================================================
+  # Integration tests (with Postgres + Redis containers)
+  # =====================================================
+  integration:
+    name: Integration Tests (with Postgres + Redis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quality
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ak_test
+          POSTGRES_PASSWORD: ak_test
+          POSTGRES_DB: ak_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      JWT_SECRET: ci-test-secret-do-not-use-in-prod-32
+      INTERNAL_API_KEY: ci-test-key-do-not-use-in-prod-32
+      DATABASE_URL: postgresql://ak_test:ak_test@localhost:5432/ak_test
+      REDIS_URL: redis://localhost:6379
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ROOT_USER: ak_admin
+      MINIO_ROOT_PASSWORD: ci-test-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm test
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: '**/coverage/**'

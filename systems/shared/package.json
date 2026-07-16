@@ -1,0 +1,58 @@
+{
+  "name": "@ak/shared",
+  "version": "1.0.0",
+  "description": "Shared types, Prisma client, auth utilities for AKAIUNSAN attendance + payroll systems",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./db": {
+      "types": "./dist/db/client.d.ts",
+      "default": "./dist/db/client.js"
+    },
+    "./auth/*": {
+      "types": "./dist/auth/*.d.ts",
+      "default": "./dist/auth/*.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo coverage",
+    "prisma:generate": "prisma generate --schema=src/db/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=src/db/prisma/schema.prisma",
+    "prisma:studio": "prisma studio --schema=src/db/prisma/schema.prisma",
+    "db:seed": "tsx src/db/seeds/dev-seed.ts",
+    "db:reset": "prisma migrate reset --schema=src/db/prisma/schema.prisma --skip-seed && pnpm db:seed"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.668.0",
+    "@aws-sdk/s3-request-presigner": "^3.668.0",
+    "@prisma/client": "^5.20.0",
+    "argon2": "^0.41.1",
+    "decimal.js": "^10.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.14.0",
+    "eslint": "^8.57.0",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

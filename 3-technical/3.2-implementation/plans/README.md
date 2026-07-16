@@ -52,6 +52,7 @@ plans/
 | Plan Name | Type | Status | Priority | Created | Last Updated | Epic | System |
 |-----------|------|--------|----------|---------|--------------|------|--------|
 | [agent-leadership-orchestration.md](active/agent-leadership-orchestration.md) | slice | in-progress | high | 2026-04-13 | 2026-04-13 | PRD-EPIC-001 | `0-agents/agents/` |
+| [PRD-EPIC-002 — Attendance + Payroll](../active/PRD-EPIC-002.md) | epic | in-progress | high | 2026-07-16 | 2026-07-16 | PRD-EPIC-002 | `systems/attendance/`, `systems/payroll/` |
 
 ### Completed Plans (Last 3 Months)
 

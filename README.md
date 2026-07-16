@@ -1,65 +1,103 @@
-# Project Factory - Structure-First Template Repository
+# AKAIUNSAN — Attendance + Payroll Systems
 
-**Version:** Template v1.1
+**PRD-EPIC-002.** This monorepo hosts the internal attendance and payroll systems for AKAIUNSAN, a Vietnamese cleaning service company with ~200 employees across 15 project sites.
 
-## Overview
+## What's Inside
 
-This repository is a structure-first startup factory template. It is meant to be aligned and documented before real project execution begins, then reused across future projects with the same operating model.
+| System | Purpose | Tech |
+| --- | --- | --- |
+| [`systems/attendance/`](systems/attendance/README.md) | Mobile check-in/out (GPS + photo), customer-facing reports | Flutter + Fastify |
+| [`systems/payroll/`](systems/payroll/README.md) | Monthly payroll calculation, web admin, Excel export | Fastify + Next.js |
+| [`systems/shared/`](systems/shared/README.md) | Prisma schema, auth utilities, common types, docker-compose stack | TypeScript |
 
-The template combines three layers:
-- **Canonical repository structure** defined in [INDEX.md](INDEX.md)
-- **Core factory agents** in [0-agents/agents/core-agents/](0-agents/agents/core-agents/) for routing, governance, and domain ownership
-- **Specialist playbooks** in [0-agents/agents/agency-agents/README.md](0-agents/agents/agency-agents/README.md) for deep execution across engineering, design, marketing, product, sales, testing, and operations
+## Quick Start
 
-## Why Use This Template?
+```bash
+# 1. Install dependencies
+pnpm install
 
-This structure helps you:
-- **Stabilize the project skeleton first** before shipping product work
-- **Keep one source of truth** for documents, plans, and execution outputs
-- **Route work through modes** instead of ad hoc prompting
-- **Reuse the same operating system** across new projects with minimal drift
+# 2. Copy env file
+cp .env.example .env
+# Edit .env: change JWT_SECRET, INTERNAL_API_KEY, etc.
 
-## Operating Model
+# 3. Start shared infrastructure (Postgres, Redis, MinIO)
+pnpm docker:up
 
-1. **Read [INDEX.md](INDEX.md)** to understand the canonical folder structure.
-2. **Read [0-agents/README.md](0-agents/README.md)** to understand the agent stack.
-3. **Choose a mode** from [0-agents/mode/README.md](0-agents/mode/README.md).
-4. **Let core factory agents own routing and governance**.
-5. **Pull in `agency-agents` specialists** when a mode needs deeper domain execution.
+# 4. Run database migrations + generate Prisma client
+pnpm prisma:migrate
+pnpm prisma:generate
 
-## Quick Navigation
+# 5. Start backends in dev mode
+pnpm dev
+# Attendance API → http://localhost:3000
+# Payroll API    → http://localhost:3001
+```
 
-### Top-Level Sections
+## Documentation
 
-- **[0-agents/](0-agents/)** - Dual-layer agent system: core factory agents, imported specialists, skills, modes, and workflows
-- **[1-ideas/](1-ideas/README.md)** - Research, idea capture, and early validation
-- **[2-product-foundation/](2-product-foundation/README.md)** - Product overview, backlog, and requirements
-- **[3-technical/](3-technical/README.md)** - Architecture, implementation tracking, and DevOps
-- **[systems/](systems/README.md)** - Source code for all future software systems
-- **[4-marketing/](4-marketing/README.md)** - Canonical GTM strategy, personas, templates, and performance tracking
-- **[5-financing/](5-financing/README.md)** - Financial planning, analysis, pitches, and projection tracking
-- **[6-operations/](6-operations/README.md)** - Team, HR, legal, vendor, and operating process documentation
-- **[7-operations-monitoring/](7-operations-monitoring/README.md)** - Monitoring, analytics, and incident handling
-- **[8-governance/](8-governance/README.md)** - Changelog, decision log, risks, reviews, and retrospectives
-- **[shared/](shared/README.md)** - Shared context, templates, and assets
-- **[archives/](archives/README.md)** - Archived or deprecated material
-- **[refactoring/](refactoring/README.md)** - Refactor-mode outputs for adapting the factory to other projects
+- **Architecture:** [`3-technical/3.1-system-foundation/`](3-technical/3.1-system-foundation/)
+  - [Infrastructure](3-technical/3.1-system-foundation/infrastructure.md) — On-prem setup, server spec, cost
+  - [System Design](3-technical/3.1-system-foundation/design-standards/system-design.md) — C4 diagrams
+  - [Domain Specs](3-technical/3.1-system-foundation/architecture/domain-specs.md) — DDD model + business rules
+  - [API Contracts](3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml) — OpenAPI 3.1
+  - [Coding Standards](3-technical/3.1-system-foundation/design-standards/coding-standards.md) — TS/Flutter conventions
+- **Plan:** [`3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md`](3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md)
+- **ADRs:** [`8-governance/decision-log/`](8-governance/decision-log/)
+  - [ADR-001: Tech Stack](8-governance/decision-log/adr-001-tech-stack.md)
+  - [ADR-002: On-Premise](8-governance/decision-log/adr-002-on-premise.md)
+  - [ADR-003: Skip VN Compliance at MVP](8-governance/decision-log/adr-003-skip-vn-compliance-mvp.md)
 
-### Agent Entry Points
+## Repository Structure
 
-- **[INDEX.md](INDEX.md)** - Canonical directory map and quick links
-- **[0-agents/README.md](0-agents/README.md)** - Agent system overview
-- **[0-agents/mode/README.md](0-agents/mode/README.md)** - Mode selection and routing
-- **[0-agents/workflows/primary-workflow.md](0-agents/workflows/primary-workflow.md)** - Default workflow
+```
+.
+├── package.json              # Root workspace + scripts
+├── pnpm-workspace.yaml
+├── turbo.json                # Turborepo config
+├── .env.example              # Copy to .env
+├── systems/
+│   ├── shared/               # @ak/shared + shared docker-compose/Caddy
+│   │   ├── src/              # Prisma schema, auth, types
+│   │   ├── docker-compose.yml
+│   │   ├── docker-compose.dev.yml
+│   │   └── Caddyfile
+│   ├── attendance/           # @ak/attendance — mobile + API
+│   │   ├── backend/          # @ak/attendance-api
+│   │   │   ├── Dockerfile
+│   │   │   └── src/
+│   │   ├── web-admin/        # (shared with payroll)
+│   │   └── mobile/           # @ak/attendance-mobile (Flutter)
+│   └── payroll/              # @ak/payroll — API + web admin
+│       ├── backend/          # @ak/payroll-api
+│       │   ├── Dockerfile
+│       │   └── src/
+│       └── web-admin/        # @ak/payroll-web-admin (Next.js)
+├── 3-technical/              # Architecture docs
+├── 8-governance/             # ADRs, decisions, risks
+└── ...
+```
 
-## Getting Started
+## Status
 
-1. Read [INDEX.md](INDEX.md) and confirm the repository structure before adding or moving anything.
-2. Use [0-agents/mode/README.md](0-agents/mode/README.md) to choose the right mode for the task.
-3. Start in [0-agents/README.md](0-agents/README.md) to understand which core agents and specialist agents should lead.
-4. Use [refactoring/README.md](refactoring/README.md) when applying this operating model to an existing external project.
-5. Keep all new work inside the canonical folders instead of inventing parallel structures.
+| Phase | Status | What |
+| --- | --- | --- |
+| Phase 0 — Architecture | Complete | 5 docs + 3 ADRs + 2 scaffolds |
+| Phase 1 — Foundation | In progress | Monorepo + shared + backends + Docker |
+| Phase 2 — Attendance | Pending | Mobile check-in/out + admin realtime |
+| Phase 3 — Payroll | Pending | Engine + Excel export |
+| Phase 4 — Customer Report | Pending | PDF/CSV generator |
+| Phase 5 — Pilot | Pending | 1-2 projects live |
+| Phase 6 — Scale-out | Pending | 13 remaining projects |
 
----
+## Conventions
 
-*This is the reusable factory template. Align the structure first, then execute the project inside it.*
+See [Coding Standards](3-technical/3.1-system-foundation/design-standards/coding-standards.md):
+- TypeScript strict mode, no `any`
+- Conventional commits
+- Test coverage >= 90% (target 100% for domain logic)
+- File size under 200 lines
+- No AI references in commits or code
+
+## License
+
+Proprietary. AKAIUNSAN.

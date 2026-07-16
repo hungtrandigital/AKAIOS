@@ -12,6 +12,7 @@
 | ID | Title | Status | Owner | Created | Slices | Bugs | Related Domains | Plan |
 |----|-------|--------|-------|---------|--------|------|----------------|------|
 | PRD-EPIC-001 | Factory Agent Leadership Orchestration | in-progress | @product-strategist | 2026-04-13 | 1 | 0 | code | `2-product-foundation/product-backlog/backlog.md#epic-1-factory-agent-leadership-orchestration` |
+| PRD-EPIC-002 | Attendance + Payroll Systems for AKAIUNSAN | in-progress | @fullstack-engineer | 2026-07-16 | 6 | 0 | code, ops | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md` |
 
 **Notes:**
 - Slices = count of active feature slices (PRD-SLICE-*) belonging to this epic
@@ -25,6 +26,12 @@
 | ID | Title | Epic | Status | Owner | Created | Tasks | Bugs | Plan |
 |----|-------|------|--------|-------|---------|-------|------|------|
 | PRD-SLICE-001 | Standardize Core-Agent Leadership Orchestration | PRD-EPIC-001 | in-progress | @docs-guardian | 2026-04-13 | 2 | 0 | `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md` |
+| PRD-SLICE-002 | Foundation (5 architecture docs + scaffolds) | PRD-EPIC-002 | in-progress | @system-architecture | 2026-07-16 | 4 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-0--architecture-foundation` |
+| PRD-SLICE-003 | Attendance (mobile check-in/out + admin realtime) | PRD-EPIC-002 | planned | @fullstack-engineer | 2026-07-16 | 6 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-2--attendance-` |
+| PRD-SLICE-004 | Payroll engine + Excel export | PRD-EPIC-002 | planned | @fullstack-engineer | 2026-07-16 | 4 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-3--payroll-` |
+| PRD-SLICE-005 | Customer report generator | PRD-EPIC-002 | planned | @fullstack-engineer | 2026-07-16 | 3 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-4--customer-report-` |
+| PRD-SLICE-006 | Pilot (1-2 projects) | PRD-EPIC-002 | planned | @ops + @fullstack-engineer | 2026-07-16 | 3 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-5--pilot-` |
+| PRD-SLICE-007 | Scale-out (13 projects) | PRD-EPIC-002 | planned | @ops + @fullstack-engineer | 2026-07-16 | 3 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-6--scale-out-` |
 
 ---
 
@@ -36,6 +43,10 @@
 |----|-------|--------|-------|--------|---------|--------|
 | CODE-TASK-001 | Add leader-orchestration contract to all core agents | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/` |
 | CODE-TASK-002 | Align specialist-to-skill pairings with the real skill library | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/skills/` |
+| CODE-TASK-003 | Produce 5 architecture docs (Phase 0) | PRD-SLICE-002 | @system-architecture | in-progress | 2026-07-16 | `3-technical/3.1-system-foundation/` |
+| CODE-TASK-004 | Scaffold `systems/attendance/` + `systems/payroll/` from TEMPLATE-SYSTEM | PRD-SLICE-002 | @fullstack-engineer | planned | 2026-07-16 | `systems/` |
+| CODE-TASK-005 | Create 3 ADRs (tech stack, on-prem, skip VN compliance MVP) | PRD-SLICE-002 | @system-architecture | planned | 2026-07-16 | `8-governance/decision-log/` |
+| CODE-TASK-006 | Docker Compose stack + Caddy reverse proxy config | PRD-SLICE-002 | @devops | planned | 2026-07-16 | `systems/attendance/` |
 
 ### Marketing Tasks
 
@@ -54,6 +65,8 @@
 | ID | Title | Area | Owner | Status | Created |
 |----|-------|------|-------|--------|---------|
 | OPS-TASK-001 | [Task] | HR / Legal / Vendor | @ops | planned | YYYY-MM-DD |
+| OPS-TASK-006 | Select 1-2 pilot projects for attendance/payroll rollout | Operations | @ops | planned | 2026-07-16 |
+| OPS-TASK-007 | Rollout plan for 13 remaining projects (after pilot) | Operations | @ops | planned | 2026-07-16 |
 
 ---
 

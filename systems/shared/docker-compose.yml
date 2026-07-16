@@ -1,0 +1,183 @@
+# Full production Docker Compose for AKAIUNSAN attendance + payroll.
+# Hosts both Fastify backends + Next.js web-admin + Postgres + Redis + MinIO
+# on a single on-premise server. Caddy reverse proxy terminates TLS.
+#
+# Usage on production server:
+#   1. Copy .env.example to .env and fill real secrets
+#   2. docker compose pull
+#   3. docker compose up -d
+#   4. docker compose logs -f
+#
+# See 3-technical/3.3-devops/server-steps.md for full runbook (added Phase 1 close).
+
+name: ak-monorepo
+
+services:
+  # =====================================================
+  # BACKEND: ATTENDANCE API
+  # =====================================================
+  attendance-api:
+    build:
+      context: ../../..
+      dockerfile: systems/attendance/backend/Dockerfile
+    container_name: ak-attendance-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../../../.env
+    environment:
+      - NODE_ENV=production
+      - ATTENDANCE_API_PORT=3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - ak-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # =====================================================
+  # BACKEND: PAYROLL API
+  # =====================================================
+  payroll-api:
+    build:
+      context: ../../..
+      dockerfile: systems/payroll/backend/Dockerfile
+    container_name: ak-payroll-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - ../../../.env
+    environment:
+      - NODE_ENV=production
+      - PAYROLL_API_PORT=3001
+      - ATTENDANCE_API_URL=http://attendance-api:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      attendance-api:
+        condition: service_healthy
+    networks:
+      - ak-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # =====================================================
+  # DATABASE
+  # =====================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ak-postgres
+    restart: unless-stopped
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-ak_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CHANGE_ME}
+      - POSTGRES_DB=${POSTGRES_DB:-ak_main}
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - ak-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+
+  # =====================================================
+  # CACHE
+  # =====================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ak-redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - /data/redis:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks:
+      - ak-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =====================================================
+  # OBJECT STORAGE (Photos + reports)
+  # =====================================================
+  minio:
+    image: minio/minio:RELEASE.2024-09-13T03-09-25Z
+    container_name: ak-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-ak_admin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-CHANGE_ME}
+    volumes:
+      - /data/minio:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    networks:
+      - ak-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =====================================================
+  # REVERSE PROXY + TLS
+  # =====================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: ak-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/caddy/data:/data
+      - /data/caddy/config:/config
+    networks:
+      - ak-net
+    depends_on:
+      - attendance-api
+      - payroll-api
+
+networks:
+  ak-net:
+    driver: bridge

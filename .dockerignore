@@ -1,0 +1,35 @@
+# Files NOT copied into Docker build context
+# Save build time + reduce image size
+
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+
+# Source control
+.git
+.gitignore
+
+# Environment files (will be injected at runtime)
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in image)
+**/README.md
+**/*.md
+docs/
+
+# Tests (only unit tests run in image; e2e runs separately)
+**/tests/e2e/
+**/test-results/
+**/playwright-report/

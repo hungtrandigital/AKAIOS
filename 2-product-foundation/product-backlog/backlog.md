@@ -64,8 +64,57 @@ Standardize the factory's outer/core agents as the reusable leader layer for mul
 
 ---
 
-### Epic 2: [Epic Name]
-*Repeat structure above*
+### Epic 2: Attendance + Payroll Systems for AKAIUNSAN
+
+**Work-Item Metadata:**
+```yaml
+id: PRD-EPIC-002
+title: "Attendance + Payroll Systems for AKAIUNSAN"
+type: epic
+domain: product
+status: in-progress
+created: 2026-07-16
+updated: 2026-07-16
+priority: high
+owner: @fullstack-engineer
+phases: [foundation, attendance, payroll, customer-report, pilot, scale-out]
+related_domain_tasks:
+  - PRD-SLICE-002
+  - PRD-SLICE-003
+  - PRD-SLICE-004
+  - PRD-SLICE-005
+  - PRD-SLICE-006
+  - PRD-SLICE-007
+```
+
+**Status:** *In Progress*
+**Priority:** *High*
+
+**Description:**
+Xây dựng 2 hệ thống: `attendance` (mobile app check-in/out theo ca tại dự án + web admin realtime + báo cáo khách hàng) và `payroll` (web admin tính lương, duyệt, xuất Excel). Internal-only cho AKAIUNSAN, host on-premise server công ty, không tính BHXH/PIT ở MVP. Pilot 1-2 dự án trước khi rollout 13 dự án còn lại.
+
+**Success Metrics:**
+- 200+ NV check-in/out ổn định qua mobile app với GPS + ảnh, không gian lận
+- BO duyệt bảng lương tháng đầu tiên từ hệ thống (không cần Excel)
+- Báo cáo PDF gửi 15 khách hàng đúng hẹn tháng đầu tiên sau rollout
+- Tất cả 5 architecture docs được sản xuất (không dùng template) trong Phase 0
+- Test coverage domain logic ≥ 90% (target 100% cho payroll engine)
+
+**User Stories (Feature Slices):**
+- [ ] Story 1 (PRD-SLICE-002): Foundation — 5 architecture docs + 2 system scaffolds
+- [ ] Story 2 (PRD-SLICE-003): Attendance — mobile check-in/out, web admin realtime view, manual override
+- [ ] Story 3 (PRD-SLICE-004): Payroll — engine tính lương, web admin duyệt, xuất Excel
+- [ ] Story 4 (PRD-SLICE-005): Customer report — PDF/CSV auto-generator theo 15 dự án
+- [ ] Story 5 (PRD-SLICE-006): Pilot — 1-2 dự án đầu dùng thật
+- [ ] Story 6 (PRD-SLICE-007): Scale-out — 13 dự án còn lại
+
+**Related Documents:**
+- [Active Epic Plan](../../3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md)
+- [Architecture Docs](../../3-technical/3.1-system-foundation/)
+- [API Contracts](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
+- [Work-Item Registry](../../3-technical/3.2-implementation/status/work-items-registry.md)
+- [Systems README](../../systems/README.md)
+
 
 ## Backlog Items (Unprioritized)
 

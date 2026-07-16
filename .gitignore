@@ -1,2 +1,68 @@
+# =====================================================
+# AKAIUNSAN Monorepo .gitignore
+# =====================================================
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Vendored agent library (huge git checkout)
 0-agents/agents/agency-agents/.git/
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Coverage & test artifacts
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker volumes (data persists outside container)
+.docker-data/
+
+# Prisma generated client (regenerated on install)
+systems/shared/node_modules/.prisma/
+
+# Flutter / Dart
+systems/attendance/mobile/.dart_tool/
+systems/attendance/mobile/build/
+systems/attendance/mobile/.flutter-plugins
+systems/attendance/mobile/.flutter-plugins-dependencies
+systems/attendance/mobile/.packages
+systems/attendance/mobile/.pub-cache/
+systems/attendance/mobile/.pub/
+systems/attendance/mobile/ios/Pods/
+systems/attendance/mobile/android/.gradle/
+systems/attendance/mobile/android/app/build/
+
+# Backups (should be on backup VPS, not in repo)
+*.dump
+*.tar.gz
+backups/

@@ -1,58 +1,79 @@
-# System Overview
+# System Overview — AKAIUNSAN
+
+**Status:** Active
+**Last Updated:** 2026-07-16
+**Owner:** @system-architecture
+**Related:** PRD-EPIC-002
 
 ## Purpose
 
-This document provides a high-level overview of all systems in the project, their relationships, and how they work together.
-
-> **Mapping Requirement:** This document **must map to all systems** in `systems/` directory. Every system listed in `systems/` should be documented here, and every system documented here should exist in `systems/`.
+This document provides a high-level overview of all systems in AKAIUNSAN, their relationships, and how they work together. It maps to the actual `systems/` directory.
 
 ## Systems Architecture
 
 ### System Diagram
 
-*Add a diagram showing all systems and their relationships*
+```mermaid
+graph LR
+    Employee[📱 Employee<br/>Flutter App] --> AttendanceAPI[Attendance API<br/>Fastify + TS]
+    BO[💻 BO / Supervisor<br/>Next.js Web Admin] --> AttendanceAPI
+    BO --> PayrollAPI[Payroll API<br/>Fastify + TS]
+    AttendanceAPI --> Postgres[(PostgreSQL 16<br/>Shared DB)]
+    PayrollAPI --> Postgres
+    AttendanceAPI --> Redis[(Redis 7)]
+    PayrollAPI --> Redis
+    AttendanceAPI --> MinIO[(MinIO<br/>Photos, PDFs)]
+    PayrollAPI -.Internal API.-> AttendanceAPI
+```
 
 ### Systems List
 
-#### [System 1 Name]
-- **Purpose:** [Description]
-- **Location:** `systems/[system-1]/`
-- **Tech Stack:** [Stack]
-- **Documentation:** [systems/[system-1]/README.md](../../../systems/[system-1]/README.md)
+#### `attendance` (PRD-EPIC-002)
 
-#### [System 2 Name]
-- **Purpose:** [Description]
-- **Location:** `systems/[system-2]/`
-- **Tech Stack:** [Stack]
-- **Documentation:** [systems/[system-2]/README.md](../../../systems/[system-2]/README.md)
+- **Purpose:** Mobile employee check-in/out (GPS + photo), project management, real-time attendance view for supervisors, customer-facing reports (PDF/CSV by project).
+- **Location:** [`systems/attendance/`](../../../systems/attendance/README.md)
+- **Tech Stack:** Flutter 3.24 (mobile), Node.js 20 + Fastify + TypeScript (backend), PostgreSQL 16, Redis 7, MinIO (photos)
+- **Domain Context:** Attendance bounded context + Identity shared kernel
+- **Related:** See [Domain Specs](domain-specs.md#2-attendance-bounded-context)
 
-## Shared Services
+#### `payroll` (PRD-EPIC-002)
 
-### [Service Name]
-- **Purpose:** [Description]
-- **Location:** `systems/shared/services/[service-name]/`
-- **Used by:** [List of systems using this service]
+- **Purpose:** Web admin only — calculate monthly payroll, allow BO to override lines (advance, deductions), approve and lock periods, export Excel for accounting.
+- **Location:** [`systems/payroll/`](../../../systems/payroll/README.md)
+- **Tech Stack:** Node.js 20 + Fastify + TypeScript (backend), Next.js 14 (web admin), PostgreSQL 16, Redis 7, ExcelJS (export)
+- **Domain Context:** Payroll bounded context + Identity shared kernel
+- **Reads attendance data via:** `GET /internal/attendance` endpoint on attendance API (X-Internal-API-Key auth)
 
-## Integration Patterns
+## Cross-Cutting
 
-### Communication Between Systems
-- [Pattern 1]: [Description]
-- [Pattern 2]: [Description]
+| Concern | Owner | Location |
+| --- | --- | --- |
+| Shared DB schema (users, projects, tenants) | Identity shared kernel | `systems/shared/db/prisma/schema.prisma` |
+| Auth (JWT issuance, refresh tokens) | Identity | `systems/shared/auth/` |
+| Common error types, logging | Cross-cutting | `systems/shared/` |
+| Deployment (Docker Compose stack) | @devops | `systems/attendance/docker-compose.yml` (single stack hosts both systems) |
 
-### Data Flow
-- [Description of how data flows between systems]
+## Deployment Topology
 
-## Infrastructure
+```
+On-Premise Server (Ubuntu 22.04, 16GB RAM)
+├── Caddy (reverse proxy + TLS)
+├── Docker Compose
+│   ├── attendance-api (Fastify)
+│   ├── payroll-api (Fastify)
+│   ├── web-admin (Next.js — for both systems)
+│   ├── postgres (shared)
+│   ├── redis (shared)
+│   └── minio (photos only)
+└── Backup: daily pg_dump + MinIO sync to VPS
+```
 
-See [infrastructure.md](../infrastructure.md) for infrastructure details.
+External access via Cloudflare Tunnel → Caddy → backend containers.
 
-## Related Documentation
+See [Infrastructure](../infrastructure.md) for full hosting details.
 
-- **[Individual System Docs](../../../systems/README.md)** - Documentation for each system
-- **[Shared Code](../../../systems/shared/README.md)** - Shared libraries and services
-- **[System Design](system-design.md)** - Detailed system design
-- **[Infrastructure](../infrastructure.md)** - Infrastructure setup
+## Future Systems
 
----
-
-*Keep this document updated as systems are added or changed.*
+- `recruitment` (potential epic after PRD-EPIC-002) — pipeline cho lao động phổ thông
+- `inventory` — quản lý vật tư/hóa chất per project
+- `quality-inspection` — supervisor photo evidence for service quality

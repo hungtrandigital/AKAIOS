@@ -1,0 +1,49 @@
+{
+  "@@locale": "vi",
+  "appTitle": "AKAIUNSAN",
+  "loginTitle": "Đăng nhập",
+  "phone": "Số điện thoại",
+  "password": "Mật khẩu",
+  "loginButton": "Đăng nhập",
+  "loginWithOtp": "Đăng nhập bằng OTP",
+  "requestOtp": "Gửi mã OTP",
+  "otp": "Mã OTP",
+  "verify": "Xác nhận",
+  "logout": "Đăng xuất",
+
+  "todayTitle": "Hôm nay",
+  "noAssignmentToday": "Không có ca hôm nay",
+  "project": "Dự án",
+  "shift": "Ca",
+  "shiftTime": "Thời gian ca",
+  "checkIn": "Check-in",
+  "checkOut": "Check-out",
+  "checkedIn": "Đã check-in lúc {time}",
+  "@checkedIn": { "placeholders": { "time": { "type": "String" } } },
+  "checkedOut": "Đã check-out lúc {time}",
+  "@checkedOut": { "placeholders": { "time": { "type": "String" } } },
+  "notCheckedIn": "Chưa check-in",
+  "noGpsPermission": "Cần quyền truy cập vị trí để check-in",
+  "openGpsSettings": "Mở cài đặt GPS",
+  "gpsLoading": "Đang lấy vị trí...",
+  "tooFarFromProject": "Bạn ở cách dự án {distance}m (cho phép {radius}m)",
+  "@tooFarFromProject": {
+    "placeholders": {
+      "distance": { "type": "String" },
+      "radius": { "type": "String" }
+    }
+  },
+  "checkInSuccess": "Check-in thành công",
+  "checkOutSuccess": "Check-out thành công",
+  "takePhoto": "Chụp ảnh",
+  "retakePhoto": "Chụp lại",
+  "submitCheckIn": "Xác nhận Check-in",
+  "submitCheckOut": "Xác nhận Check-out",
+
+  "errorRequired": "Trường bắt buộc",
+  "errorInvalidPhone": "Số điện thoại không hợp lệ",
+  "errorLoginFailed": "Đăng nhập thất bại",
+  "errorGpsFailed": "Không thể lấy vị trí",
+  "errorCameraFailed": "Không thể mở camera",
+  "errorCheckInFailed": "Check-in thất bại"
+}

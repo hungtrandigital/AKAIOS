@@ -1,0 +1,33 @@
+{
+  "name": "ak-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AKAIUNSAN attendance + payroll monorepo (PRD-EPIC-002)",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "prisma:migrate": "pnpm --filter @ak/shared exec prisma migrate dev",
+    "prisma:generate": "pnpm --filter @ak/shared exec prisma generate",
+    "prisma:studio": "pnpm --filter @ak/shared exec prisma studio",
+    "docker:up": "docker compose -f systems/shared/docker-compose.yml up -d",
+    "docker:up:dev": "docker compose -f systems/shared/docker-compose.dev.yml up -d",
+    "docker:down": "docker compose -f systems/shared/docker-compose.yml down",
+    "docker:down:dev": "docker compose -f systems/shared/docker-compose.dev.yml down",
+    "docker:logs": "docker compose -f systems/shared/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.0"
+  }
+}

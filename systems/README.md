@@ -65,7 +65,21 @@ systems/
 
 ### Current Systems
 
-*[List all current systems here]*
+- **`attendance`** — Chấm công tại dự án, mobile app (Flutter), báo cáo khách hàng.
+  - Location: `systems/attendance/`
+  - Tech Stack: Flutter 3.24 (mobile), Node.js 20 + Fastify + TypeScript (backend), PostgreSQL 16, Redis 7, MinIO
+  - Documentation: `systems/attendance/README.md`
+  - Related Docs: `3-technical/3.1-system-foundation/architecture/domain-specs.md`, `architecture/api-contracts/openapi.yaml`
+
+- **`payroll`** — Tính lương, duyệt bảng lương, xuất Excel cho BO.
+  - Location: `systems/payroll/`
+  - Tech Stack: Node.js 20 + Fastify + TypeScript (backend), Next.js 14 (web admin), PostgreSQL 16
+  - Documentation: `systems/payroll/README.md`
+  - Related Docs: Same shared docs as attendance
+
+**Shared between attendance + payroll:** Postgres database, Redis, MinIO, Docker Compose stack, Caddy reverse proxy, Cloudflare Tunnel.
+
+**Shared code:** `systems/shared/` — common TypeScript types, repositories, error classes, logging utilities.
 
 - **System Name** - Brief description
   - Location: `systems/[system-name]/`

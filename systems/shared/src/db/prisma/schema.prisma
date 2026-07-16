@@ -1,0 +1,445 @@
+// AKAIUNSAN Prisma Schema
+// PRD-EPIC-002 — Attendance + Payroll systems
+// Implements DDD model defined in:
+//   3-technical/3.1-system-foundation/architecture/domain-specs.md
+
+generator client {
+  provider = "prisma-client-js"
+  // Output to ./node_modules/.prisma so other workspace packages can resolve
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// ENUMS
+// =====================================================
+
+enum UserRole {
+  employee
+  supervisor
+  bo_admin
+  system_admin
+}
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum SalaryType {
+  monthly
+  hourly
+}
+
+enum ProjectStatus {
+  active
+  paused
+  ended
+}
+
+enum ShiftAssignmentStatus {
+  scheduled
+  checked_in
+  checked_out
+  completed
+  missed
+  cancelled
+}
+
+enum AttendanceStatus {
+  present
+  late
+  early_leave
+  half_day
+  absent
+  on_leave
+  holiday
+}
+
+enum PayrollPeriodStatus {
+  open
+  calculating
+  calculated
+  approved
+  paid
+  locked
+}
+
+enum AuditAction {
+  // Identity
+  create_user
+  update_user
+  deactivate_user
+  // Attendance
+  override_attendance
+  create_shift_assignment
+  cancel_shift_assignment
+  // Payroll
+  open_payroll_period
+  calculate_payroll
+  approve_payroll
+  lock_payroll
+  override_payroll_line
+  export_payroll
+  // Customer reports
+  generate_customer_report
+  // Rules
+  update_payroll_rules
+}
+
+enum ReportFormat {
+  pdf
+  csv
+}
+
+// =====================================================
+// IDENTITY (Shared Kernel)
+// =====================================================
+
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  employees   Employee[]
+  projects    Project[]
+  payrollRules PayrollRule[]
+  payrollPeriods PayrollPeriod[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  tenantId     String     @db.Uuid
+  email        String?    @unique
+  phone        String     @unique
+  passwordHash String?
+  role         UserRole
+  status       UserStatus @default(active)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  employee      Employee?
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  assignedShifts ShiftAssignment[] @relation("AssignedBy")
+  overrideAttendance AttendanceRecord[] @relation("OverrideByAttendance")
+  overridePayroll PayrollLine[] @relation("OverrideByPayroll")
+  openedPeriods PayrollPeriod[] @relation("OpenedBy")
+  approvedPeriods PayrollPeriod[] @relation("ApprovedBy")
+
+  @@index([tenantId])
+  @@index([phone])
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  family    String   // token family for rotation tracking
+  expiresAt DateTime
+  revokedAt DateTime?
+  replacedBy String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([family])
+  @@map("refresh_tokens")
+}
+
+model Employee {
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @db.Uuid
+  userId      String     @unique @db.Uuid
+  employeeCode String
+  fullName    String
+  dateOfBirth DateTime?  @db.Date
+  hireDate    DateTime   @db.Date
+  baseSalary  Decimal    @db.Decimal(15, 2)
+  salaryType  SalaryType
+  hourlyRate  Decimal?   @db.Decimal(15, 2)
+  bankAccount String?
+  bankName    String?
+  idNumber    String?
+  status      UserStatus @default(active)
+  deletedAt   DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  user              User               @relation(fields: [userId], references: [id])
+  shiftAssignments  ShiftAssignment[]
+  attendanceRecords AttendanceRecord[]
+  payrollLines      PayrollLine[]
+
+  @@unique([tenantId, employeeCode])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([status])
+  @@map("employees")
+}
+
+// =====================================================
+// ATTENDANCE
+// =====================================================
+
+model Project {
+  id                    String        @id @default(uuid()) @db.Uuid
+  tenantId              String        @db.Uuid
+  code                  String
+  name                  String
+  clientName            String
+  address               String
+  latitude              Decimal       @db.Decimal(10, 7)
+  longitude             Decimal       @db.Decimal(10, 7)
+  geofenceRadiusMeters  Int           @default(100)
+  contractStartDate     DateTime      @db.Date
+  contractEndDate       DateTime?     @db.Date
+  status                ProjectStatus @default(active)
+  reportTemplateConfig  Json?
+  deletedAt             DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  shiftAssignments  ShiftAssignment[]
+  attendanceRecords AttendanceRecord[]
+  customerReports   CustomerReport[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([status])
+  @@map("projects")
+}
+
+model Shift {
+  id                   String   @id @default(uuid()) @db.Uuid
+  name                 String
+  startTime            String   // "HH:mm" format
+  endTime              String   // "HH:mm"
+  breakMinutes         Int      @default(60)
+  lateThresholdMinutes Int      @default(15)
+  isOvernight          Boolean  @default(false)
+  color                String?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  shiftAssignments ShiftAssignment[]
+
+  @@index([isActive])
+  @@map("shifts")
+}
+
+model ShiftAssignment {
+  id                 String                @id @default(uuid()) @db.Uuid
+  employeeId         String                @db.Uuid
+  projectId          String                @db.Uuid
+  shiftId            String                @db.Uuid
+  date               DateTime              @db.Date
+  status             ShiftAssignmentStatus @default(scheduled)
+  assignedById       String                @db.Uuid
+  assignedAt         DateTime              @default(now())
+  notes              String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  employee           Employee             @relation(fields: [employeeId], references: [id])
+  project            Project              @relation(fields: [projectId], references: [id])
+  shift              Shift                @relation(fields: [shiftId], references: [id])
+  assignedBy         User                 @relation("AssignedBy", fields: [assignedById], references: [id])
+  attendanceRecord   AttendanceRecord?
+
+  @@unique([employeeId, projectId, shiftId, date])
+  @@index([employeeId, date])
+  @@index([projectId, date])
+  @@index([status])
+  @@map("shift_assignments")
+}
+
+model AttendanceRecord {
+  id                 String           @id @default(uuid()) @db.Uuid
+  shiftAssignmentId  String           @unique @db.Uuid
+  employeeId         String           @db.Uuid
+  projectId          String           @db.Uuid
+  checkInAt          DateTime?
+  checkOutAt         DateTime?
+  checkInGps         Json?
+  checkOutGps        Json?
+  checkInPhotoKey    String?          // MinIO object key
+  checkOutPhotoKey   String?
+  status             AttendanceStatus
+  totalMinutesWorked Int?
+  overtimeMinutes    Int?
+  lateMinutes        Int?
+  overrideReason     String?
+  overrideById       String?          @db.Uuid
+  overrideAt         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  shiftAssignment ShiftAssignment @relation(fields: [shiftAssignmentId], references: [id], onDelete: Cascade)
+  employee        Employee         @relation(fields: [employeeId], references: [id])
+  project         Project          @relation(fields: [projectId], references: [id])
+  overrideBy      User?            @relation("OverrideByAttendance", fields: [overrideById], references: [id])
+
+  @@index([employeeId])
+  @@index([projectId])
+  @@index([status])
+  @@index([checkInAt])
+  @@map("attendance_records")
+}
+
+model CustomerReport {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @db.Uuid
+  projectId   String       @db.Uuid
+  periodFrom  DateTime     @db.Date
+  periodTo    DateTime     @db.Date
+  format      ReportFormat
+  fileKey     String       // MinIO object key
+  generatedBy String       @db.Uuid
+  generatedAt DateTime     @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, generatedAt])
+  @@map("customer_reports")
+}
+
+// =====================================================
+// PAYROLL
+// =====================================================
+
+model PayrollRule {
+  id                          String    @id @default(uuid()) @db.Uuid
+  tenantId                    String    @db.Uuid
+  effectiveFrom               DateTime  @db.Date
+  effectiveTo                 DateTime? @db.Date
+  otWeekdayMultiplier         Decimal   @db.Decimal(3, 2)
+  otWeekendMultiplier         Decimal   @db.Decimal(3, 2)
+  otHolidayMultiplier         Decimal   @db.Decimal(3, 2)
+  latePenaltyPerMinute        Decimal?  @db.Decimal(15, 2)
+  maxLatePenaltyPerDay        Decimal?  @db.Decimal(15, 2)
+  mealAllowancePerDay         Decimal?  @db.Decimal(15, 2)
+  phoneAllowance              Decimal?  @db.Decimal(15, 2)
+  roundingMinutes             Int       @default(15)
+  workingHoursPerDay          Int       @default(8)
+  standardWorkingDaysPerMonth Int       @default(26)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+  updatedBy                   String?   @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, effectiveFrom])
+  @@map("payroll_rules")
+}
+
+model PayrollPeriod {
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @db.Uuid
+  year            Int
+  month           Int
+  status          PayrollPeriodStatus @default(open)
+  openedAt        DateTime           @default(now())
+  openedById      String             @db.Uuid
+  calculatedAt    DateTime?
+  approvedAt      DateTime?
+  approvedById    String?            @db.Uuid
+  paidAt          DateTime?
+  lockedAt        DateTime?
+  totalGross      Decimal?           @db.Decimal(15, 2)
+  totalNet        Decimal?           @db.Decimal(15, 2)
+  totalEmployees  Int?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  tenant     Tenant        @relation(fields: [tenantId], references: [id])
+  openedBy   User          @relation("OpenedBy", fields: [openedById], references: [id])
+  approvedBy User?         @relation("ApprovedBy", fields: [approvedById], references: [id])
+  lines      PayrollLine[]
+
+  @@unique([tenantId, year, month])
+  @@index([status])
+  @@map("payroll_periods")
+}
+
+model PayrollLine {
+  id                      String   @id @default(uuid()) @db.Uuid
+  payrollPeriodId         String   @db.Uuid
+  employeeId              String   @db.Uuid
+  daysWorked              Int      @default(0)
+  daysOnLeave             Int      @default(0)
+  totalWorkMinutes        Int      @default(0)
+  overtimeWeekdayMinutes  Int      @default(0)
+  overtimeWeekendMinutes  Int      @default(0)
+  overtimeHolidayMinutes  Int      @default(0)
+  lateMinutes             Int      @default(0)
+  absentDays              Int      @default(0)
+  baseSalary              Decimal  @db.Decimal(15, 2)
+  proratedBase            Decimal  @db.Decimal(15, 2) @default(0)
+  overtimeWeekdayAmount   Decimal  @db.Decimal(15, 2) @default(0)
+  overtimeWeekendAmount   Decimal  @db.Decimal(15, 2) @default(0)
+  overtimeHolidayAmount   Decimal  @db.Decimal(15, 2) @default(0)
+  latePenalty             Decimal  @db.Decimal(15, 2) @default(0)
+  allowances              Decimal  @db.Decimal(15, 2) @default(0)
+  gross                   Decimal  @db.Decimal(15, 2)
+  advance                 Decimal  @db.Decimal(15, 2) @default(0)
+  otherDeductions         Decimal  @db.Decimal(15, 2) @default(0)
+  net                     Decimal  @db.Decimal(15, 2)
+  overrideReason          String?
+  overrideById            String?  @db.Uuid
+  overrideAt              DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  payrollPeriod PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+  overrideBy    User?         @relation("OverrideByPayroll", fields: [overrideById], references: [id])
+
+  @@unique([payrollPeriodId, employeeId])
+  @@index([employeeId])
+  @@map("payroll_lines")
+}
+
+// =====================================================
+// AUDIT
+// =====================================================
+
+model AuditLog {
+  id            String      @id @default(uuid()) @db.Uuid
+  tenantId      String      @db.Uuid
+  actorId       String      @db.Uuid
+  actorRole     String
+  action        AuditAction
+  entityType    String
+  entityId      String?     @db.Uuid
+  previousValue Json?
+  newValue      Json?
+  ipAddress     String?
+  userAgent     String?
+  occurredAt    DateTime    @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([tenantId, occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([action, occurredAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
