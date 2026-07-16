@@ -42,7 +42,7 @@ export async function generatePayrollExcel(periodId: string): Promise<Buffer> {
   ws.getCell('A2').value = `Công ty: ${period.tenant.name}`
   ws.getCell('A2').alignment = { horizontal: 'center' }
 
-  // Headers (row 4)
+  // Headers (row 4) — set via columns array so addRow can use keys
   const headers = [
     { header: 'Mã NV', key: 'employeeCode', width: 10 },
     { header: 'Họ tên', key: 'employeeName', width: 22 },
@@ -58,11 +58,14 @@ export async function generatePayrollExcel(periodId: string): Promise<Buffer> {
     { header: 'Khấu trừ khác', key: 'otherDeductions', width: 13 },
     { header: 'Thực nhận', key: 'net', width: 14 },
   ]
-  ws.getRow(4).values = headers.map((h) => h.header)
-  ws.getRow(4).font = { bold: true }
-  ws.getRow(4).alignment = { horizontal: 'center', vertical: 'middle' }
-  ws.getRow(4).height = 25
-  ws.getRow(4).eachCell((cell) => {
+  // Set columns BEFORE writing header (so ExcelJS auto-populates row 4)
+  ws.columns = headers
+  // Style the header row
+  const headerRow = ws.getRow(4)
+  headerRow.font = { bold: true }
+  headerRow.alignment = { horizontal: 'center', vertical: 'middle' }
+  headerRow.height = 25
+  headerRow.eachCell((cell) => {
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } }
     cell.border = {
       top: { style: 'thin' },
@@ -71,7 +74,6 @@ export async function generatePayrollExcel(periodId: string): Promise<Buffer> {
       right: { style: 'thin' },
     }
   })
-  ws.columns = headers.map((h) => ({ width: h.width }))
 
   // Number format: VNĐ with thousand separator
   const vnđFormat = '#,##0'

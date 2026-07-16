@@ -1,0 +1,151 @@
+// Generate demo attendance_records for the last 30 days.
+// Run: `pnpm db:seed:attendance-demo`
+//
+// Realistic distribution:
+//   - 85% present (full day, on time)
+//   - 10% late (10-45 min late)
+//   - 5% absent (no check-in)
+//
+// Skips Sundays. For each Mon-Sat:
+//   - For each active shift_assignment of the day:
+//     - 85%: create present attendance_record (checkIn at shift start ± 5 min, checkOut at shift end)
+//     - 10%: create late (checkIn 10-45 min after shift start)
+//     - 5%: skip (no record, counts as absent)
+
+import { PrismaClient, AttendanceStatus, ShiftAssignmentStatus } from '@prisma/client'
+import { isWeekend } from '../../engine/calendar.js'
+
+const prisma = new PrismaClient()
+const DAYS_BACK = 30
+
+function addMinutes(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * 60 * 1000)
+}
+
+function randomBetween(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
+async function main() {
+  console.log(`Generating demo attendance for last ${DAYS_BACK} days...\n`)
+
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  const records: any[] = []
+
+  // Load all shift assignments in the past DAYS_BACK days
+  const startDate = new Date(today)
+  startDate.setUTCDate(startDate.getUTCDate() - DAYS_BACK)
+
+  const assignments = await prisma.shiftAssignment.findMany({
+    where: { date: { gte: startDate, lte: today } },
+    include: { shift: true, project: true },
+  })
+  console.log(`  Found ${assignments.length} shift assignments in window`)
+
+  let presentCount = 0
+  let lateCount = 0
+  let absentCount = 0
+  let weekendCount = 0
+
+  for (const a of assignments) {
+    // Skip Sundays
+    if (isWeekend(a.date)) {
+      weekendCount++
+      continue
+    }
+
+    // Random outcome: 85% present, 10% late, 5% absent
+    const roll = Math.random()
+    let status: 'present' | 'late' | 'absent'
+    let lateMinutes = 0
+    if (roll < 0.85) {
+      status = 'present'
+      presentCount++
+    } else if (roll < 0.95) {
+      status = 'late'
+      lateMinutes = randomBetween(10, 45)
+      lateCount++
+    } else {
+      status = 'absent'
+      absentCount++
+      continue // Skip — no attendance record
+    }
+
+    // Parse shift start/end "HH:mm"
+    const [sh, sm] = a.shift.startTime.split(':').map(Number) ?? [8, 0]
+    const [eh, em] = a.shift.endTime.split(':').map(Number) ?? [17, 0]
+
+    // Date for check-in: assignment date at shift start (UTC)
+    const scheduledStart = new Date(a.date)
+    scheduledStart.setUTCHours(sh ?? 8, sm ?? 0, 0, 0)
+    const scheduledEnd = new Date(a.date)
+    scheduledEnd.setUTCHours(eh ?? 17, em ?? 0, 0, 0)
+    // For overnight shifts (e.g. 22:00 → 06:00), end time is next day
+    if ((eh ?? 17) < (sh ?? 8)) {
+      scheduledEnd.setUTCDate(scheduledEnd.getUTCDate() + 1)
+    }
+
+    const checkInAt = addMinutes(scheduledStart, lateMinutes + randomBetween(-2, 5))
+    const checkOutAt = addMinutes(scheduledEnd, randomBetween(-10, 5))
+
+    // Convert to ISO strings
+    const checkInStr = checkInAt.toISOString()
+    const checkOutStr = checkOutAt.toISOString()
+
+    // Total minutes worked (rough)
+    const totalMinutes = Math.max(0, Math.round((checkOutAt.getTime() - checkInAt.getTime()) / 60000) - (a.shift.breakMinutes ?? 60))
+    const overtimeMinutes = Math.max(0, totalMinutes - (a.shift.breakMinutes ? 480 : 480))
+
+    records.push({
+      shiftAssignmentId: a.id,
+      employeeId: a.employeeId,
+      projectId: a.projectId,
+      checkInAt: checkInStr,
+      checkOutAt: checkOutStr,
+      checkInGps: { latitude: Number(a.project.latitude), longitude: Number(a.project.longitude), accuracy: 10 },
+      checkOutGps: { latitude: Number(a.project.latitude), longitude: Number(a.project.longitude), accuracy: 10 },
+      checkInPhotoKey: null, // Skip photo upload in seed
+      checkOutPhotoKey: null,
+      status: status as AttendanceStatus,
+      totalMinutesWorked: totalMinutes,
+      overtimeMinutes,
+      lateMinutes,
+    })
+  }
+
+  console.log(`  Distribution: ${presentCount} present, ${lateCount} late, ${absentCount} absent, ${weekendCount} Sundays skipped`)
+
+  // Bulk insert via createMany (skipDuplicates for re-runs)
+  console.log(`\n  Upserting ${records.length} attendance records...`)
+  // Note: createMany with skipDuplicates requires unique constraint on shiftAssignmentId (which we have)
+  let created = 0
+  for (const r of records) {
+    try {
+      await prisma.attendanceRecord.upsert({
+        where: { shiftAssignmentId: r.shiftAssignmentId },
+        update: {
+          checkInAt: new Date(r.checkInAt),
+          checkOutAt: new Date(r.checkOutAt),
+          totalMinutesWorked: r.totalMinutesWorked,
+          overtimeMinutes: r.overtimeMinutes,
+          lateMinutes: r.lateMinutes,
+          status: r.status,
+        },
+        create: r,
+      })
+      created++
+    } catch (err) {
+      // Skip duplicates
+    }
+  }
+  console.log(`  ✓ ${created} attendance records upserted\n`)
+}
+
+main()
+  .then(() => prisma.$disconnect())
+  .catch(async (e) => {
+    console.error('❌ Attendance demo seed failed:', e)
+    await prisma.$disconnect()
+    process.exit(1)
+  })

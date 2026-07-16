@@ -248,26 +248,35 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
         from: z.string().optional(),
         to: z.string().optional(),
         status: z.enum(['present', 'late', 'early_leave', 'half_day', 'absent', 'on_leave', 'holiday']).optional(),
+        limit: z.coerce.number().int().min(1).max(500).default(100),
       })
       .parse(request.query)
+
+    // Date semantics: "from" = start of day UTC 00:00, "to" = END of day UTC 23:59:59.999
+    // (otherwise records on the "to" date would be excluded since lte midnight)
+    const fromDate = query.from ? new Date(`${query.from}T00:00:00.000Z`) : undefined
+    const toDate = query.to ? new Date(`${query.to}T23:59:59.999Z`) : undefined
 
     const records = await prisma.attendanceRecord.findMany({
       where: {
         ...(query.employeeId ? { employeeId: query.employeeId } : {}),
         ...(query.projectId ? { projectId: query.projectId } : {}),
         ...(query.status ? { status: query.status } : {}),
-        ...(query.from || query.to
+        ...(fromDate || toDate
           ? {
               checkInAt: {
-                ...(query.from ? { gte: new Date(query.from) } : {}),
-                ...(query.to ? { lte: new Date(query.to) } : {}),
+                ...(fromDate ? { gte: fromDate } : {}),
+                ...(toDate ? { lte: toDate } : {}),
               },
             }
           : {}),
+        shiftAssignment: {
+          project: { tenantId: request.user.tenantId },
+        },
       },
       include: { shiftAssignment: { include: { employee: true, project: true, shift: true } } },
       orderBy: { checkInAt: 'desc' },
-      take: 100,
+      take: query.limit,
     })
     return { data: records }
   })

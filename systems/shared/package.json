@@ -36,6 +36,7 @@
     "prisma:studio": "prisma studio --schema=src/db/prisma/schema.prisma",
     "db:seed": "tsx src/db/seeds/dev-seed.ts",
     "db:seed:demo": "tsx src/db/seeds/demo-accounts.ts",
+    "db:seed:attendance": "tsx src/db/seeds/attendance-demo.ts",
     "db:seed:all": "pnpm db:seed && pnpm db:seed:demo",
     "db:reset": "prisma migrate reset --schema=src/db/prisma/schema.prisma --skip-seed && pnpm db:seed:all"
   },
