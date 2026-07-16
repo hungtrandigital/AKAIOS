@@ -1,24 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
+import { TopNav } from '@/components/TopNav'
+import { useAuth } from '@/components/AuthProvider'
 
-interface Employee {
-  id: string
-  status: string
-}
-
-interface Project {
-  id: string
-  status: string
-}
-
-interface CustomerReport {
-  generatedAt: string
-  project: { code: string; name: string }
-}
-
+interface Employee { id: string; status: string }
+interface Project { id: string; status: string; name: string; clientName: string }
 interface PayrollPeriod {
   id: string
   year: number
@@ -28,287 +17,201 @@ interface PayrollPeriod {
   totalNet: string | null
   totalEmployees: number | null
 }
+interface CustomerReport { generatedAt: string; project: { code: string; name: string } }
+
+const PERIOD_STATUS: Record<string, { label: string; cls: string }> = {
+  open: { label: '📂 Mới mở', cls: 'badge-info' },
+  calculating: { label: '⏳ Đang tính', cls: 'badge-neutral' },
+  calculated: { label: '✅ Đã tính', cls: 'badge-info' },
+  approved: { label: '👍 Đã duyệt', cls: 'badge-success' },
+  paid: { label: '💸 Đã trả', cls: 'badge-success' },
+  locked: { label: '🔒 Đã khóa', cls: 'badge-dark' },
+}
 
 export default function ExecutivePage() {
+  const { user } = useAuth()
   const today = new Date().toISOString().split('T')[0]
   const month = new Date().getMonth() + 1
   const year = new Date().getFullYear()
 
-  // Parallel queries for all key metrics
   const employeesQuery = useQuery({
     queryKey: ['employees'],
     queryFn: () => apiFetch<{ data: Employee[] }>('/attendance/employees'),
   })
-
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: () => apiFetch<{ data: Project[] }>('/attendance/projects'),
   })
-
   const todayAttendanceQuery = useQuery({
     queryKey: ['attendance-today'],
-    queryFn: () =>
-      apiFetch<{ data: any[] }>('/attendance/records', {
-        query: { from: today, to: today },
-      }),
+    queryFn: () => apiFetch<{ data: any[] }>('/attendance/records', { query: { from: today, to: today } }),
   })
-
-  const currentPeriodQuery = useQuery({
+  const periodsQuery = useQuery({
     queryKey: ['payroll-periods-current'],
     queryFn: () => apiFetch<{ data: PayrollPeriod[] }>('/payroll/periods'),
   })
-
-  const recentReportsQuery = useQuery({
+  const reportsQuery = useQuery({
     queryKey: ['recent-reports'],
-    queryFn: () =>
-      apiFetch<{ data: CustomerReport[] }>('/attendance/reports/customer', {
-        query: { limit: 5 },
-      }),
+    queryFn: () => apiFetch<{ data: CustomerReport[] }>('/attendance/reports/customer'),
   })
 
-  // Derived metrics
-  const activeEmployees = (employeesQuery.data?.data ?? []).filter((e) => e.status === 'active').length
-  const totalEmployees = employeesQuery.data?.data?.length ?? 0
-  const activeProjects = (projectsQuery.data?.data ?? []).filter((p) => p.status === 'active').length
-
-  const todayAttendance = todayAttendanceQuery.data?.data ?? []
-  const checkedInToday = todayAttendance.filter((r) => r.checkInAt !== null).length
-  const lateToday = todayAttendance.filter((r) => r.status === 'late').length
-  const attendanceRate = activeEmployees > 0 ? Math.round((checkedInToday / activeEmployees) * 100) : 0
-
-  const currentPeriod = (currentPeriodQuery.data?.data ?? []).find(
-    (p) => p.year === year && p.month === month
-  )
-
-  const totalMonthlyGross = currentPeriod?.totalGross
-    ? parseFloat(currentPeriod.totalGross)
-    : 0
-  const totalMonthlyNet = currentPeriod?.totalNet
-    ? parseFloat(currentPeriod.totalNet)
-    : 0
-  const totalMonthlyEmployees = currentPeriod?.totalEmployees ?? 0
-
-  const formatVNĐ = (amount: number) =>
-    new Intl.NumberFormat('vi-VN').format(amount) + ' ₫'
+  const employees = employeesQuery.data?.data ?? []
+  const projects = projectsQuery.data?.data ?? []
+  const activeEmployees = employees.filter((e) => e.status === 'active').length
+  const activeProjects = projects.filter((p) => p.status === 'active').length
+  const todayRecords = todayAttendanceQuery.data?.data ?? []
+  const checkedIn = todayRecords.filter((r) => r.checkInAt !== null).length
+  const lateToday = todayRecords.filter((r) => r.status === 'late').length
+  const attendanceRate = activeEmployees > 0 ? Math.round((checkedIn / activeEmployees) * 100) : 0
+  const currentPeriod = (periodsQuery.data?.data ?? []).find((p) => p.year === year && p.month === month)
+  const formatVNĐ = (amount: number | null) =>
+    amount == null ? '—' : new Intl.NumberFormat('vi-VN').format(amount) + ' ₫'
 
   return (
-    <div className="container">
-      <header className="flex-between" style={{ marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>📊 Báo cáo Ban Giám Đốc</h1>
-          <p className="muted">
-            {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex">
-          <Link href="/attendance">Chấm công</Link>
-          <Link href="/payroll">Bảng lương</Link>
-          <Link href="/projects">Dự án</Link>
-        </div>
-      </header>
+    <>
+      <TopNav userEmail={user?.email || user?.phone} userName={user?.fullName} role={user?.role} />
 
-      {/* KPI Cards - Top Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <KpiCard
-          icon="👥"
-          label="Nhân viên active"
-          value={activeEmployees.toString()}
-          sub={`Tổng ${totalEmployees} (gồm inactive)`}
-          color="#0066cc"
-        />
-        <KpiCard
-          icon="🏢"
-          label="Dự án active"
-          value={activeProjects.toString()}
-          sub={`Trên tổng ${projectsQuery.data?.data?.length ?? 0} dự án`}
-          color="#28a745"
-        />
-        <KpiCard
-          icon="📱"
-          label="Check-in hôm nay"
-          value={checkedInToday.toString()}
-          sub={`${attendanceRate}% tỷ lệ điểm danh`}
-          color="#17a2b8"
-        />
-        <KpiCard
-          icon="⚠️"
-          label="Đi trễ hôm nay"
-          value={lateToday.toString()}
-          sub={lateToday > 0 ? 'Cần theo dõi' : 'Tốt'}
-          color={lateToday > 0 ? '#dc3545' : '#28a745'}
-        />
-      </div>
+      <div className="page">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">📊 CEO Dashboard</h1>
+            <p className="page-subtitle">
+              Tổng quan toàn hệ thống · {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+        </div>
 
-      {/* Monthly Payroll KPI */}
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>💰 Bảng lương tháng {month}/{year}</h2>
-        {currentPeriod ? (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginTop: 16 }}>
-              <div>
-                <div className="muted" style={{ fontSize: 13 }}>Trạng thái</div>
-                <PeriodStatusBadge status={currentPeriod.status} />
-              </div>
-              <div>
-                <div className="muted" style={{ fontSize: 13 }}>Tổng gross</div>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{formatVNĐ(totalMonthlyGross)}</div>
-              </div>
-              <div>
-                <div className="muted" style={{ fontSize: 13 }}>Tổng thực nhận (net)</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#28a745' }}>
-                  {formatVNĐ(totalMonthlyNet)}
+        <div className="kpi-grid">
+          <div className="kpi-card kpi-accent">
+            <div className="kpi-card-head">
+              <div className="kpi-card-icon">👥</div>
+              <div>Nhân viên active</div>
+            </div>
+            <div className="kpi-card-value">{activeEmployees}</div>
+            <div className="kpi-card-sub">Tổng {employees.length} (gồm inactive)</div>
+          </div>
+
+          <div className="kpi-card kpi-success">
+            <div className="kpi-card-head">
+              <div className="kpi-card-icon">🏢</div>
+              <div>Dự án active</div>
+            </div>
+            <div className="kpi-card-value">{activeProjects}</div>
+            <div className="kpi-card-sub">Trên tổng {projects.length} dự án</div>
+          </div>
+
+          <div className="kpi-card kpi-success">
+            <div className="kpi-card-head">
+              <div className="kpi-card-icon">📱</div>
+              <div>Check-in hôm nay</div>
+            </div>
+            <div className="kpi-card-value">{checkedIn}</div>
+            <div className="kpi-card-sub">{attendanceRate}% tỷ lệ điểm danh</div>
+          </div>
+
+          <div className={`kpi-card ${lateToday > 0 ? 'kpi-warning' : 'kpi-success'}`}>
+            <div className="kpi-card-head">
+              <div className="kpi-card-icon">{lateToday > 0 ? '⚠️' : '✓'}</div>
+              <div>Đi trễ hôm nay</div>
+            </div>
+            <div className="kpi-card-value">{lateToday}</div>
+            <div className="kpi-card-sub">{lateToday > 0 ? 'Cần theo dõi' : 'Tốt'}</div>
+          </div>
+        </div>
+
+        {/* Payroll */}
+        <div className="page-card">
+          <div className="page-card-head">
+            <h3 className="page-card-title">💰 Bảng lương tháng {month}/{year}</h3>
+            {currentPeriod && (
+              <span className={`badge ${PERIOD_STATUS[currentPeriod.status]?.cls ?? 'badge-neutral'}`}>
+                {PERIOD_STATUS[currentPeriod.status]?.label ?? currentPeriod.status}
+              </span>
+            )}
+          </div>
+          <div className="page-card-body">
+            {currentPeriod ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-4)' }}>
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Tổng gross
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--fg-default)', marginTop: 4 }}>
+                    {formatVNĐ(currentPeriod.totalGross ? parseFloat(currentPeriod.totalGross) : null)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Thực nhận (net)
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--success)', marginTop: 4 }}>
+                    {formatVNĐ(currentPeriod.totalNet ? parseFloat(currentPeriod.totalNet) : null)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Nhân viên
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 700, color: 'var(--fg-default)', marginTop: 4 }}>
+                    {currentPeriod.totalEmployees ?? '—'}
+                  </div>
                 </div>
               </div>
-              <div>
-                <div className="muted" style={{ fontSize: 13 }}>Nhân viên</div>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{totalMonthlyEmployees}</div>
-              </div>
-            </div>
-            {currentPeriod.status === 'open' && (
-              <div className="muted" style={{ marginTop: 16 }}>
-                ⚠️ Kỳ lương chưa được tính. <Link href="/payroll">Vào BO →</Link>
-              </div>
+            ) : (
+              <p className="text-muted">Chưa mở kỳ lương cho tháng này.</p>
             )}
-          </>
-        ) : (
-          <div className="muted">
-            Chưa mở kỳ lương cho tháng {month}/{year}.{' '}
-            <Link href="/payroll">Mở kỳ →</Link>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Two-column layout: Recent reports + Quick stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>📋 Báo cáo khách hàng gần đây</h3>
-          {(recentReportsQuery.data?.data ?? []).length === 0 ? (
-            <p className="muted">Chưa có báo cáo nào được tạo.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Ngày</th>
-                  <th>Dự án</th>
-                  <th>Mã</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(recentReportsQuery.data?.data ?? []).slice(0, 5).map((r, idx) => (
-                  <tr key={idx}>
-                    <td>{new Date(r.generatedAt).toLocaleDateString('vi-VN')}</td>
-                    <td>{r.project.name}</td>
-                    <td><code style={{ fontSize: 11 }}>{r.project.code}</code></td>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 'var(--space-4)' }}>
+          <div className="page-card">
+            <div className="page-card-head">
+              <h3 className="page-card-title">📋 Báo cáo khách hàng</h3>
+            </div>
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Ngày</th>
+                    <th>Dự án</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>🚀 Tình trạng hệ thống</h3>
-          <SystemHealth />
-          <div style={{ marginTop: 16 }}>
-            <Link href="/projects">
-              <button style={{ width: '100%' }}>Xem danh sách dự án</button>
-            </Link>
+                </thead>
+                <tbody>
+                  {((reportsQuery.data?.data ?? []).slice(0, 5).length === 0) ? (
+                    <tr><td colSpan={2} className="table-empty">Chưa có báo cáo</td></tr>
+                  ) : (
+                    (reportsQuery.data?.data ?? []).slice(0, 5).map((r, idx) => (
+                      <tr key={idx}>
+                        <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
+                          {new Date(r.generatedAt).toLocaleDateString('vi-VN')}
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 500 }}>{r.project.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+                            <code>{r.project.code}</code>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div style={{ marginTop: 8 }}>
-            <Link href="/employees">
-              <button style={{ width: '100%', background: '#6c757d' }}>Xem danh sách nhân viên</button>
-            </Link>
+
+          <div className="page-card">
+            <div className="page-card-head">
+              <h3 className="page-card-title">🚀 Quick actions</h3>
+            </div>
+            <div className="page-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <a href="/projects" className="btn btn-secondary btn-block">📋 Xem danh sách dự án</a>
+              <a href="/employees" className="btn btn-secondary btn-block">👥 Xem danh sách nhân viên</a>
+              <a href="/payroll" className="btn btn-primary btn-block">💰 Mở kỳ lương</a>
+              <a href="/attendance" className="btn btn-ghost btn-block">📍 Xem chấm công realtime</a>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
-
-function KpiCard({
-  icon,
-  label,
-  value,
-  sub,
-  color,
-}: {
-  icon: string
-  label: string
-  value: string
-  sub?: string
-  color: string
-}) {
-  return (
-    <div className="card" style={{ padding: 16, borderLeft: `4px solid ${color}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <span style={{ fontSize: 28 }}>{icon}</span>
-        <span style={{ color: '#666', fontSize: 13, fontWeight: 600, textTransform: 'uppercase' }}>
-          {label}
-        </span>
-      </div>
-      <div style={{ fontSize: 32, fontWeight: 700, color }}>{value}</div>
-      {sub && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{sub}</div>}
-    </div>
-  )
-}
-
-function PeriodStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { bg: string; label: string }> = {
-    open: { bg: '#17a2b8', label: '📂 Mới mở' },
-    calculating: { bg: '#6c757d', label: '⏳ Đang tính' },
-    calculated: { bg: '#007bff', label: '✅ Đã tính' },
-    approved: { bg: '#28a745', label: '👍 Đã duyệt' },
-    paid: { bg: '#20c997', label: '💸 Đã trả' },
-    locked: { bg: '#343a40', label: '🔒 Đã khóa' },
-  }
-  const c = config[status] ?? { bg: '#888', label: status }
-  return (
-    <span
-      style={{
-        background: c.bg,
-        color: 'white',
-        padding: '4px 10px',
-        borderRadius: 4,
-        fontSize: 13,
-        fontWeight: 600,
-        display: 'inline-block',
-        marginTop: 4,
-      }}
-    >
-      {c.label}
-    </span>
-  )
-}
-
-function SystemHealth() {
-  const [health, setHealth] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch('/api/payroll/health/live')
-      .then((r) => r.json())
-      .then((data) => {
-        setHealth(data)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [])
-
-  if (loading) return <p className="muted">Đang kiểm tra...</p>
-  if (!health) return <p className="error">Không thể kiểm tra trạng thái</p>
-
-  return (
-    <div style={{ padding: '8px 0' }}>
-      <div className="flex-between">
-        <span>API Payroll:</span>
-        <span style={{ color: '#28a745', fontWeight: 600 }}>🟢 Online</span>
-      </div>
-      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-        Last check: {new Date(health.timestamp).toLocaleTimeString('vi-VN')}
-      </div>
-    </div>
-  )
-}
-
-// Need to import useEffect
-import { useEffect, useState } from 'react'

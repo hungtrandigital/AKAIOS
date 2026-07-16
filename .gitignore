@@ -75,3 +75,7 @@ playwright/.cache/
 # Next.js
 .next/
 out/
+---
+
+# Ignore large reference assets
+shared/assets/Prismate Brand Assets/

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="ak-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0289f7" />
+      <stop offset="100%" stop-color="#0070cc" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#ak-grad)" />
+  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle"
+        fill="white" font-family="'InterVariable','Inter',system-ui,sans-serif"
+        font-weight="700" font-size="14" letter-spacing="-0.5">AK</text>
+</svg>

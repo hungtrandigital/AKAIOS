@@ -11,8 +11,6 @@ export default function HomePage() {
       router.replace('/login')
       return
     }
-    // Try to detect role from JWT to redirect appropriately
-    // For MVP, all roles land on /attendance (realtime view)
     router.replace('/attendance')
   }, [router])
   return null

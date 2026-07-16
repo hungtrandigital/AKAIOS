@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="ak-grad-64" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0289f7" />
+      <stop offset="100%" stop-color="#0070cc" />
+    </linearGradient>
+  </defs>
+  <!-- Brand mark — gradient rounded square with AK letterform -->
+  <rect width="64" height="64" rx="14" fill="url(#ak-grad-64)" />
+  <text x="32" y="32" dominant-baseline="central" text-anchor="middle"
+        fill="white" font-family="'InterVariable','Inter',system-ui,sans-serif"
+        font-weight="800" font-size="28" letter-spacing="-1">AK</text>
+  <!-- Clean sweep underline accent -->
+  <rect x="14" y="48" width="36" height="2" rx="1" fill="white" opacity="0.6"/>
+  <rect x="20" y="52" width="24" height="2" rx="1" fill="white" opacity="0.4"/>
+</svg>

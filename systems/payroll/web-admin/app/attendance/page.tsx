@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import Link from 'next/link'
-import { apiFetch, apiLogout } from '@/lib/api'
-import { useRouter } from 'next/navigation'
+import { apiFetch } from '@/lib/api'
+import { TopNav } from '@/components/TopNav'
+import { useAuth } from '@/components/AuthProvider'
 import { AttendanceOverrideModal } from '@/components/AttendanceOverrideModal'
 
 interface AttendanceRecord {
@@ -22,112 +22,149 @@ interface AttendanceRecord {
   }
 }
 
+const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  present: { label: 'Đúng giờ', cls: 'badge-success' },
+  late: { label: 'Đi trễ', cls: 'badge-warning' },
+  absent: { label: 'Vắng', cls: 'badge-danger' },
+  on_leave: { label: 'Nghỉ phép', cls: 'badge-neutral' },
+  holiday: { label: 'Lễ', cls: 'badge-info' },
+  half_day: { label: 'Nửa ngày', cls: 'badge-warning' },
+  early_leave: { label: 'Về sớm', cls: 'badge-warning' },
+}
+
 export default function AttendancePage() {
-  const router = useRouter()
+  const { user } = useAuth()
   const today = new Date().toISOString().split('T')[0]
   const [overrideTarget, setOverrideTarget] = useState<AttendanceRecord | null>(null)
+  const [filter, setFilter] = useState('')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['attendance', today],
-    queryFn: () => apiFetch<{ data: AttendanceRecord[] }>('/attendance/records', {
-      query: { from: today, to: today },
-    }),
+    queryFn: () =>
+      apiFetch<{ data: AttendanceRecord[] }>('/attendance/records', {
+        query: { from: today, to: today },
+      }),
     refetchInterval: 30_000,
   })
 
-  const logout = async () => {
-    await apiLogout()
-    router.push('/login')
-  }
-
-  const groupedByProject = data?.data?.reduce((acc, r) => {
+  const groupedByProject = (data?.data ?? []).reduce((acc, r) => {
     const key = r.shiftAssignment.project.code
-    if (!acc[key]) acc[key] = { project: r.shiftAssignment.project, records: [] }
-    acc[key].records.push(r)
+    if (!acc[key]) acc[key] = { project: r.shiftAssignment.project, records: [] as AttendanceRecord[] }
+    ;(acc[key]!.records as AttendanceRecord[]).push(r)
     return acc
-  }, {} as Record<string, { project: AttendanceRecord['shiftAssignment']['project']; records: AttendanceRecord[] }>) ?? {}
+  }, {} as Record<string, { project: AttendanceRecord['shiftAssignment']['project']; records: AttendanceRecord[] }>)
+
+  const filteredKeys = Object.entries(groupedByProject).filter(([code, group]) => {
+    if (!filter) return true
+    const q = filter.toLowerCase()
+    return code.toLowerCase().includes(q) || group.project.name.toLowerCase().includes(q)
+  })
 
   return (
-    <div className="container">
-      <header className="flex-between" style={{ marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Chấm công hôm nay</h1>
-          <p className="muted">{new Date().toLocaleDateString('vi-VN')}</p>
+    <>
+      <TopNav
+        userEmail={user?.email || user?.phone}
+        userName={user?.fullName}
+        role={user?.role}
+      />
+
+      <div className="page">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">📍 Chấm công hôm nay</h1>
+            <p className="page-subtitle">
+              {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {' '}· Tự động refresh mỗi 30s
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <input
+              type="search"
+              placeholder="Lọc dự án..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              style={{ width: 200 }}
+            />
+          </div>
         </div>
-        <div className="flex">
-          <Link href="/executive">📊 CEO</Link>
-          <Link href="/payroll">Bảng lương</Link>
-          <Link href="/projects">Dự án</Link>
-          <Link href="/employees">Nhân viên</Link>
-          <button className="danger" onClick={logout}>Đăng xuất</button>
-        </div>
-      </header>
 
-      {isLoading && <p>Đang tải...</p>}
-      {error && <div className="error">{String(error)}</div>}
+        {isLoading && (
+          <div className="card text-center">
+            <span className="spinner" /> Đang tải dữ liệu...
+          </div>
+        )}
+        {error && <div className="alert alert-error">⚠️ Không thể tải: {String(error)}</div>}
 
-      {Object.entries(groupedByProject).map(([code, { project, records }]) => (
-        <div key={code} className="card">
-          <h3 style={{ marginTop: 0 }}>{project.name}</h3>
-          <p className="muted">{project.code} · {records.length} records</p>
-          <table>
-            <thead>
-              <tr>
-                <th>Mã NV</th>
-                <th>Họ tên</th>
-                <th>Ca</th>
-                <th>Check-in</th>
-                <th>Check-out</th>
-                <th>Tổng giờ</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.shiftAssignment.employee.employeeCode}</td>
-                  <td>{r.shiftAssignment.employee.fullName}</td>
-                  <td>{r.shiftAssignment.shift.name} ({r.shiftAssignment.shift.startTime}-{r.shiftAssignment.shift.endTime})</td>
-                  <td>{r.checkInAt ? new Date(r.checkInAt).toLocaleTimeString('vi-VN') : '—'}</td>
-                  <td>{r.checkOutAt ? new Date(r.checkOutAt).toLocaleTimeString('vi-VN') : '—'}</td>
-                  <td>{r.totalMinutesWorked ? `${Math.round(r.totalMinutesWorked / 60 * 10) / 10}h` : '—'}</td>
-                  <td><StatusBadge status={r.status} /></td>
-                  <td>
-                    <button onClick={() => setOverrideTarget(r)} style={{ fontSize: 12, padding: '4px 8px' }}>
-                      Override
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+        {!isLoading && Object.keys(filteredKeys).length === 0 && (
+          <div className="card text-center text-muted">
+            Hôm nay chưa có check-in nào.
+          </div>
+        )}
 
-      {overrideTarget && (
-        <AttendanceOverrideModal
-          record={overrideTarget}
-          onClose={() => setOverrideTarget(null)}
-        />
-      )}
-    </div>
-  )
-}
+        {filteredKeys.map(([code, { project, records }]) => (
+          <div key={code} className="page-card">
+            <div className="page-card-head">
+              <h3 className="page-card-title">
+                🏢 {project.name} <span style={{ color: 'var(--fg-muted)', fontWeight: 400, fontSize: 13, marginLeft: 8 }}>{project.code}</span>
+              </h3>
+              <span className="badge badge-neutral">{records.length} records</span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Mã NV</th>
+                    <th>Họ tên</th>
+                    <th>Ca</th>
+                    <th>Check-in</th>
+                    <th>Check-out</th>
+                    <th>Tổng giờ</th>
+                    <th>Trạng thái</th>
+                    <th style={{ width: 1 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((r) => (
+                    <tr key={r.id}>
+                      <td><code>{r.shiftAssignment.employee.employeeCode}</code></td>
+                      <td style={{ fontWeight: 500 }}>{r.shiftAssignment.employee.fullName}</td>
+                      <td>
+                        <div style={{ fontSize: 13 }}>{r.shiftAssignment.shift.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+                          {r.shiftAssignment.shift.startTime}–{r.shiftAssignment.shift.endTime}
+                        </div>
+                      </td>
+                      <td>{r.checkInAt ? new Date(r.checkInAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                      <td>{r.checkOutAt ? new Date(r.checkInAt!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }).replace(r.checkInAt!, r.checkOutAt) : '—'}</td>
+                      <td>{r.totalMinutesWorked ? `${Math.round(r.totalMinutesWorked / 60 * 10) / 10}h` : '—'}</td>
+                      <td>
+                        <span className={`badge ${STATUS_BADGE[r.status]?.cls ?? 'badge-neutral'}`}>
+                          {STATUS_BADGE[r.status]?.label ?? r.status}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setOverrideTarget(r)}
+                        >
+                          Sửa
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
 
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    present: '#28a745',
-    late: '#ffc107',
-    absent: '#dc3545',
-    on_leave: '#6c757d',
-    holiday: '#17a2b8',
-    half_day: '#fd7e14',
-    early_leave: '#e83e8c',
-  }
-  return (
-    <span style={{ background: colors[status] ?? '#888', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: 12 }}>
-      {status}
-    </span>
+        {overrideTarget && (
+          <AttendanceOverrideModal
+            record={overrideTarget}
+            onClose={() => setOverrideTarget(null)}
+          />
+        )}
+      </div>
+    </>
   )
 }

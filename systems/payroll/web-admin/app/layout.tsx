@@ -1,4 +1,4 @@
-// Root layout for AKAIUNSAN web admin.
+// Root layout for AKAIUNSAN web admin — Prismate design system.
 
 import type { Metadata } from 'next'
 import './globals.css'
@@ -6,7 +6,11 @@ import { Providers } from './providers'
 
 export const metadata: Metadata = {
   title: 'AKAIUNSAN Admin',
-  description: 'Internal attendance + payroll admin',
+  description: 'Internal attendance + payroll admin — Prismate design',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
