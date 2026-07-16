@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/attendance/v1/auth/admin-login', {
+      const response = await fetch('/api/attendance/auth/admin-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
