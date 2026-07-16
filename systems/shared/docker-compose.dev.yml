@@ -21,7 +21,7 @@ services:
       - POSTGRES_PASSWORD=dev_password
       - POSTGRES_DB=ak_main
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"  # host 5433 → container 5432 (avoid conflict with maimai-db on 5432)
     volumes:
       - postgres_dev:/var/lib/postgresql/data
     healthcheck:
@@ -35,7 +35,7 @@ services:
     container_name: ak-dev-redis
     command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"  # host 6380 → container 6379 (avoid conflict)
     volumes:
       - redis_dev:/data
     healthcheck:
@@ -45,15 +45,15 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:RELEASE.2024-09-13T03-09-25Z
+    image: minio/minio:latest
     container_name: ak-dev-minio
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       - MINIO_ROOT_USER=ak_admin
       - MINIO_ROOT_PASSWORD=dev_minio_password
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:9100:9000"   # host 9100 → container 9000 (avoid frappe 9000)
+      - "127.0.0.1:9101:9001"   # host 9101 → console 9001
     volumes:
       - minio_dev:/data
     healthcheck:

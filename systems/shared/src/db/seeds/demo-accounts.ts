@@ -13,6 +13,7 @@
 
 import { PrismaClient, UserRole, SalaryType } from '@prisma/client'
 import { hashPassword } from '../../auth/password.js'
+import { AK_TENANT_ID } from './dev-seed.js'
 
 const prisma = new PrismaClient()
 
@@ -147,7 +148,7 @@ async function createDemoAccounts() {
         role: acc.role,
       },
       create: {
-        tenantId: 'ak-main-tenant',
+        tenantId: AK_TENANT_ID,
         phone: acc.phone,
         email: acc.email ?? null,
         passwordHash,
@@ -157,13 +158,13 @@ async function createDemoAccounts() {
 
     // Upsert employee (link to user)
     const employee = await prisma.employee.upsert({
-      where: { tenantId_employeeCode: { tenantId: 'ak-main-tenant', employeeCode: acc.employeeCode } },
+      where: { tenantId_employeeCode: { tenantId: AK_TENANT_ID, employeeCode: acc.employeeCode } },
       update: {
         fullName: acc.fullName,
         baseSalary: acc.baseSalary.toString(),
       },
       create: {
-        tenantId: 'ak-main-tenant',
+        tenantId: AK_TENANT_ID,
         userId: user.id,
         employeeCode: acc.employeeCode,
         fullName: acc.fullName,
@@ -176,7 +177,7 @@ async function createDemoAccounts() {
     // For supervisors, link to their flagship project (assign as project supervisor via shift assignment today)
     if ('projectCode' in acc && acc.projectCode) {
       const project = await prisma.project.findUnique({
-        where: { tenantId_code: { tenantId: 'ak-main-tenant', code: acc.projectCode } },
+        where: { tenantId_code: { tenantId: AK_TENANT_ID, code: acc.projectCode } },
       })
       if (project) {
         // Create a "supervisor on duty" assignment for today

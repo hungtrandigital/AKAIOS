@@ -51,6 +51,9 @@ const SHIFTS = [
 
 const NUM_EMPLOYEES = 200
 
+// Fixed UUID for AKAIUNSAN tenant — used across seeds and tests
+export const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
+
 export async function seedDevData(): Promise<{
   tenantId: string
   adminUserId: string
@@ -61,10 +64,10 @@ export async function seedDevData(): Promise<{
 
   // === Tenant ===
   const tenant = await prisma.tenant.upsert({
-    where: { id: 'ak-main-tenant' },
+    where: { id: AK_TENANT_ID },
     update: {},
     create: {
-      id: 'ak-main-tenant',
+      id: AK_TENANT_ID,
       name: 'AKAIUNSAN Cleaning Services',
     },
   })
@@ -114,13 +117,14 @@ export async function seedDevData(): Promise<{
   }
 
   // === Shifts ===
-  const shiftRecords = await Promise.all(
-    SHIFTS.map((s) =>
-      prisma.shift.upsert({
-        where: { id: `ak-shift-${s.name}` },
-        update: {},
-        create: {
-          id: `ak-shift-${s.name}`,
+  const shiftRecords: { id: string; name: string }[] = []
+  for (const s of SHIFTS) {
+    const existing = await prisma.shift.findFirst({ where: { name: s.name } })
+    if (existing) {
+      shiftRecords.push({ id: existing.id, name: existing.name })
+    } else {
+      const created = await prisma.shift.create({
+        data: {
           name: s.name,
           startTime: s.startTime,
           endTime: s.endTime,
@@ -130,8 +134,9 @@ export async function seedDevData(): Promise<{
           color: s.name === 'Ca sáng' ? '#FFA500' : s.name === 'Ca chiều' ? '#4169E1' : s.name === 'Ca tối' ? '#2F4F4F' : '#90EE90',
         },
       })
-    )
-  )
+      shiftRecords.push({ id: created.id, name: created.name })
+    }
+  }
 
   // === Projects (15) ===
   console.log(`Creating ${CUSTOMERS.length} projects...`)
@@ -215,7 +220,7 @@ export async function seedDevData(): Promise<{
     for (let empIdx = 0; empIdx < employees.length; empIdx++) {
       const employee = employees[empIdx]!
       const project = projects[(empIdx + dayOffset) % projects.length]!
-      const shift = shiftRecords[empIdx % 2]! // alternate morning/afternoon
+      const shift = shiftRecords[empIdx % 2]!
 
       await prisma.shiftAssignment.upsert({
         where: {

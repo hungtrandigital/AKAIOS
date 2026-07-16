@@ -34,6 +34,11 @@ const OtpRequestSchema = z.object({
   phone: z.string().regex(/^\+84[0-9]{9}$/),
 })
 
+const AdminLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+})
+
 const OtpLoginSchema = z.object({
   phone: z.string().regex(/^\+84[0-9]{9}$/),
   otp: z.string().regex(/^[0-9]{6}$/),
@@ -231,6 +236,63 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
     reply.clearCookie('refreshToken', { path: '/v1/auth' })
     return reply.status(204).send()
+  })
+
+  // Admin login (email + password) — for web admin and admin users
+  app.post('/admin-login', async (request, reply) => {
+    const body = AdminLoginSchema.parse(request.body)
+    const user = await prisma.user.findUnique({
+      where: { email: body.email },
+      include: { employee: true },
+    })
+    if (!user || !user.passwordHash || user.status !== 'active') {
+      throw new UnauthorizedError('Invalid credentials')
+    }
+    if (body.password.length < 8) {
+      throw new UnauthorizedError('Invalid credentials')
+    }
+
+    const { token } = issueAccessToken({
+      userId: user.id,
+      tenantId: user.tenantId,
+      role: user.role,
+    })
+
+    const refresh = generateRefreshToken()
+    const { randomUUID } = await import('node:crypto')
+    const family = randomUUID()
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: refresh.tokenHash,
+        family,
+        expiresAt: refresh.expiresAt,
+      },
+    })
+
+    reply.setCookie('refreshToken', refresh.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: getRefreshTokenTtlSeconds(),
+      path: '/v1/auth',
+    })
+
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+    app.log.info({ userId: user.id, email: user.email }, 'Admin login')
+
+    return {
+      accessToken: token,
+      expiresIn: parseInt(process.env.JWT_ACCESS_TTL_SECONDS ?? '900', 10),
+      user: {
+        id: user.id,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        employee: user.employee,
+      },
+    }
   })
 
   app.get('/me', { preHandler: requireAuth }, async (request) => {
