@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
-- **PRD-EPIC-002 CI remediation:** Corrected the Prisma schema path, added real unit/integration/E2E entry points, enforced ≥90% coverage over core attendance/payroll logic, and replaced skipped or incomplete Actions checks with independent quality, build, live-service integration, and Playwright jobs.
+- **PRD-EPIC-002 CI remediation:** Corrected the Prisma schema path, added real unit/integration/E2E entry points, enforced ≥90% coverage over core attendance/payroll logic, and replaced skipped or incomplete Actions checks with independent quality, build, live-service integration, and Playwright jobs; remote execution was verified by [Actions run 29555194773](https://github.com/hungtrandigital/AKAIOS/actions/runs/29555194773).
 - **PRD-EPIC-002 database baseline:** Added and verified the immutable initial Prisma migration on a fresh PostgreSQL 16 database; added the production-safe `prisma:migrate:deploy` command.
 - **PRD-EPIC-002 seed orchestration:** Removed the duplicate `db:seed:all` key so attendance and RBAC seed stages are no longer silently omitted from the aggregate command.
 - Cleared remaining references to legacy numbered product foundation paths (plan/boost scaffolds) and added a redirect notice in the old backlog file to point to `product-backlog/backlog.md`.

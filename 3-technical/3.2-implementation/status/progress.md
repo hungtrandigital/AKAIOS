@@ -9,7 +9,7 @@
 - **Verdict:** REJECTED — 4 Critical, 14 High, and 3 Medium findings.
 - **Scope:** commit range `08d9d25..9ed7be2`, 147 files.
 - **Canonical report:** [PRD-EPIC-002 code review](../../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md).
-- **Open work:** `CODE-BUG-002..020` and `CODE-BUG-022`; `CODE-BUG-021` is fixed. Authentication, tenant isolation, payroll integrity, deployment, and CI are release blockers.
+- **Open work:** `CODE-BUG-002..018`, `CODE-BUG-020`, and `CODE-BUG-022`; `CODE-BUG-019` and `CODE-BUG-021` are fixed. Authentication, tenant isolation, payroll integrity, deployment, and browser E2E failures remain release blockers.
 - **Next action:** Fix Critical issues first, then security/payroll High issues in bounded batches and request re-review after each batch.
 
 ### Reviewed-head verification evidence (historical)
@@ -42,7 +42,7 @@
 ## Active Remediation
 
 - Critical: `CODE-BUG-002..005`.
-- High: `CODE-BUG-006..019`.
+- High: `CODE-BUG-006..018`; `CODE-BUG-019` is fixed.
 - Medium: `CODE-BUG-020` and `CODE-BUG-022`; `CODE-BUG-021` is fixed.
 - The next milestone is a successful re-review of the Critical and security/payroll High batches; no pilot date should be set before that gate passes.
 
@@ -59,7 +59,7 @@
 | Real integration gate | Pass: PostgreSQL, Redis, MinIO, bucket readiness, and API readiness exercised |
 | Playwright E2E | Executed with Chromium and live services: 5 pass, 2 fail on open `CODE-BUG-002` and `CODE-BUG-020` |
 
-`CODE-BUG-019` is in progress pending a fresh GitHub Actions run. The release verdict remains rejected: a red E2E job is expected until the authentication bypass and web-admin auth-state defects are remediated, and `CODE-BUG-005` remains open for Docker/Compose work.
+`CODE-BUG-019` is fixed by [GitHub Actions run 29555194773](https://github.com/hungtrandigital/AKAIOS/actions/runs/29555194773): quality, production build, and live-service integration passed; Playwright installed Chromium, migrated and seeded a fresh database, started all services, then reported 5 pass and 2 fail. The release verdict remains rejected because those failures reproduce `CODE-BUG-002` and `CODE-BUG-020`, and `CODE-BUG-005` remains open for Docker/Compose work.
 
 ## Gate to Resume Pilot
 

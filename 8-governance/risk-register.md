@@ -73,7 +73,7 @@ Broken Compose paths, incomplete production images, and unresolved application f
 
 The 2026-07-17 remediation batch adds a verified fresh-database migration, fixes aggregate seed orchestration, and makes the CI gates execute real quality, integration, and browser checks. Risk remains open because Docker/Compose is not yet repaired and the browser gate correctly exposes unresolved authentication and web-admin defects.
 
-**Mitigation:** Finish `CODE-BUG-005` and remotely verify `CODE-BUG-019`; retain the fresh-database aggregate seed as regression evidence for fixed `CODE-BUG-021`; validate immutable builds from the lockfile; run production-image smoke tests and a real CI integration gate.
+**Mitigation:** Finish `CODE-BUG-005`; retain the verified GitHub Actions run for fixed `CODE-BUG-019` and the fresh-database aggregate seed for fixed `CODE-BUG-021` as regression evidence; validate immutable builds from the lockfile and run production-image smoke tests.
 
 **Contingency:** Keep the pilot blocked and retain the last known-good environment. Do not perform manual schema or container workarounds that cannot be reproduced from the repository.
 

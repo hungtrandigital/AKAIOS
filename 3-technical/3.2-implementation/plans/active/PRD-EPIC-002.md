@@ -414,7 +414,7 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 | CODE-BUG-016 | High | Payroll override breaks money and state invariants | open |
 | CODE-BUG-017 | High | Weekend/holiday overtime double-counted | open |
 | CODE-BUG-018 | High | Out-of-scope compliance changes unauditable net pay | open |
-| CODE-BUG-019 | High | CI/integration/coverage quality gate invalid | in-progress (local verification complete; GitHub run pending) |
+| CODE-BUG-019 | High | CI/integration/coverage quality gate invalid | fixed (GitHub Actions run 29555194773 verified 2026-07-17) |
 | CODE-BUG-020 | Medium | Web-admin auth state, E2E, and checkout display defects | open |
 | CODE-BUG-021 | Medium | Aggregate seed omits attendance and RBAC data | fixed (fresh-database aggregate seed verified 2026-07-17) |
 | CODE-BUG-022 | Medium | Canonical documentation and implementation drift | open |
@@ -425,7 +425,7 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - Local verification passes for Prisma generation, lint, typecheck, unit tests, ≥90% coverage, production build, a fresh PostgreSQL 16 migration deploy, and a real PostgreSQL/Redis/MinIO integration test.
 - The aggregate seed now runs dev, demo-account, attendance, and RBAC stages once in order; a fresh-database run completed with a randomized multi-month attendance dataset and 52 role-permission mappings, closing `CODE-BUG-021`.
 - The browser gate now installs Chromium, migrates and seeds a fresh database, starts both APIs and the web admin, then runs all Playwright tests. Its local run reports 5 pass and 2 fail; the failures reproduce open `CODE-BUG-002` and `CODE-BUG-020` instead of being skipped or ignored.
-- `CODE-BUG-005` remains open because production Docker/Compose validation is outside this batch. `CODE-BUG-019` remains in progress until the new GitHub Actions run proves that every gate executes remotely.
+- `CODE-BUG-005` remains open because production Docker/Compose validation is outside this batch. `CODE-BUG-019` is fixed by [GitHub Actions run 29555194773](https://github.com/hungtrandigital/AKAIOS/actions/runs/29555194773): quality, build, integration, and browser jobs all executed; the overall run remains red only because E2E reproduces open `CODE-BUG-002` and `CODE-BUG-020`.
 
 ## Related Documents
 

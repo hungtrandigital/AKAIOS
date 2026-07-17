@@ -166,7 +166,7 @@ The implementation must not be merged to a production branch or deployed. The re
 - Added an ESLint baseline, explicit unit/integration/E2E scripts, coverage providers, and ≥90% thresholds over attendance domain services and payroll engine code.
 - Split GitHub Actions into independent quality, production-build, integration, and Playwright jobs. Integration now receives `RUN_INTEGRATION=true` through Turbo and exercises PostgreSQL, Redis, MinIO buckets, and API readiness.
 - Playwright now installs Chromium, starts all dependencies and application processes, and uploads diagnostics. The local gate executed all 7 tests: 5 passed; invalid-password and logout tests failed because they reproduce open `CODE-BUG-002` and `CODE-BUG-020`.
-- Local remediation checks pass except for those two intentional release-blocking E2E failures. `CODE-BUG-019` remains in progress until a fresh GitHub Actions run confirms remote execution; the overall **REJECTED** verdict is unchanged.
+- Local remediation checks pass except for those two intentional release-blocking E2E failures. [GitHub Actions run 29555194773](https://github.com/hungtrandigital/AKAIOS/actions/runs/29555194773) remotely executed all four jobs: quality, production build, and integration passed; Playwright completed with 5 pass and 2 failures reproducing `CODE-BUG-002` and `CODE-BUG-020`. `CODE-BUG-019` is fixed; the overall **REJECTED** verdict is unchanged.
 
 ## Medium-severity issues
 
@@ -223,7 +223,7 @@ The implementation must not be merged to a production branch or deployed. The re
 **Review verdict**: REJECTED — 4 Critical, 14 High, 3 Medium findings
 
 **Next recommended agent**: @fullstack-engineer
-**Next task**: Fix CODE-BUG-002 through CODE-BUG-019 in prioritized batches and request re-review
+**Next task**: Fix open CODE-BUG-002 through CODE-BUG-018 in prioritized batches and request re-review
 **Priority**: Critical
 
 **Blockers/Issues**: Authentication takeover, cross-tenant mutations and data disclosure, invalid payroll results, nonfunctional production build/database initialization, and untrustworthy CI gates.
