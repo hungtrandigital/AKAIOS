@@ -2,138 +2,65 @@
 
 ## Current Status
 
-**Last Updated:** 2026-07-16 (PRD-EPIC-002 — Attendance + Payroll systems, Phase 0+1+2 backend + mobile scaffold complete; typecheck + tests passing)
+**Last Updated:** 2026-07-17 (PRD-EPIC-002 code review rejected; remediation required before deployment or pilot)
 
-## Overall Progress
+## Review Gate — 2026-07-17
 
-- **Completion:** PRD-EPIC-002 Phase 0+1+2 backend + mobile: ✅ 95%
-- **Current Sprint:** Phase 2 (attendance mobile + admin pending) and Phase 3 (payroll engine)
+- **Verdict:** REJECTED — 4 Critical, 14 High, and 3 Medium findings.
+- **Scope:** commit range `08d9d25..9ed7be2`, 147 files.
+- **Canonical report:** [PRD-EPIC-002 code review](../../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md).
+- **Open work:** `CODE-BUG-002..022`; authentication, tenant isolation, payroll integrity, deployment, and CI are release blockers.
+- **Next action:** Fix Critical issues first, then security/payroll High issues in bounded batches and request re-review after each batch.
 
-## PRD-EPIC-002 — Attendance + Payroll Systems (AKAIUNSAN)
+### Fresh verification evidence
 
-### Phase 0 — Architecture ✅ Complete (2026-07-16)
-- 5 architecture docs produced (infrastructure, system-design C4, domain-specs DDD, api-contracts OpenAPI, coding-standards)
-- 3 ADRs written (tech stack, on-premise, skip VN compliance MVP)
-- 2 system scaffolds (attendance, payroll) with README + docs/architecture
-- Tracking: Epic 2 added to backlog + work-items-registry + plans/README
+| Check | Result |
+| --- | --- |
+| `pnpm lint` | Fail: ESLint configuration missing |
+| `pnpm typecheck` | Pass: 5/5 tasks |
+| `pnpm build` | Pass: 4/4 packages on host |
+| Attendance tests | Fail: 23 pass, 1 fail, 1 integration skipped |
+| Payroll tests | Partial: 73 pass, 2 todo |
+| Web E2E after Chromium install | Fail: 4 pass, 3 fail |
+| Coverage | Fail: provider missing; ≥90% not measurable |
+| Attendance Docker image | Fail: Prisma Client not generated during image build |
+| Root migration command | Fail: Prisma command unavailable; no committed migrations |
 
-### Phase 1 — Foundation ✅ Complete (2026-07-16)
-- Monorepo: pnpm + Turborepo at root (`pnpm-workspace.yaml`, `turbo.json`, root `package.json`)
-- `@ak/shared` package: Prisma schema (15 models, all entities from domain-specs), Auth (JWT, Argon2id, OTP), GPSCoordinate value object (Haversine), Money value object (Decimal.js), MinIO client
-- `@ak/attendance-api` scaffold: Fastify 4 + TS strict, health + auth (login password/OTP) + me endpoints
-- `@ak/payroll-api` scaffold: Fastify 4 + TS strict, health endpoint, payroll engine stub (Phase 3 implements)
-- Shared Docker stack (`systems/shared/docker-compose.yml`, `docker-compose.dev.yml`, `Caddyfile`)
-- Per-backend Dockerfiles (multi-stage build)
-- CI workflow `.github/workflows/ci.yml` (lint + typecheck + unit + integration with Postgres+Redis services)
-- ADR-004 documenting monorepo tooling placement
+## Implementation vs Acceptance
 
-### Phase 2 — Attendance ✅ Backend Complete, Mobile Scaffold Done (2026-07-16)
-- **Backend services** (pure functions, ~310 LOC + tests):
-  - `GeoService` — BR-ATT-001 (geofence), BR-ATT-007 (project GPS required), BR-ATT-010 (low accuracy tolerance)
-  - `AttendanceService` — BR-ATT-002 (late threshold), BR-ATT-004 (no double check-in/out)
-  - `ScheduleService` — BR-ATT-006 (conflict detection), BR-ATT-008 (past date window)
-  - `PhotoService` — BR-ATT-005 (photo required, JPEG verified, max 5MB), MinIO upload
-- **Backend routes** (4 route files, ~470 LOC):
-  - `/v1/auth/{login, request-otp, login-otp, logout, me}` — Phase 1 minimal
-  - `/v1/attendance/{my-today, check-in, check-out, records, records/:id/override}` — Phase 2
-  - `/v1/projects` CRUD (admin only) — Phase 2
-  - `/v1/employees` CRUD (admin) — Phase 2
-  - `/v1/shifts` + `/v1/shifts/assignments` — Phase 2
-- **Backend tests** (3 files, 25 test cases):
-  - `geo-service.test.ts` — 8 cases (inside/outside/low-accuracy/project missing GPS)
-  - `attendance-service.test.ts` — 13 cases (absent/present/late/overnight/no-double)
-  - `auth.test.ts` + `health.test.ts` — 2 cases
-  - `engine.test.ts` + `health.test.ts` (payroll) — 2 cases
-- **Mobile scaffold** (`systems/attendance/mobile/`, ~900 LOC Dart):
-  - pubspec.yaml (Riverpod, Dio, Geolocator, image_picker, secure_storage, go_router)
-  - vi/en ARB localization files
-  - 4 screens: Login (password OR OTP), Today (assignment + status), CheckIn/CheckOut (GPS + camera + submit)
-  - Repositories (auth, attendance) + Riverpod providers + secure storage
-  - README with `flutter create` instructions
-  - ⚠️ Requires `flutter create --platforms=android,ios .` to scaffold native folders + add permissions
-- **Deferred**: Next.js web admin (Phase 2.5+)
+| Slice / Surface | Implementation observed in reviewed range | Acceptance status |
+| --- | --- | --- |
+| Foundation / architecture | Architecture, shared package, Compose, Dockerfiles, CI, and seeds are present | **Rejected:** production image, paths, migrations, seed orchestration, and CI gates fail |
+| Attendance backend | Auth, employee/project/shift, check-in/out, override, and report routes are present | **Rejected:** authentication, tenant isolation, geofence, time, concurrency, and data-integrity blockers |
+| Attendance mobile | Dart screens/repositories are present | **Incomplete:** no native platform projects; provider/base-URL/photo path cannot be validated end to end |
+| Payroll backend | Calculation, period state routes, overrides, rules, and Excel export are present | **Rejected:** authorization, month boundary, atomicity, override, OT, and compliance defects |
+| Payroll web admin | Next.js authentication, attendance, and payroll views are present | **Rejected:** auth state and E2E failures; no accepted production flow |
+| Customer reports | PDF/CSV generation and report routes are present | **Rejected:** permission, PII, and cross-tenant object-key defects |
+| Pilot | No accepted live pilot evidence | **Blocked** |
+| Scale-out | No accepted rollout evidence | **Blocked** |
 
-### Phase 3 — Payroll ⏳ Pending
-- Engine implement BR-PAY-001..BR-PAY-010 (pro-rated, OT, allowances, rounding, late penalty, gross/net)
-- Excel export (Vietnamese accounting format)
-- Web admin routes for payroll periods + lines
+## Active Remediation
 
-### Phase 4 — Customer Report ⏳ Pending
-- PDF generator (PDFKit) + CSV per 15 projects
-- Templates per customer
+- Critical: `CODE-BUG-002..005`.
+- High: `CODE-BUG-006..019`.
+- Medium: `CODE-BUG-020..022`.
+- The next milestone is a successful re-review of the Critical and security/payroll High batches; no pilot date should be set before that gate passes.
 
-### Phase 5 — Pilot ⏳ Pending
-- 1-2 projects live
-- Bug-fix sprint 2 weeks
+## Gate to Resume Pilot
 
-### Phase 6 — Scale-out ⏳ Pending
-- 13 remaining projects
-- Multi-project conflict handling
-
-### Verification Status (2026-07-16)
-
-```
-✅ pnpm install         → 277 packages, 0 errors
-✅ pnpm prisma:generate → Prisma Client v5.22.0 generated
-✅ pnpm typecheck       → All 4 packages pass (0 errors)
-✅ pnpm test            → 25/25 tests pass (attendance 23/23, payroll 2/2, shared passWithNoTests)
-⏳ Docker compose      → Built but not runtime-tested (no Postgres locally)
-⏳ pnpm build           → Cached (shared compiled)
-⏳ Flutter run         → Requires `flutter create` first; not yet executed
-```
-
-### Known Issues / Carry-over
-
-1. **flutter pub get** not yet run — mobile won't build until executed
-2. **`flutter create` requires user** to generate `android/` and `ios/` folders
-3. **Schedule conflict (BR-ATT-006)** + **past date (BR-ATT-008)** logic exists in services but not yet wired into `POST /v1/shifts/assignments` and `POST /v1/attendance/check-in` respectively
-4. **Audit log** writes for override; missing for create/update/delete of other resources
-5. **Refresh endpoint** `/v1/auth/refresh` not implemented (planned Phase 2.5)
-6. **README.md** at root lost factory context — restoration + AKAIUNSAN section planned Phase 2 close
-7. **`--dart-define=API_BASE_URL`** needs to be passed when building mobile
-
-- **Next Milestone:** *Milestone name and date*
-
-## Active Work
-
-### In Progress
-- *Task 1*
-- *Task 2*
-- *Task 3*
-
-### Blocked
-- *Blocked item 1 - reason*
-- *Blocked item 2 - reason*
-
-## Completed This Sprint
-
-- *Completed item 1*
-- *Completed item 2*
-
-## Upcoming
-
-### Next Sprint
-- *Planned item 1*
-- *Planned item 2*
-
-### Future Milestones
-- *Milestone 1 - target date*
-- *Milestone 2 - target date*
-
-## Metrics
-
-- *Velocity metric*
-- *Burn-down chart link*
-- *Other relevant metrics*
+1. Close all Critical findings with adversarial integration tests.
+2. Close security and payroll High findings, including tenant, permission, money, state, and month-boundary invariants.
+3. Produce a reproducible fresh-database deployment from committed migrations and locked production images.
+4. Make lint, unit, integration, browser E2E, and coverage gates execute successfully in CI.
+5. Request a fresh code review against immutable base/head SHAs.
 
 ## Related Documents
 
 - **[Plans Index](../plans/README.md)** - Active/completed/archived plans
 - **[Plan Overview](../plans/plan-overview.md)** - Planning conventions and overview
 - **[History Log](../history/history.log.md)** - Completed work history
-- **[Product Backlog](../../2-product-foundation/product-backlog/backlog.md)** - Source of work items
+- **[Product Backlog](../../../2-product-foundation/product-backlog/backlog.md)** - Source of work items
 
 ---
 
 *Update this document regularly (daily/weekly) to track progress.*
-

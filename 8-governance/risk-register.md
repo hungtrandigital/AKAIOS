@@ -2,12 +2,12 @@
 
 ## Overview
 
-This document identifies, assesses, and tracks risks that may impact the project. Risks are categorized, assessed for probability and impact, and mitigation strategies are documented.
+This register tracks systemic project risks. Individual implementation defects remain in the canonical work-item registry and review report.
 
 ## Risk Assessment Matrix
 
 | Probability | Impact | Risk Level |
-|------------|--------|------------|
+|---|---|---|
 | High | High | Critical |
 | High | Medium | High |
 | Medium | High | High |
@@ -16,97 +16,87 @@ This document identifies, assesses, and tracks risks that may impact the project
 | Low | Medium | Low |
 | Any | Low | Low |
 
-## Risk Register
+## Open Risks
 
-### Risk ID: RISK-001
-**Title:** *Risk title*  
-**Category:** *Technical / Business / Operational / Legal / Financial*  
-**Date Identified:** *YYYY-MM-DD*  
-**Status:** *Open / Mitigated / Closed / Accepted*
+### RISK-001 — Workforce and payroll data compromise
 
-**Description:**
-*Detailed description of the risk*
+| Field | Value |
+|---|---|
+| Category | Security / Financial |
+| Date identified | 2026-07-17 |
+| Status | Open |
+| Probability | High |
+| Impact | High |
+| Risk level | Critical |
+| Owner | @security-engineer / @fullstack-engineer |
+| Review date | 2026-07-18 |
 
-**Probability:** *High / Medium / Low*  
-**Impact:** *High / Medium / Low*  
-**Risk Level:** *Critical / High / Medium / Low*
+Authentication bypasses, missing authorization gates, raw-ID cross-tenant mutations, and over-broad employee responses can expose or corrupt attendance, identity, salary, and bank data.
 
-**Impact Description:**
-*What would happen if this risk materializes?*
+**Mitigation:** Block deployment; remediate `CODE-BUG-002`, `003`, `004`, `006`, `007`, `008`, and `012`; add adversarial role/tenant integration tests; if seed credentials were used in any environment, rotate those credentials and active tokens after the fixes are deployed.
 
-**Mitigation Strategy:**
-- *Mitigation action 1*
-- *Mitigation action 2*
-- *Mitigation action 3*
+**Contingency:** If exposure is suspected, disable external API access, revoke all sessions, preserve audit evidence, assess affected tenants and records, and follow the incident-response process before restoring service.
 
-**Contingency Plan:**
-*What to do if the risk materializes*
+### RISK-002 — Incorrect attendance and payroll outcomes
 
-**Owner:** *Person/team responsible*  
-**Review Date:** *Next review date*
+| Field | Value |
+|---|---|
+| Category | Technical / Financial / Operational |
+| Date identified | 2026-07-17 |
+| Status | Open |
+| Probability | High |
+| Impact | High |
+| Risk level | Critical |
+| Owner | @fullstack-engineer / Business Owner |
+| Review date | 2026-07-18 |
 
-**Related:**
-- [Decision #X](decision-log.md#adr-xxx) - *Related decision*
-- [Version #X](project-versions.md#version-x) - *Affected version*
+Geofence bypass, time-zone errors, missing worked-time persistence, non-atomic state changes, calculation defects, invalid overrides, and executable out-of-scope deductions can produce materially wrong payroll.
 
----
+**Mitigation:** Remediate `CODE-BUG-009` through `018`; define shared attendance/payroll contracts; add state-transition, concurrency, month-boundary, and invariant tests; keep BHXH/PIT disabled for the MVP.
 
-### Risk ID: RISK-002
-*Repeat structure above*
+**Contingency:** Freeze approval/payment, reconcile attendance and payroll against source records with dual control, correct affected lines through an audited process, and recalculate only after the repaired gate passes.
 
-## Risk Categories
+### RISK-003 — No reproducible releasable deployment
 
-### Technical Risks
-- *Technology risks*
-- *Architecture risks*
-- *Implementation risks*
-- *Security risks*
+| Field | Value |
+|---|---|
+| Category | Technical / Operational |
+| Date identified | 2026-07-17 |
+| Status | Open |
+| Probability | High |
+| Impact | High |
+| Risk level | Critical |
+| Owner | @devops / @fullstack-engineer |
+| Review date | 2026-07-18 |
 
-### Business Risks
-- *Market risks*
-- *Competitive risks*
-- *Revenue risks*
-- *Customer risks*
+Broken Compose paths, incomplete production images, absent database migrations, incomplete seed orchestration, and invalid CI gates prevent a reproducible installation and trustworthy release decision.
 
-### Operational Risks
-- *Team risks*
-- *Process risks*
-- *Vendor risks*
-- *Infrastructure risks*
+**Mitigation:** Remediate `CODE-BUG-005`, `019`, and `021`; validate immutable builds from the lockfile; commit and exercise migrations; test fresh database startup; run production-image smoke tests and a real CI integration gate.
 
-### Legal & Compliance Risks
-- *Regulatory risks*
-- *Legal risks*
-- *Compliance risks*
-
-### Financial Risks
-- *Budget risks*
-- *Funding risks*
-- *Cost overrun risks*
+**Contingency:** Keep the pilot blocked and retain the last known-good environment. Do not perform manual schema or container workarounds that cannot be reproduced from the repository.
 
 ## Risk Status Summary
 
 | Status | Count |
-|--------|-------|
-| Open | *X* |
-| Mitigated | *X* |
-| Closed | *X* |
-| Accepted | *X* |
+|---|---:|
+| Open | 3 |
+| Mitigated | 0 |
+| Closed | 0 |
+| Accepted | 0 |
 
-## Risk Review Schedule
+## Review Schedule
 
-- **Monthly Review:** *Review date*
-- **Quarterly Review:** *Review date*
-- **Annual Review:** *Review date*
+- Daily while the rejected release gate is being remediated.
+- Reassess after each critical-fix batch and before any pilot or production deployment.
+- Close or downgrade only with linked verification evidence.
 
 ## Related Documents
 
-- **[Decision Log](decision-log.md)** - Decisions addressing risks
-- **[Project Versions](project-versions.md)** - Versions affected by risks
-- **[Quarterly Retrospectives](quarterly-retrospective/)** - Risk review in retrospectives
-- **[Legal Documentation](../6-operations/legal/README.md)** - Legal and compliance risks
+- [PRD-EPIC-002 code review](reviews/prd-epic-002-code-review-2026-07-17.md)
+- [PRD-EPIC-002 active plan](../3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md)
+- [Work-item registry](../3-technical/3.2-implementation/status/work-items-registry.md)
+- [Decision log](decision-log.md)
 
 ---
 
-*Regularly review and update the risk register to proactively manage project risks.*
-
+*Last updated: 2026-07-17*

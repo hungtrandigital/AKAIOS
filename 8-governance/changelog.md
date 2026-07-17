@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **PRD-EPIC-002 code review:** Published the canonical 2026-07-17 review report with the frozen commit range, verification evidence, verdict, and `CODE-BUG-002..022` remediation backlog.
 - Operations domain structure: templates (hiring plan, onboarding, JD), tracking registry (OPS-TASK-XXX), metrics glossary, strategy, and changelog
 - Role-specific JD copies: Senior Backend Engineer, Product Manager with OPS linkage and parent epics
 - Hiring plans seeded and linked from registry (dates, owners, pipeline, metrics)
@@ -20,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
+- Corrected PRD-EPIC-002 lifecycle metadata and synchronized the active epic, product backlog, work-item registry, progress status, governance risks, and review navigation with the rejected review gate.
+- Archived the superseded `docs/review/REVIEW_PLAN.md` content under `archives/2026-07-17-prd-epic-002-review-plan/` and retained a redirect to the canonical plan/result.
 - Reframed the core agents in `0-agents/agents/` as the reusable leader layer for multi-project work: each core agent now preserves existing process ownership while explicitly pairing `agency-agents` specialists with matching local skills.
 - Registered the factory optimization initiative as `PRD-EPIC-001` / `PRD-SLICE-001` and added the active plan `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md` plus matching registry/index updates.
 - Updated `0-agents/README.md` and `INDEX.md` so the stack description now reflects leader orchestration rather than only specialist routing.
@@ -44,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Structure:** Fixed `financial-modeling` skill to follow Agent Skills Spec (moved from `skills/financial-modeling.md` to `skills/financial-modeling/SKILL.md` with proper YAML frontmatter)
 - **Finance-director agent:** Enhanced to explicitly activate `financial-modeling` skill during all projection work (steps 3, 4, 5) and added mandatory skill usage pattern
 - **Cursor modes:** Added missing `/refactor` command to Cursor to match `0-agents/mode/refactor.md`
+
+### Security
+- **Review findings (open):** Confirmed password authentication bypass, payroll/attendance cross-tenant mutation, sensitive employee data disclosure, and spoofable OTP rate limiting. No security fix is claimed in this entry.
 
 ## [2.0.0] - 2025-12-14 (Factory AI 2.0)
 
@@ -106,9 +112,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - *Bug fixes and error corrections*
-
-### Security
-- *Security-related fixes and improvements*
 
 ---
 

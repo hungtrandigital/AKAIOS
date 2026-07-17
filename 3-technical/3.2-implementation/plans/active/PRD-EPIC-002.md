@@ -2,22 +2,40 @@
 id: PRD-EPIC-002
 title: Hệ thống Quản lý Chấm công & Tính lương — AKAIUNSAN
 type: epic
-domain: PRD
-status: draft
-parent_id: null
+domain: product
+status: in-progress
+parent_id: "-"
 related_ids:
   - PRD-EPIC-001
+  - CODE-BUG-002
+  - CODE-BUG-003
+  - CODE-BUG-004
+  - CODE-BUG-005
+  - CODE-BUG-006
+  - CODE-BUG-007
+  - CODE-BUG-008
+  - CODE-BUG-009
+  - CODE-BUG-010
+  - CODE-BUG-011
+  - CODE-BUG-012
+  - CODE-BUG-013
+  - CODE-BUG-014
+  - CODE-BUG-015
+  - CODE-BUG-016
+  - CODE-BUG-017
+  - CODE-BUG-018
+  - CODE-BUG-019
+  - CODE-BUG-020
+  - CODE-BUG-021
+  - CODE-BUG-022
 created: 2026-07-16
-updated: 2026-07-16
+updated: 2026-07-17
 priority: high
 owner: "@fullstack-engineer"
 phases:
-  - foundation
-  - attendance
-  - payroll
-  - customer-report
-  - pilot
-  - scale-out
+  - plan
+  - code
+  - review
 folder: 3-technical/3.2-implementation/plans/active/
 related_domain_docs:
   - 3-technical/3.1-system-foundation/infrastructure.md
@@ -36,6 +54,25 @@ related_domain_docs:
 **Kết quả mong muốn.** Phần mềm nội bộ cho phép nhân viên check-in/out tại dự án bằng mobile (GPS + ảnh), BO xem bảng chấm công realtime, tự động tính bảng lương cuối tháng, và xuất báo cáo gửi 15 khách hàng. Pilot trên 1–2 dự án đầu trước khi mở rộng.
 
 **Tại sao bây giờ.** Đây là epic product đầu tiên của AKAIUNSAN. Factory repo hiện là template rỗng (xem [findings note](#findings-note)). Epic này thiết lập đồng thời (a) domain model thật cho công ty vệ sinh VN, (b) các architecture docs còn thiếu, (c) baseline codebase & CI cho tất cả epic sau.
+
+## Code Review
+
+### Review scope and plan
+
+- Work item: `PRD-EPIC-002`.
+- Frozen commit range: `08d9d25..9ed7be2`.
+- Inventory: 147 files, 28,885 insertions and 360 deletions.
+- Priority order: authentication/RBAC/tenant isolation; attendance GPS/photo/state; payroll money/state integrity; CI/deployment; frontend reliability and documentation drift.
+- Audit method: parallel security, payroll, attendance/data-flow, and CI/reliability reviews; automated lint, typecheck, test, build, coverage, migration, Compose, and Docker checks; manual evidence at file and line level.
+- Exclusions: dependency vulnerability scan, load testing, live deployment, accessibility scoring, and complete Flutter platform/device validation.
+
+### Review result — 2026-07-17
+
+- Verdict: **REJECTED**.
+- Findings: 4 Critical, 14 High, and 3 Medium.
+- Deployment and pilot are blocked until all Critical and security/payroll High findings are fixed and re-reviewed.
+- Canonical report: [PRD-EPIC-002 code review](../../../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md).
+- Vietnam tax/insurance remains outside MVP under ADR-003; executable modes other than `none` must not affect MVP payroll.
 
 ## Findings Note
 
@@ -355,6 +392,32 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 3. **SMS gateway**: Dùng nhà cung cấp nào (eSignal, SpeedSMS, VNPT API)? Hay skip OTP ở MVP và dùng password thường?
 4. **Domain cho server on-prem**: Có domain thật + Cloudflare Tunnel, hay dùng Tailscale VPN thuần?
 5. **Ngân sách server**: Approximate budget cho 1 server on-prem (RAM, CPU, SSD)? Hay sẵn server, cần mình viết runbook?
+
+## Known Issues & Bugs
+
+| ID | Severity | Summary | Status |
+| --- | --- | --- | --- |
+| CODE-BUG-002 | Critical | Password authentication bypass | open |
+| CODE-BUG-003 | Critical | Payroll RBAC and cross-tenant IDOR | open |
+| CODE-BUG-004 | Critical | Attendance override cross-team/cross-tenant IDOR | open |
+| CODE-BUG-005 | Critical | Production build and database initialization unusable | open |
+| CODE-BUG-006 | High | Missing 2FA and inactive-account enforcement | open |
+| CODE-BUG-007 | High | Supervisor PII and password-hash disclosure | open |
+| CODE-BUG-008 | High | Spoofable OTP rate-limit boundary | open |
+| CODE-BUG-009 | High | GPS accuracy bypasses geofence | open |
+| CODE-BUG-010 | High | Attendance race and missing worked-time persistence | open |
+| CODE-BUG-011 | High | Vietnam timezone/calendar drift | open |
+| CODE-BUG-012 | High | Customer-report authorization and tenant leakage | open |
+| CODE-BUG-013 | High | Mobile/photo/MinIO path cannot operate as shipped | open |
+| CODE-BUG-014 | High | Payroll excludes the last day of month | open |
+| CODE-BUG-015 | High | Payroll calculation is non-atomic and unrecoverable | open |
+| CODE-BUG-016 | High | Payroll override breaks money and state invariants | open |
+| CODE-BUG-017 | High | Weekend/holiday overtime double-counted | open |
+| CODE-BUG-018 | High | Out-of-scope compliance changes unauditable net pay | open |
+| CODE-BUG-019 | High | CI/integration/coverage quality gate invalid | open |
+| CODE-BUG-020 | Medium | Web-admin auth state, E2E, and checkout display defects | open |
+| CODE-BUG-021 | Medium | Aggregate seed omits attendance and RBAC data | open |
+| CODE-BUG-022 | Medium | Canonical documentation and implementation drift | open |
 
 ## Related Documents
 

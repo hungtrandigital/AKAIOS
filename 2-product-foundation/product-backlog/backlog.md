@@ -74,10 +74,10 @@ type: epic
 domain: product
 status: in-progress
 created: 2026-07-16
-updated: 2026-07-16
+updated: 2026-07-17
 priority: high
 owner: @fullstack-engineer
-phases: [foundation, attendance, payroll, customer-report, pilot, scale-out]
+phases: [plan, code, review]
 related_domain_tasks:
   - PRD-SLICE-002
   - PRD-SLICE-003
@@ -114,6 +114,13 @@ Xây dựng 2 hệ thống: `attendance` (mobile app check-in/out theo ca tại 
 - [API Contracts](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
 - [Work-Item Registry](../../3-technical/3.2-implementation/status/work-items-registry.md)
 - [Systems README](../../systems/README.md)
+- [Code Review — 2026-07-17](../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md)
+
+**Known Issues (2026-07-17 review):**
+- Verdict: **REJECTED** — 4 Critical, 14 High, and 3 Medium findings (`CODE-BUG-002..022`).
+- Deployment blockers: authentication bypass, cross-tenant payroll/attendance mutations, unusable production build/database initialization, and invalid CI quality gates.
+- Payroll blockers: month-end attendance omission, non-atomic calculation, broken override invariants, double-counted OT, and executable compliance drift outside ADR-003.
+- Epic remains `in-progress`; Pilot and Scale-out cannot start until Critical and security/payroll High bugs pass re-review.
 
 
 ## Backlog Items (Unprioritized)

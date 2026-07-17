@@ -2,7 +2,7 @@
 
 **Purpose:** Centralized, real-time index of all work items across the organization (epics, slices, tasks, bugs, experiments, research). Use this to navigate, track progress, and understand cross-domain dependencies.
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-07-17
 **Scope:** Active + recently completed work items
 
 ---
@@ -12,7 +12,7 @@
 | ID | Title | Status | Owner | Created | Slices | Bugs | Related Domains | Plan |
 |----|-------|--------|-------|---------|--------|------|----------------|------|
 | PRD-EPIC-001 | Factory Agent Leadership Orchestration | in-progress | @product-strategist | 2026-04-13 | 1 | 0 | code | `2-product-foundation/product-backlog/backlog.md#epic-1-factory-agent-leadership-orchestration` |
-| PRD-EPIC-002 | Attendance + Payroll Systems for AKAIUNSAN | in-progress | @fullstack-engineer | 2026-07-16 | 6 | 0 | code, ops | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md` |
+| PRD-EPIC-002 | Attendance + Payroll Systems for AKAIUNSAN | in-progress | @fullstack-engineer | 2026-07-16 | 6 | 21 | code, ops | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md` |
 
 **Notes:**
 - Slices = count of active feature slices (PRD-SLICE-*) belonging to this epic
@@ -26,10 +26,10 @@
 | ID | Title | Epic | Status | Owner | Created | Tasks | Bugs | Plan |
 |----|-------|------|--------|-------|---------|-------|------|------|
 | PRD-SLICE-001 | Standardize Core-Agent Leadership Orchestration | PRD-EPIC-001 | in-progress | @docs-guardian | 2026-04-13 | 2 | 0 | `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md` |
-| PRD-SLICE-002 | Foundation (5 architecture docs + scaffolds) | PRD-EPIC-002 | in-progress | @system-architecture | 2026-07-16 | 4 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-0--architecture-foundation` |
-| PRD-SLICE-003 | Attendance (mobile check-in/out + admin realtime) | PRD-EPIC-002 | planned | @fullstack-engineer | 2026-07-16 | 6 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-2--attendance-` |
-| PRD-SLICE-004 | Payroll engine + Excel export | PRD-EPIC-002 | planned | @fullstack-engineer | 2026-07-16 | 4 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-3--payroll-` |
-| PRD-SLICE-005 | Customer report generator | PRD-EPIC-002 | planned | @fullstack-engineer | 2026-07-16 | 3 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-4--customer-report-` |
+| PRD-SLICE-002 | Foundation (5 architecture docs + scaffolds) | PRD-EPIC-002 | in-progress | @system-architecture | 2026-07-16 | 4 | 4 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-0--architecture-foundation` |
+| PRD-SLICE-003 | Attendance (mobile check-in/out + admin realtime) | PRD-EPIC-002 | in-progress | @fullstack-engineer | 2026-07-16 | 6 | 10 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-2--attendance-` |
+| PRD-SLICE-004 | Payroll engine + Excel export | PRD-EPIC-002 | in-progress | @fullstack-engineer | 2026-07-16 | 4 | 6 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-3--payroll-` |
+| PRD-SLICE-005 | Customer report generator | PRD-EPIC-002 | in-progress | @fullstack-engineer | 2026-07-16 | 3 | 1 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-4--customer-report-` |
 | PRD-SLICE-006 | Pilot (1-2 projects) | PRD-EPIC-002 | planned | @ops + @fullstack-engineer | 2026-07-16 | 3 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-5--pilot-` |
 | PRD-SLICE-007 | Scale-out (13 projects) | PRD-EPIC-002 | planned | @ops + @fullstack-engineer | 2026-07-16 | 3 | 0 | `3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md#phase-6--scale-out-` |
 
@@ -44,9 +44,9 @@
 | CODE-TASK-001 | Add leader-orchestration contract to all core agents | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/` |
 | CODE-TASK-002 | Align specialist-to-skill pairings with the real skill library | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/skills/` |
 | CODE-TASK-003 | Produce 5 architecture docs (Phase 0) | PRD-SLICE-002 | @system-architecture | in-progress | 2026-07-16 | `3-technical/3.1-system-foundation/` |
-| CODE-TASK-004 | Scaffold `systems/attendance/` + `systems/payroll/` from TEMPLATE-SYSTEM | PRD-SLICE-002 | @fullstack-engineer | planned | 2026-07-16 | `systems/` |
-| CODE-TASK-005 | Create 3 ADRs (tech stack, on-prem, skip VN compliance MVP) | PRD-SLICE-002 | @system-architecture | planned | 2026-07-16 | `8-governance/decision-log/` |
-| CODE-TASK-006 | Docker Compose stack + Caddy reverse proxy config | PRD-SLICE-002 | @devops | planned | 2026-07-16 | `systems/attendance/` |
+| CODE-TASK-004 | Scaffold `systems/attendance/` + `systems/payroll/` from TEMPLATE-SYSTEM | PRD-SLICE-002 | @fullstack-engineer | in-progress | 2026-07-16 | `systems/` |
+| CODE-TASK-005 | Create 3 ADRs (tech stack, on-prem, skip VN compliance MVP) | PRD-SLICE-002 | @system-architecture | in-progress | 2026-07-16 | `8-governance/decision-log/` |
+| CODE-TASK-006 | Docker Compose stack + Caddy reverse proxy config | PRD-SLICE-002 | @devops | in-progress | 2026-07-16 | `systems/attendance/` |
 
 ### Marketing Tasks
 
@@ -74,7 +74,27 @@
 
 | ID | Title | Epic | Slice | Status | Owner | Created | Fixed | Plan |
 |----|-------|------|-------|--------|-------|---------|-------|------|
-| CODE-BUG-001 | [Bug] | PRD-EPIC-001 | PRD-SLICE-001 | open | @engineer | YYYY-MM-DD | - | See "Known Issues" in epic plan |
+| CODE-BUG-002 | Password authentication bypass | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-003 | Payroll RBAC and cross-tenant IDOR | PRD-EPIC-002 | PRD-SLICE-004 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-004 | Attendance override cross-team/cross-tenant IDOR | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-005 | Production build and DB initialization unusable | PRD-EPIC-002 | PRD-SLICE-002 | open | @devops | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-006 | Missing 2FA and inactive-account enforcement | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-007 | Supervisor PII and password-hash disclosure | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-008 | Spoofable OTP rate-limit boundary | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-009 | GPS accuracy bypasses geofence | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-010 | Attendance race and missing worked-time persistence | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-011 | Vietnam timezone/calendar drift | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-012 | Customer-report authorization and tenant leakage | PRD-EPIC-002 | PRD-SLICE-005 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-013 | Mobile/photo/MinIO path cannot operate | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-014 | Payroll excludes the last day of month | PRD-EPIC-002 | PRD-SLICE-004 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-015 | Payroll calculation non-atomic and unrecoverable | PRD-EPIC-002 | PRD-SLICE-004 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-016 | Payroll override breaks money/state invariants | PRD-EPIC-002 | PRD-SLICE-004 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-017 | Weekend/holiday overtime double-counted | PRD-EPIC-002 | PRD-SLICE-004 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-018 | Out-of-scope compliance changes net pay | PRD-EPIC-002 | PRD-SLICE-004 | open | @product-strategist | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-019 | CI/integration/coverage gate invalid | PRD-EPIC-002 | PRD-SLICE-002 | open | @devops | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-020 | Web-admin auth/E2E/display defects | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-021 | Aggregate seed omits attendance/RBAC | PRD-EPIC-002 | PRD-SLICE-002 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-022 | Canonical docs and implementation drift | PRD-EPIC-002 | PRD-SLICE-002 | open | @docs-guardian | 2026-07-17 | - | Epic Known Issues + review |
 
 ---
 
@@ -181,10 +201,10 @@ PRD-EPIC-001: Factory Agent Leadership Orchestration (in-progress)
 
 ## Related Documents
 
-- **[Work-Item Traceability System](../../0-agents/_core/work-item-traceability.md)** - Glossary, ID schema, metadata requirements
-- **[Product Backlog](../../2-product-foundation/product-backlog/backlog.md)** - Canonical epic definitions
-- **[Implementation Plans](../3.2-implementation/plans/README.md)** - Slice & task plans
-- **[Changelog](../../8-governance/changelog.md)** - Historical record of all work (backup)
+- **[Work-Item Traceability System](../../../0-agents/_core/work-item-traceability.md)** - Glossary, ID schema, metadata requirements
+- **[Product Backlog](../../../2-product-foundation/product-backlog/backlog.md)** - Canonical epic definitions
+- **[Implementation Plans](../plans/README.md)** - Slice & task plans
+- **[Changelog](../../../8-governance/changelog.md)** - Historical record of all work (backup)
 - **[Progress Tracking](progress.md)** - Implementation progress & metrics
 
 ---

@@ -307,6 +307,7 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 
 ### Governance
 - **[Governance](8-governance/)** - Project versions, decisions, risks, retrospectives
+- **[Code Reviews](8-governance/reviews/README.md)** - Canonical quality-gate reports and verdicts
 - **[Changelog](8-governance/changelog.md)** - All project changes
 - **[Decision Log](8-governance/decision-log.md)** - Architectural decisions (ADR format)
 - **[Risk Register](8-governance/risk-register.md)** - Project risks
