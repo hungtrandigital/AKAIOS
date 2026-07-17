@@ -5,6 +5,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { apiLogout } from '@/lib/api'
+import { useAuth } from '@/components/AuthProvider'
 
 interface Props {
   userEmail?: string
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
 ]
 
 export function TopNav({ userEmail, userName, role }: Props) {
+  const { user } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
 
@@ -56,6 +58,16 @@ export function TopNav({ userEmail, userName, role }: Props) {
             {item.label}
           </Link>
         ))}
+        {user?.role === 'system_admin' && (
+          <Link
+            href="/admin/rbac"
+            className={`topnav-link ${isActive('/admin/rbac') ? 'active' : ''}`}
+            style={{ color: 'var(--warning)' }}
+          >
+            <span style={{ marginRight: 6 }}>🔐</span>
+            RBAC
+          </Link>
+        )}
       </nav>
 
       <div className="topnav-spacer" />

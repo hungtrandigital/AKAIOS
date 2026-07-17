@@ -15,6 +15,7 @@ import { projectRoutes } from './routes/projects.js'
 import { employeeRoutes } from './routes/employees.js'
 import { shiftRoutes } from './routes/shifts.js'
 import { reportRoutes } from './routes/reports.js'
+import { rbacRoutes } from './routes/rbac.js'
 
 export async function buildServer() {
   const config = loadConfig()
@@ -52,6 +53,7 @@ export async function buildServer() {
   await app.register(employeeRoutes, { prefix: '/v1/employees' })
   await app.register(shiftRoutes, { prefix: '/v1/shifts' })
   await app.register(reportRoutes, { prefix: '/v1/reports' })
+  await app.register(rbacRoutes, { prefix: '/v1/rbac' })
 
   // Domain error handler
   app.setErrorHandler(function (error, request, reply) {

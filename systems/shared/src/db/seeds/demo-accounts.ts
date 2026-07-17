@@ -31,6 +31,17 @@ const DEMO_ACCOUNTS = [
     note: 'CEO — full system access, sees executive dashboard',
   },
 
+  // ===== SYSADMIN (technical admin — separate from CEO) =====
+  {
+    phone: '+84900000050',
+    email: 'sysadmin@ak.local',
+    fullName: 'Ngô Hệ Thống (Sysadmin)',
+    role: UserRole.system_admin,
+    employeeCode: 'SYS-001',
+    baseSalary: 35_000_000,
+    note: 'Sysadmin — quản lý users + roles + permissions + cấu hình hệ thống',
+  },
+
   // ===== BO =====
   {
     phone: '+84900000098',

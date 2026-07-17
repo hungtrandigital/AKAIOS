@@ -21,6 +21,8 @@ export type { JwtClaims, IssueTokenInput } from './auth/jwt.js'
 export { hashPassword, verifyPassword } from './auth/password.js'
 export { generateOtp, isOtpValid, getSmsMode, generateRefreshToken, hashRefreshToken, getRefreshTokenTtlSeconds } from './auth/refresh-token.js'
 export type { GeneratedOtp, RefreshTokenRecord } from './auth/refresh-token.js'
+export { requirePermission, loadUserPermissions, userHasPermission } from './auth/rbac.js'
+export type { RequestLike } from './auth/rbac.js'
 
 // Types
 export * from './types/index.js'

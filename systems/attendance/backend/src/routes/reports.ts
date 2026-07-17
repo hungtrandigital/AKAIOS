@@ -3,12 +3,13 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma, ForbiddenError, NotFoundError } from '@ak/shared'
-import { requireAuth, requireRole } from '../plugins/auth.js'
+import { requireAuth } from '../plugins/auth.js'
+import { requirePermission } from '@ak/shared'
 import { generateAndStoreReport } from '../services/reports/customer-report.js'
 
 export const reportRoutes: FastifyPluginAsync = async (app) => {
   // ===== GENERATE CUSTOMER REPORT =====
-  app.post('/customer', { preHandler: requireRole('bo_admin', 'supervisor') }, async (request) => {
+  app.post('/customer', { preHandler: [requireAuth, requirePermission('reports.generate')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const body = z
       .object({

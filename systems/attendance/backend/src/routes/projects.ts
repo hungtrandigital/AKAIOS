@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma, Prisma, ProjectStatus, ForbiddenError, NotFoundError, ConflictError } from '@ak/shared'
 import { requireAuth } from '../plugins/auth.js'
+import { requirePermission } from '@ak/shared'
 
 const ProjectSchema = z.object({
   code: z.string().min(1).max(50),
@@ -23,7 +24,7 @@ const ProjectUpdateSchema = ProjectSchema.partial().extend({
 })
 
 export const projectRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/', { preHandler: requireAuth }, async (request) => {
+  app.get('/', { preHandler: [requireAuth, requirePermission('projects.view')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const status = (request.query as { status?: ProjectStatus }).status
     const projects = await prisma.project.findMany({
@@ -37,7 +38,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     return { data: projects }
   })
 
-  app.post('/', { preHandler: requireAuth }, async (request) => {
+  app.post('/', { preHandler: [requireAuth, requirePermission('projects.create')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     if (request.user.role !== 'bo_admin' && request.user.role !== 'system_admin') {
       throw new ForbiddenError('Only BO/admin can create projects')
@@ -67,7 +68,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     })
   })
 
-  app.get<{ Params: { id: string } }>('/:id', { preHandler: requireAuth }, async (request) => {
+  app.get<{ Params: { id: string } }>('/:id', { preHandler: [requireAuth, requirePermission('projects.view')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const id = request.params.id
     const project = await prisma.project.findUnique({ where: { id } })
@@ -75,7 +76,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     return project
   })
 
-  app.patch<{ Params: { id: string } }>('/:id', { preHandler: requireAuth }, async (request) => {
+  app.patch<{ Params: { id: string } }>('/:id', { preHandler: [requireAuth, requirePermission('projects.update')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     if (request.user.role !== 'bo_admin' && request.user.role !== 'system_admin') {
       throw new ForbiddenError('Only BO/admin can update projects')

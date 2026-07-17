@@ -9,6 +9,7 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
+  requirePermission,
 } from '@ak/shared'
 import { requireAuth } from '../plugins/auth.js'
 import { validateGeofence, assertProjectHasGeofence } from '../services/geo-service.js'
@@ -61,6 +62,8 @@ async function loadAssignmentWithProject(shiftAssignmentId: string, tenantId: st
 export const attendanceRoutes: FastifyPluginAsync = async (app) => {
   // ===== MY-TODAY =====
   app.get('/my-today', { preHandler: requireAuth }, async (request) => {
+    // requireAuth = any logged-in user; this is per-user self-view
+    void requirePermission('attendance.view_self')
     if (!request.user) throw new ForbiddenError()
     const today = new Date()
     today.setUTCHours(0, 0, 0, 0)
@@ -86,6 +89,7 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
 
   // ===== CHECK-IN =====
   app.post('/check-in', { preHandler: requireAuth }, async (request) => {
+    void requirePermission('attendance.view_self') // NV tự check-in cho mình
     if (!request.user) throw new ForbiddenError()
     const body = CheckInSchema.parse(request.body)
 
@@ -171,6 +175,7 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
 
   // ===== CHECK-OUT =====
   app.post('/check-out', { preHandler: requireAuth }, async (request) => {
+    void requirePermission('attendance.view_self') // NV tự check-out
     if (!request.user) throw new ForbiddenError()
     const body = CheckOutSchema.parse(request.body)
 
@@ -239,7 +244,8 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
   // ===== RECORDS QUERY (admin/supervisor) =====
   app.get('/records', { preHandler: requireAuth }, async (request) => {
     if (!request.user) throw new ForbiddenError()
-    if (request.user.role === 'employee') throw new ForbiddenError('Employees cannot query all records')
+    // BR-RBAC-001: Only roles with attendance.view_all can list all records
+    await requirePermission('attendance.view_all')(request as any)
 
     const query = z
       .object({
@@ -287,7 +293,8 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: requireAuth },
     async (request: any) => {
       if (!request.user) throw new ForbiddenError()
-      if (request.user.role === 'employee') throw new ForbiddenError()
+      // BR-RBAC-002: Only roles with attendance.override can edit records
+      await requirePermission('attendance.override')(request as any)
       const body = OverrideSchema.parse(request.body)
       const id = (request.params as { id: string }).id
 

@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma, ForbiddenError, NotFoundError, ConflictError, hashPassword } from '@ak/shared'
 import { requireAuth } from '../plugins/auth.js'
+import { requirePermission } from '@ak/shared'
 
 const CreateSchema = z.object({
   phone: z.string().regex(/^\+84[0-9]{9}$/),
@@ -31,7 +32,7 @@ const UpdateSchema = z.object({
 })
 
 export const employeeRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/', { preHandler: requireAuth }, async (request) => {
+  app.get('/', { preHandler: [requireAuth, requirePermission('employees.view')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const query = z.object({
       status: z.enum(['active', 'inactive']).optional(),
@@ -59,7 +60,7 @@ export const employeeRoutes: FastifyPluginAsync = async (app) => {
     return { data, pagination: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) } }
   })
 
-  app.post('/', { preHandler: requireAuth }, async (request) => {
+  app.post('/', { preHandler: [requireAuth, requirePermission('employees.create')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     if (!['bo_admin', 'system_admin', 'supervisor'].includes(request.user.role)) {
       throw new ForbiddenError('Only admins/supervisors can create employees')
@@ -101,7 +102,7 @@ export const employeeRoutes: FastifyPluginAsync = async (app) => {
     return { ...employee, temporaryPassword: tempPassword }
   })
 
-  app.get<{ Params: { id: string } }>('/:id', { preHandler: requireAuth }, async (request) => {
+  app.get<{ Params: { id: string } }>('/:id', { preHandler: [requireAuth, requirePermission('employees.view')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const employee = await prisma.employee.findUnique({
       where: { id: request.params.id },
@@ -111,7 +112,7 @@ export const employeeRoutes: FastifyPluginAsync = async (app) => {
     return employee
   })
 
-  app.patch<{ Params: { id: string } }>('/:id', { preHandler: requireAuth }, async (request) => {
+  app.patch<{ Params: { id: string } }>('/:id', { preHandler: [requireAuth, requirePermission('employees.update')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     if (!['bo_admin', 'system_admin'].includes(request.user.role)) {
       throw new ForbiddenError('Only admins can update employees')

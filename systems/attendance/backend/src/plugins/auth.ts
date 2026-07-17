@@ -26,14 +26,8 @@ export const requireAuth = async (request: FastifyRequest) => {
   }
 }
 
-export const requireRole =
-  (...roles: JwtClaims['role'][]) =>
-  async (request: FastifyRequest) => {
-    await requireAuth(request)
-    if (!request.user || !roles.includes(request.user.role)) {
-      throw new UnauthorizedError(`Requires role: ${roles.join(' or ')}`)
-    }
-  }
+// requireRole removed in favor of @ak/shared's requirePermission(permCode)
+// (RBAC Option B — role -> permission mapping is editable via /v1/rbac API)
 
 export const requireInternalApiKey = async (request: FastifyRequest) => {
   const key = request.headers['x-internal-api-key']

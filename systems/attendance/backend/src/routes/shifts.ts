@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma, ForbiddenError, NotFoundError, ConflictError, BusinessRuleViolationError } from '@ak/shared'
 import { requireAuth } from '../plugins/auth.js'
+import { requirePermission } from '@ak/shared'
 import { detectShiftConflict } from '../services/schedule-service.js'
 
 const ShiftSchema = z.object({
@@ -25,12 +26,12 @@ const AssignmentSchema = z.object({
 })
 
 export const shiftRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/', { preHandler: requireAuth }, async () => {
+  app.get('/', { preHandler: [requireAuth, requirePermission('attendance.shifts.manage')] }, async () => {
     const shifts = await prisma.shift.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } })
     return { data: shifts }
   })
 
-  app.post('/', { preHandler: requireAuth }, async (request) => {
+  app.post('/', { preHandler: [requireAuth, requirePermission('attendance.shifts.manage')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     if (!['bo_admin', 'system_admin', 'supervisor'].includes(request.user.role)) {
       throw new ForbiddenError()
@@ -39,7 +40,7 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
     return prisma.shift.create({ data: body })
   })
 
-  app.get('/assignments', { preHandler: requireAuth }, async (request) => {
+  app.get('/assignments', { preHandler: [requireAuth, requirePermission('attendance.shifts.manage')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const q = z.object({
       employeeId: z.string().uuid().optional(),
@@ -65,7 +66,7 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
     return { data: assignments }
   })
 
-  app.post('/assignments', { preHandler: requireAuth }, async (request) => {
+  app.post('/assignments', { preHandler: [requireAuth, requirePermission('attendance.shifts.manage')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     if (!['bo_admin', 'system_admin', 'supervisor'].includes(request.user.role)) {
       throw new ForbiddenError()

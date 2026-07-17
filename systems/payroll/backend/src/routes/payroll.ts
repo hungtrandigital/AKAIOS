@@ -3,7 +3,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma, ForbiddenError, NotFoundError, BusinessRuleViolationError, Money } from '@ak/shared'
-import { requireAuth, requireRole } from '../plugins/auth.js'
+import { requireAuth } from '../plugins/auth.js'
+import { requirePermission } from '@ak/shared'
 import { openPayrollPeriod, calculatePayroll } from '../services/payroll-service.js'
 import { generatePayrollExcel } from '../services/excel-exporter.js'
 
@@ -32,7 +33,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // ===== OPEN PERIOD =====
-  app.post('/periods', { preHandler: requireRole('bo_admin', 'system_admin') }, async (request) => {
+  app.post('/periods', { preHandler: [requireAuth, requirePermission('payroll.open')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const body = z
       .object({
@@ -46,7 +47,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   // ===== CALCULATE PERIOD =====
   app.post<{ Params: { id: string } }>(
     '/periods/:id/calculate',
-    { preHandler: requireRole('bo_admin', 'system_admin') },
+    { preHandler: [requireAuth, requirePermission('payroll.open')] },
     async (request) => {
       if (!request.user) throw new ForbiddenError()
       const id = request.params.id
@@ -76,7 +77,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   // ===== APPROVE PERIOD (BR-PAY-008) =====
   app.post<{ Params: { id: string } }>(
     '/periods/:id/approve',
-    { preHandler: requireRole('bo_admin') },
+    { preHandler: [requireAuth, requirePermission('payroll.approve')] },
     async (request) => {
       if (!request.user) throw new ForbiddenError()
       const id = request.params.id
@@ -113,7 +114,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   // ===== LOCK PERIOD =====
   app.post<{ Params: { id: string } }>(
     '/periods/:id/lock',
-    { preHandler: requireRole('system_admin') },
+    { preHandler: [requireAuth, requirePermission('payroll.lock')] },
     async (request) => {
       if (!request.user) throw new ForbiddenError()
       const id = request.params.id
@@ -134,7 +135,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   // ===== MARK PAID =====
   app.post<{ Params: { id: string } }>(
     '/periods/:id/mark-paid',
-    { preHandler: requireRole('bo_admin') },
+    { preHandler: [requireAuth, requirePermission('payroll.approve')] },
     async (request) => {
       if (!request.user) throw new ForbiddenError()
       const id = request.params.id
@@ -155,7 +156,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   // ===== OVERRIDE PAYROLL LINE =====
   app.post<{ Params: { id: string } }>(
     '/lines/:id/override',
-    { preHandler: requireRole('bo_admin') },
+    { preHandler: [requireAuth, requirePermission('payroll.approve')] },
     async (request) => {
       if (!request.user) throw new ForbiddenError()
       const id = request.params.id
@@ -220,7 +221,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   // ===== EXPORT TO EXCEL =====
   app.get<{ Params: { id: string } }>(
     '/periods/:id/export',
-    { preHandler: requireRole('bo_admin', 'system_admin') },
+    { preHandler: [requireAuth, requirePermission('payroll.export')] },
     async (request, reply) => {
       if (!request.user) throw new ForbiddenError()
       const id = request.params.id
@@ -264,7 +265,7 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
   // ===== UPDATE PAYROLL RULES =====
   app.post(
     '/rules',
-    { preHandler: requireRole('system_admin') },
+    { preHandler: [requireAuth, requirePermission('payroll.approve')] }, // rules editable by BO+
     async (request) => {
       if (!request.user) throw new ForbiddenError()
       const body = z
