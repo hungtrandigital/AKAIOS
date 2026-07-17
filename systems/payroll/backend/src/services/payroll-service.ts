@@ -201,5 +201,12 @@ async function getCurrentRules(tenantId: string, atDate: Date): Promise<PayrollR
     roundingMinutes: rule.roundingMinutes,
     workingHoursPerDay: rule.workingHoursPerDay,
     standardWorkingDaysPerMonth: rule.standardWorkingDaysPerMonth,
+    taxMode: rule.taxMode,
+    bhxhRateNv: rule.bhxhRateNv ? Number(rule.bhxhRateNv) : null,
+    bhxhRateDn: rule.bhxhRateDn ? Number(rule.bhxhRateDn) : null,
+    bhytRateNv: rule.bhytRateNv ? Number(rule.bhytRateNv) : null,
+    bhytRateDn: rule.bhytRateDn ? Number(rule.bhytRateDn) : null,
+    bhtnRateNv: rule.bhtnRateNv ? Number(rule.bhtnRateNv) : null,
+    bhtnRateDn: rule.bhtnRateDn ? Number(rule.bhtnRateDn) : null,
   }
 }

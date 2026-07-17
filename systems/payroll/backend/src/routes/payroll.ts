@@ -280,6 +280,14 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
           roundingMinutes: z.number().int().min(1).default(15),
           workingHoursPerDay: z.number().int().min(1).max(24).default(8),
           standardWorkingDaysPerMonth: z.number().int().min(1).max(31).default(26),
+          // VN tax/insurance (BR-VN-TAX-001..005)
+          taxMode: z.enum(['none', 'tncn_only', 'full', 'custom']).default('none'),
+          bhxhRateNv: z.number().min(0).max(0.2).optional(),
+          bhxhRateDn: z.number().min(0).max(0.2).optional(),
+          bhytRateNv: z.number().min(0).max(0.2).optional(),
+          bhytRateDn: z.number().min(0).max(0.2).optional(),
+          bhtnRateNv: z.number().min(0).max(0.2).optional(),
+          bhtnRateDn: z.number().min(0).max(0.2).optional(),
         })
         .parse(request.body)
 
@@ -304,6 +312,13 @@ export const payrollRoutes: FastifyPluginAsync = async (app) => {
           roundingMinutes: body.roundingMinutes,
           workingHoursPerDay: body.workingHoursPerDay,
           standardWorkingDaysPerMonth: body.standardWorkingDaysPerMonth,
+          taxMode: body.taxMode,
+          bhxhRateNv: body.bhxhRateNv,
+          bhxhRateDn: body.bhxhRateDn,
+          bhytRateNv: body.bhytRateNv,
+          bhytRateDn: body.bhytRateDn,
+          bhtnRateNv: body.bhtnRateNv,
+          bhtnRateDn: body.bhtnRateDn,
           updatedBy: request.user.userId,
         },
       })

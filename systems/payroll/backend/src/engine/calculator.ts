@@ -8,6 +8,8 @@
 
 import { Money } from '@ak/shared'
 import { roundMinutes } from './working-days.js'
+import { computeVietnamTax, type TaxBreakdown } from './vietnam-tax.js'
+import type { TaxMode } from '@prisma/client'
 import { isVietnamHoliday } from './holidays.js'
 
 // ============================================================================
@@ -43,6 +45,16 @@ export interface PayrollRuleSnapshot {
   // Working hours config
   workingHoursPerDay: number           // default 8
   standardWorkingDaysPerMonth: number  // default 26 (Mon-Sat, off Sunday)
+
+  // VN tax/insurance (BR-VN-TAX-001..005)
+  taxMode: TaxMode                     // 'none' | 'tncn_only' | 'full' | 'custom'
+  bhxhRateNv?: number | null          // 0.08 default
+  bhxhRateDn?: number | null
+  bhytRateNv?: number | null
+  bhytRateDn?: number | null
+  bhtnRateNv?: number | null
+  bhtnRateDn?: number | null
+  dependentCount?: number             // Số người phụ thuộc (default 0)
 }
 
 export interface AttendanceRecord {
@@ -83,8 +95,15 @@ export interface CalculatedLine {
   latePenalty: Money
   allowances: Money
   gross: Money
+
+  // Vietnam tax/insurance (per VN_RATES_DEFAULT; controlled by taxMode)
+  tax: TaxBreakdown
+
+  // Other deductions
   advance: Money
   otherDeductions: Money
+
+  // Final take-home = gross - total tax deductions - advance - other
   net: Money
 }
 
@@ -323,17 +342,31 @@ export function calculateLine(
     rules.phoneAllowance
   )
 
-  // 7. BR-PAY-006 + BR-PAY-007
-  const { gross, net } = computeGrossAndNet(
-    proratedBase,
-    otWeekdayAmount,
-    otWeekendAmount,
-    otHolidayAmount,
-    latePenalty,
-    allowances,
-    inputs.advance,
-    inputs.otherDeductions
-  )
+  // 7. BR-PAY-006 — Gross
+  const gross = proratedBase
+    .add(otWeekdayAmount)
+    .add(otWeekendAmount)
+    .add(otHolidayAmount)
+    .subtract(latePenalty)
+    .add(allowances)
+
+  // 8. BR-VN-TAX-001..005 — Vietnam tax/insurance deductions
+  const tax = computeVietnamTax(gross, rules.taxMode, {
+    bhxhRateNv: rules.bhxhRateNv ?? undefined,
+    bhxhRateDn: rules.bhxhRateDn ?? undefined,
+    bhytRateNv: rules.bhytRateNv ?? undefined,
+    bhytRateDn: rules.bhytRateDn ?? undefined,
+    bhtnRateNv: rules.bhtnRateNv ?? undefined,
+    bhtnRateDn: rules.bhtnRateDn ?? undefined,
+    dependentCount: rules.dependentCount ?? 0,
+  })
+
+  // 9. BR-PAY-007 — Net (after ALL deductions)
+  const net = gross
+    .subtract(tax.tongKhauTru)
+    .subtract(inputs.advance)
+    .subtract(inputs.otherDeductions)
+  const netSafe = net.isLessThan(Money.zero()) ? Money.zero() : net
 
   return {
     daysWorked: totals.daysWorked,
@@ -349,9 +382,10 @@ export function calculateLine(
     latePenalty,
     allowances,
     gross,
+    tax,
     advance: inputs.advance,
     otherDeductions: inputs.otherDeductions,
-    net,
+    net: netSafe,
   }
 }
 

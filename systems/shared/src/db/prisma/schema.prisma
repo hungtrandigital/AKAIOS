@@ -69,6 +69,18 @@ enum PayrollPeriodStatus {
   locked
 }
 
+enum TaxMode {
+  /// No insurance, no PIT (gross = net). Common for contractors / short-term.
+  none
+  /// Only PIT (personal income tax) withheld. No BHXH/BHYT/BHTN.
+  tncn_only
+  /// Full VN statutory: BHXH + BHYT + BHTN + PIT. Employee+employer portions
+  /// tracked separately for accounting/reporting.
+  full
+  /// Custom rates per-line (use bhxh/bhyt/bhtn/pit fields on PayrollRule).
+  custom
+}
+
 enum AuditAction {
   // Identity
   create_user
@@ -340,6 +352,19 @@ model PayrollRule {
   roundingMinutes             Int       @default(15)
   workingHoursPerDay          Int       @default(8)
   standardWorkingDaysPerMonth Int       @default(26)
+
+  /// Vietnam tax/insurance configuration (see TaxMode enum)
+  taxMode                     TaxMode   @default(none)
+  /// Custom rates (only used when taxMode=custom). All percentages as decimal
+  /// e.g. 0.08 = 8% BHXH employee portion. Defaults to VN statutory 2024.
+  bhxhRateNv                  Decimal?  @db.Decimal(5, 4)   // employee 8% default
+  bhxhRateDn                  Decimal?  @db.Decimal(5, 4)   // employer 17.5%
+  bhytRateNv                  Decimal?  @db.Decimal(5, 4)   // employee 1.5%
+  bhytRateDn                  Decimal?  @db.Decimal(5, 4)   // employer 3%
+  bhtnRateNv                  Decimal?  @db.Decimal(5, 4)   // employee 1%
+  bhtnRateDn                  Decimal?  @db.Decimal(5, 4)   // employer 1%
+  pitBrackets                 Json?                          // PIT progressive brackets
+
   createdAt                   DateTime  @default(now())
   updatedAt                   DateTime  @updatedAt
   updatedBy                   String?   @db.Uuid
@@ -399,6 +424,15 @@ model PayrollLine {
   latePenalty             Decimal  @db.Decimal(15, 2) @default(0)
   allowances              Decimal  @db.Decimal(15, 2) @default(0)
   gross                   Decimal  @db.Decimal(15, 2)
+  /// Vietnam tax/insurance deductions (per-line, computed from rule.taxMode)
+  bhxhNhanVien            Decimal  @db.Decimal(15, 2) @default(0)
+  bhxhDoanhNghiep         Decimal  @db.Decimal(15, 2) @default(0)
+  bhytNhanVien            Decimal  @db.Decimal(15, 2) @default(0)
+  bhytDoanhNghiep         Decimal  @db.Decimal(15, 2) @default(0)
+  bhtnNhanVien            Decimal  @db.Decimal(15, 2) @default(0)
+  bhtnDoanhNghiep         Decimal  @db.Decimal(15, 2) @default(0)
+  thueTNCN                Decimal  @db.Decimal(15, 2) @default(0)
+  tongKhauTru              Decimal  @db.Decimal(15, 2) @default(0)
   advance                 Decimal  @db.Decimal(15, 2) @default(0)
   otherDeductions         Decimal  @db.Decimal(15, 2) @default(0)
   net                     Decimal  @db.Decimal(15, 2)

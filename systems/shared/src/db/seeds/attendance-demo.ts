@@ -1,5 +1,5 @@
-// Generate demo attendance_records for the last 30 days.
-// Run: `pnpm db:seed:attendance-demo`
+// Generate demo attendance_records for the last 3 full months.
+// Run: `pnpm db:seed:attendance`
 //
 // Realistic distribution:
 //   - 85% present (full day, on time)
@@ -12,11 +12,11 @@
 //     - 10%: create late (checkIn 10-45 min after shift start)
 //     - 5%: skip (no record, counts as absent)
 
-import { PrismaClient, AttendanceStatus, ShiftAssignmentStatus } from '@prisma/client'
+import { PrismaClient, AttendanceStatus } from '@prisma/client'
 import { isWeekend } from '../../engine/calendar.js'
 
 const prisma = new PrismaClient()
-const DAYS_BACK = 30
+const MONTHS_BACK = 3  // Cover 3 full months (e.g. May + Jun + partial Jul)
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60 * 1000)
@@ -27,20 +27,74 @@ function randomBetween(min: number, max: number): number {
 }
 
 async function main() {
-  console.log(`Generating demo attendance for last ${DAYS_BACK} days...\n`)
-
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
+  // Start: first day of (current_month - MONTHS_BACK + 1)
+  // e.g. today=2026-07-17, MONTHS_BACK=3 → start=2026-05-01
+  const startDate = new Date(today.getFullYear(), today.getMonth() - (MONTHS_BACK - 1), 1)
+
+  console.log(`Generating demo attendance from ${startDate.toISOString().slice(0, 10)} to ${today.toISOString().slice(0, 10)} (${MONTHS_BACK} months back)\n`)
+
   const records: any[] = []
 
-  // Load all shift assignments in the past DAYS_BACK days
-  const startDate = new Date(today)
-  startDate.setUTCDate(startDate.getUTCDate() - DAYS_BACK)
-
+  // Load all shift assignments in window
   const assignments = await prisma.shiftAssignment.findMany({
     where: { date: { gte: startDate, lte: today } },
     include: { shift: true, project: true },
   })
+
+  // Find dates in window with NO shift_assignment — generate them so
+  // every Mon-Sat has a shift_assignment for every active employee.
+  const datesWithAssignments = new Set(assignments.map((a) => a.date.toISOString().slice(0, 10)))
+  const missing: Date[] = []
+  for (let d = new Date(startDate); d <= today; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (isWeekend(d)) continue
+    if (!datesWithAssignments.has(d.toISOString().slice(0, 10))) {
+      missing.push(new Date(d))
+    }
+  }
+
+  if (missing.length > 0) {
+    console.log(`  Missing ${missing.length} Mon-Sat dates (no shift_assignment) — creating…`)
+    const employees = await prisma.employee.findMany({
+      where: { tenantId: 'c0ffee00-0000-4000-8000-000000000001', status: 'active' },
+    })
+    const projects = await prisma.project.findMany({
+      where: { tenantId: 'c0ffee00-0000-4000-8000-000000000001', status: 'active' },
+    })
+    const morningShift = await prisma.shift.findFirst({ where: { name: 'Ca sáng' } })
+    const afternoonShift = await prisma.shift.findFirst({ where: { name: 'Ca chiều' } })
+    if (!morningShift || !afternoonShift) throw new Error('Missing default shifts — run dev-seed first')
+
+    const newAssignments: any[] = []
+    for (const date of missing) {
+      for (let i = 0; i < employees.length; i++) {
+        const shift = i % 2 === 0 ? morningShift : afternoonShift
+        newAssignments.push({
+          employeeId: employees[i]!.id,
+          projectId: projects[i % projects.length]!.id,
+          shiftId: shift.id,
+          date: new Date(date),
+          assignedById: '4812c985-bcd6-4e65-af50-c483900f92c6',
+          status: 'scheduled',
+        })
+      }
+    }
+    // Bulk create in chunks
+    const CHUNK = 1000
+    for (let i = 0; i < newAssignments.length; i += CHUNK) {
+      await prisma.shiftAssignment.createMany({ data: newAssignments.slice(i, i + CHUNK) })
+    }
+    console.log(`    → Created ${newAssignments.length} shift_assignments`)
+    // Re-load with new ones
+    assignments.push(
+      ...(await prisma.shiftAssignment.findMany({
+        where: { date: { gte: startDate, lte: today } },
+        include: { shift: true, project: true },
+      }))
+    )
+  }
+
   console.log(`  Found ${assignments.length} shift assignments in window`)
 
   let presentCount = 0
