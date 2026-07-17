@@ -9,9 +9,12 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
-    "test:e2e": "playwright test --reporter=list",
+    "test:e2e": "playwright test --reporter=list,html",
     "test:e2e:ui": "playwright test --ui",
     "clean": "rm -rf .next .turbo"
+  },
+  "eslintConfig": {
+    "extends": "next/core-web-vitals"
   },
   "dependencies": {
     "@ak/shared": "workspace:*",

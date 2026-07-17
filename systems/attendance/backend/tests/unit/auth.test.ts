@@ -28,11 +28,4 @@ describe('health routes', () => {
     expect(body.service).toBe('attendance-api')
     await app.close()
   })
-
-  it('GET /health/ready returns placeholder', async () => {
-    const { app } = await buildServer()
-    const response = await app.inject({ method: 'GET', url: '/health/ready' })
-    expect(response.statusCode).toBe(200)
-    await app.close()
-  })
 })

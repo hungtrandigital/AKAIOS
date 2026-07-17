@@ -11,7 +11,9 @@
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
     "test:watch": "vitest",
+    "test:coverage": "vitest run tests/unit --coverage --coverage.include='src/engine/**/*.ts' --coverage.thresholds.lines=90 --coverage.thresholds.functions=90 --coverage.thresholds.statements=90 --coverage.thresholds.branches=90",
     "test:e2e": "echo 'E2E tests in Phase 3'",
     "clean": "rm -rf dist .turbo coverage"
   },
@@ -29,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@vitest/coverage-v8": "^2.1.0",
     "eslint": "^8.57.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",

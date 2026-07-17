@@ -71,7 +71,7 @@ export function computeAttendanceStatus(
   // - late: after threshold
   // - absent: no check-in (handled above)
   // - on_leave / holiday: assigned by supervisor manually, not by computation
-  let status: AttendanceStatus = isLate ? 'late' : 'present'
+  const status: AttendanceStatus = isLate ? 'late' : 'present'
 
   return { status, lateMinutes, overtimeMinutes }
 }

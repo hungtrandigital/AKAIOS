@@ -10,22 +10,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  JWT_SECRET: ci-test-secret-do-not-use-in-production
+  INTERNAL_API_KEY: ci-test-internal-key-do-not-use-in-production
+  DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+  REDIS_URL: redis://localhost:6379
+  MINIO_ENDPOINT: localhost:9000
+  MINIO_ROOT_USER: ak_admin
+  MINIO_ROOT_PASSWORD: ci-test-minio-password
+  ATTENDANCE_API_URL: http://localhost:3000
+  PAYROLL_API_URL: http://localhost:3001
+
 jobs:
-  # =====================================================
-  # Lint + Typecheck + Test (no DB required)
-  # =====================================================
   quality:
-    name: Lint + Typecheck + Test
+    name: Lint, typecheck, unit tests, coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      JWT_SECRET: ci-test-secret-do-not-use-in-prod-32
-      INTERNAL_API_KEY: ci-test-key-do-not-use-in-prod-32
-      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-      REDIS_URL: redis://localhost:6379
-      MINIO_ENDPOINT: localhost:9000
-      MINIO_ROOT_USER: ak_admin
-      MINIO_ROOT_PASSWORD: ci-test-password
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +40,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -51,19 +55,49 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit tests
-        run: pnpm test
+        run: pnpm test:unit
+
+      - name: Coverage thresholds
+        run: pnpm test:coverage
+
+      - name: Upload coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: systems/**/coverage/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
 
       - name: Build all packages
         run: pnpm build
 
-  # =====================================================
-  # Integration tests (with Postgres + Redis containers)
-  # =====================================================
   integration:
-    name: Integration Tests (with Postgres + Redis)
+    name: Integration tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: quality
     services:
       postgres:
         image: postgres:16-alpine
@@ -90,13 +124,8 @@ jobs:
           --health-retries 5
 
     env:
-      JWT_SECRET: ci-test-secret-do-not-use-in-prod-32
-      INTERNAL_API_KEY: ci-test-key-do-not-use-in-prod-32
       DATABASE_URL: postgresql://ak_test:ak_test@localhost:5432/ak_test
-      REDIS_URL: redis://localhost:6379
-      MINIO_ENDPOINT: localhost:9000
-      MINIO_ROOT_USER: ak_admin
-      MINIO_ROOT_PASSWORD: ci-test-password
+      RUN_INTEGRATION: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -107,16 +136,159 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm prisma:generate
-      - run: pnpm prisma migrate deploy
-      - run: pnpm test
+      - name: Start MinIO
+        run: >-
+          docker run --detach --name minio
+          --publish 9000:9000
+          --env MINIO_ROOT_USER
+          --env MINIO_ROOT_PASSWORD
+          minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          server /data
 
-      - name: Upload coverage
-        if: always()
+      - name: Wait for MinIO
+        run: |
+          for ((attempt = 1; attempt <= 30; attempt++)); do
+            if curl --fail --silent http://localhost:9000/minio/health/live; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs minio
+          exit 1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Apply migrations
+        run: pnpm prisma:migrate:deploy
+
+      - name: Run integration tests
+        run: pnpm test:integration
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ak_test
+          POSTGRES_PASSWORD: ak_test
+          POSTGRES_DB: ak_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://ak_test:ak_test@localhost:5432/ak_test
+      E2E_ADMIN_EMAIL: admin@ak.local
+      E2E_ADMIN_PASSWORD: admin123!
+      E2E_BASE_URL: http://localhost:3002
+      E2E_NO_SERVER: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Start MinIO
+        run: >-
+          docker run --detach --name minio
+          --publish 9000:9000
+          --env MINIO_ROOT_USER
+          --env MINIO_ROOT_PASSWORD
+          minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          server /data
+
+      - name: Wait for MinIO
+        run: |
+          for ((attempt = 1; attempt <= 30; attempt++)); do
+            if curl --fail --silent http://localhost:9000/minio/health/live; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs minio
+          exit 1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @ak/payroll-web-admin exec playwright install --with-deps chromium
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Apply migrations
+        run: pnpm prisma:migrate:deploy
+
+      - name: Seed E2E data
+        run: pnpm --filter @ak/shared db:seed && pnpm --filter @ak/shared db:seed:rbac
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Start application
+        run: |
+          pnpm --filter @ak/attendance-api start > "$RUNNER_TEMP/attendance-api.log" 2>&1 &
+          pnpm --filter @ak/payroll-api start > "$RUNNER_TEMP/payroll-api.log" 2>&1 &
+          pnpm --filter @ak/payroll-web-admin start > "$RUNNER_TEMP/web-admin.log" 2>&1 &
+
+      - name: Wait for application
+        run: |
+          for ((attempt = 1; attempt <= 60; attempt++)); do
+            if curl --fail --silent http://localhost:3000/health/live \
+              && curl --fail --silent http://localhost:3001/health/live \
+              && curl --fail --silent http://localhost:3002/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 100 "$RUNNER_TEMP/attendance-api.log" || true
+          tail -n 100 "$RUNNER_TEMP/payroll-api.log" || true
+          tail -n 100 "$RUNNER_TEMP/web-admin.log" || true
+          exit 1
+
+      - name: Run Playwright tests
+        run: pnpm test:e2e
+
+      - name: Upload E2E diagnostics
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
-          path: '**/coverage/**'
+          name: e2e-diagnostics
+          path: |
+            systems/payroll/web-admin/playwright-report/**
+            systems/payroll/web-admin/test-results/**
+            ${{ runner.temp }}/attendance-api.log
+            ${{ runner.temp }}/payroll-api.log
+            ${{ runner.temp }}/web-admin.log
+          if-no-files-found: ignore
+          retention-days: 7

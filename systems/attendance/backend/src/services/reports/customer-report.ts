@@ -74,7 +74,6 @@ export async function aggregateReportData(
 
   let totalShifts = 0
   let totalCheckIns = 0
-  let totalPhotos = 0
   const uniqueEmployees = new Set<string>()
 
   for (const assignment of project.shiftAssignments) {
@@ -108,7 +107,6 @@ export async function aggregateReportData(
         empEntry.daysWorked++
         if (rec.checkInPhotoKey) {
           dayEntry.photos++
-          totalPhotos++
         }
       }
       if (rec.totalMinutesWorked) {
