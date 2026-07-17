@@ -64,7 +64,8 @@ shared/
 │   ├── db/
 │   │   ├── client.ts               # Singleton Prisma client
 │   │   └── prisma/
-│   │       └── schema.prisma       # Schema (all entities)
+│   │       ├── schema.prisma       # Schema (all entities)
+│   │       └── migrations/         # Immutable production migrations
 │   ├── auth/
 │   │   ├── jwt.ts                  # JWT issue/verify
 │   │   ├── password.ts             # Argon2id wrapper
@@ -85,9 +86,14 @@ pnpm install
 # Generate Prisma client (after editing schema.prisma)
 pnpm prisma:generate
 
-# Run migrations
+# Create a development migration after changing the schema
 pnpm prisma:migrate
+
+# Apply committed migrations in CI/staging/production
+pnpm prisma:migrate:deploy
 ```
+
+The initial migration is the baseline for fresh databases. Do not edit an applied migration; add a new timestamped migration through `pnpm prisma:migrate` instead.
 
 ## Conventions
 

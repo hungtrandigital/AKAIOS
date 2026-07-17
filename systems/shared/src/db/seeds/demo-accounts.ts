@@ -13,9 +13,9 @@
 
 import { PrismaClient, UserRole, SalaryType } from '@prisma/client'
 import { hashPassword } from '../../auth/password.js'
-import { AK_TENANT_ID } from './dev-seed.js'
 
 const prisma = new PrismaClient()
+const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 
 const DEMO_PASSWORD = 'Demo@2026' // Uniform password for ALL demo accounts
 

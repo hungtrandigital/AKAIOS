@@ -12,10 +12,11 @@
 //     - 10%: create late (checkIn 10-45 min after shift start)
 //     - 5%: skip (no record, counts as absent)
 
-import { PrismaClient, AttendanceStatus } from '@prisma/client'
+import { PrismaClient, AttendanceStatus, UserRole } from '@prisma/client'
 import { isWeekend } from '../../engine/calendar.js'
 
 const prisma = new PrismaClient()
+const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 const MONTHS_BACK = 3  // Cover 3 full months (e.g. May + Jun + partial Jul)
 
 function addMinutes(date: Date, minutes: number): Date {
@@ -31,14 +32,14 @@ async function main() {
   today.setUTCHours(0, 0, 0, 0)
   // Start: first day of (current_month - MONTHS_BACK + 1)
   // e.g. today=2026-07-17, MONTHS_BACK=3 → start=2026-05-01
-  const startDate = new Date(today.getFullYear(), today.getMonth() - (MONTHS_BACK - 1), 1)
+  const startDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - (MONTHS_BACK - 1), 1))
 
   console.log(`Generating demo attendance from ${startDate.toISOString().slice(0, 10)} to ${today.toISOString().slice(0, 10)} (${MONTHS_BACK} months back)\n`)
 
   const records: any[] = []
 
   // Load all shift assignments in window
-  const assignments = await prisma.shiftAssignment.findMany({
+  let assignments = await prisma.shiftAssignment.findMany({
     where: { date: { gte: startDate, lte: today } },
     include: { shift: true, project: true },
   })
@@ -57,13 +58,18 @@ async function main() {
   if (missing.length > 0) {
     console.log(`  Missing ${missing.length} Mon-Sat dates (no shift_assignment) — creating…`)
     const employees = await prisma.employee.findMany({
-      where: { tenantId: 'c0ffee00-0000-4000-8000-000000000001', status: 'active' },
+      where: { tenantId: AK_TENANT_ID, status: 'active' },
     })
     const projects = await prisma.project.findMany({
-      where: { tenantId: 'c0ffee00-0000-4000-8000-000000000001', status: 'active' },
+      where: { tenantId: AK_TENANT_ID, status: 'active' },
+    })
+    const assignmentOwner = await prisma.user.findFirst({
+      where: { tenantId: AK_TENANT_ID, role: UserRole.system_admin },
+      select: { id: true },
     })
     const morningShift = await prisma.shift.findFirst({ where: { name: 'Ca sáng' } })
     const afternoonShift = await prisma.shift.findFirst({ where: { name: 'Ca chiều' } })
+    if (!assignmentOwner) throw new Error('Missing system admin — run dev-seed first')
     if (!morningShift || !afternoonShift) throw new Error('Missing default shifts — run dev-seed first')
 
     const newAssignments: any[] = []
@@ -75,7 +81,7 @@ async function main() {
           projectId: projects[i % projects.length]!.id,
           shiftId: shift.id,
           date: new Date(date),
-          assignedById: '4812c985-bcd6-4e65-af50-c483900f92c6',
+          assignedById: assignmentOwner.id,
           status: 'scheduled',
         })
       }
@@ -86,13 +92,11 @@ async function main() {
       await prisma.shiftAssignment.createMany({ data: newAssignments.slice(i, i + CHUNK) })
     }
     console.log(`    → Created ${newAssignments.length} shift_assignments`)
-    // Re-load with new ones
-    assignments.push(
-      ...(await prisma.shiftAssignment.findMany({
-        where: { date: { gte: startDate, lte: today } },
-        include: { shift: true, project: true },
-      }))
-    )
+    // Re-load once so existing assignments are not processed twice.
+    assignments = await prisma.shiftAssignment.findMany({
+      where: { date: { gte: startDate, lte: today } },
+      include: { shift: true, project: true },
+    })
   }
 
   console.log(`  Found ${assignments.length} shift assignments in window`)
@@ -189,7 +193,7 @@ async function main() {
         create: r,
       })
       created++
-    } catch (err) {
+    } catch {
       // Skip duplicates
     }
   }
