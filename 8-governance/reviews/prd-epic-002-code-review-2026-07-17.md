@@ -160,6 +160,14 @@ The implementation must not be merged to a production branch or deployed. The re
 - Coverage tooling/configuration is missing despite the documented ≥90% requirement.
 - Repair CI commands and environment propagation, run real database/API integration tests, install browser dependencies, and enforce coverage thresholds.
 
+#### Remediation addendum — 2026-07-17
+
+- Replaced the ambiguous root commands with schema-aware Prisma generation and migration-deploy scripts, added an immutable initial migration, and verified it against a fresh PostgreSQL 16 database.
+- Added an ESLint baseline, explicit unit/integration/E2E scripts, coverage providers, and ≥90% thresholds over attendance domain services and payroll engine code.
+- Split GitHub Actions into independent quality, production-build, integration, and Playwright jobs. Integration now receives `RUN_INTEGRATION=true` through Turbo and exercises PostgreSQL, Redis, MinIO buckets, and API readiness.
+- Playwright now installs Chromium, starts all dependencies and application processes, and uploads diagnostics. The local gate executed all 7 tests: 5 passed; invalid-password and logout tests failed because they reproduce open `CODE-BUG-002` and `CODE-BUG-020`.
+- Local remediation checks pass except for those two intentional release-blocking E2E failures. `CODE-BUG-019` remains in progress until a fresh GitHub Actions run confirms remote execution; the overall **REJECTED** verdict is unchanged.
+
 ## Medium-severity issues
 
 ### CODE-BUG-020 — Web-admin auth state and E2E assertions are internally inconsistent
@@ -172,6 +180,12 @@ The implementation must not be merged to a production branch or deployed. The re
 
 - `systems/shared/package.json:41-42` declares `db:seed:all` twice. JSON keeps only the second command, dropping attendance and RBAC seeds.
 - Fresh environments therefore lack the mappings required by protected routes even when the documented aggregate seed command succeeds.
+
+#### Remediation addendum — 2026-07-17
+
+- Removed the duplicate JSON key, prevented `dev-seed` from executing again when imported by demo-account seed code, and replaced the attendance seed's hard-coded assignment owner with the actual seeded system administrator.
+- Verified `db:seed:all` against a fresh migrated PostgreSQL 16 database: dev, demo-account, attendance, and RBAC stages completed; a randomized multi-month attendance dataset and 52 role-permission mappings were produced.
+- `CODE-BUG-021` is fixed. This does not change the overall review verdict or close the remaining production Docker/Compose work in `CODE-BUG-005`.
 
 ### CODE-BUG-022 — Canonical plan, status, API, and implementation have drifted
 

@@ -91,9 +91,8 @@
 | CODE-BUG-016 | Payroll override breaks money/state invariants | PRD-EPIC-002 | PRD-SLICE-004 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
 | CODE-BUG-017 | Weekend/holiday overtime double-counted | PRD-EPIC-002 | PRD-SLICE-004 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
 | CODE-BUG-018 | Out-of-scope compliance changes net pay | PRD-EPIC-002 | PRD-SLICE-004 | open | @product-strategist | 2026-07-17 | - | Epic Known Issues + review |
-| CODE-BUG-019 | CI/integration/coverage gate invalid | PRD-EPIC-002 | PRD-SLICE-002 | open | @devops | 2026-07-17 | - | Epic Known Issues + review |
+| CODE-BUG-019 | CI/integration/coverage gate invalid | PRD-EPIC-002 | PRD-SLICE-002 | in-progress | @devops | 2026-07-17 | - | Local gate verified; GitHub run pending |
 | CODE-BUG-020 | Web-admin auth/E2E/display defects | PRD-EPIC-002 | PRD-SLICE-003 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
-| CODE-BUG-021 | Aggregate seed omits attendance/RBAC | PRD-EPIC-002 | PRD-SLICE-002 | open | @fullstack-engineer | 2026-07-17 | - | Epic Known Issues + review |
 | CODE-BUG-022 | Canonical docs and implementation drift | PRD-EPIC-002 | PRD-SLICE-002 | open | @docs-guardian | 2026-07-17 | - | Epic Known Issues + review |
 
 ---
@@ -148,6 +147,7 @@ PRD-EPIC-001: Factory Agent Leadership Orchestration (in-progress)
 
 | ID | Title | Epic | Fixed | Fixed By |
 |----|-------|------|-------|----------|
+| CODE-BUG-021 | Aggregate seed omits attendance/RBAC | PRD-EPIC-002 | 2026-07-17 | @fullstack-engineer |
 | CODE-BUG-001 | [Bug] | PRD-EPIC-001 | YYYY-MM-DD | @[engineer] |
 
 ---

@@ -69,9 +69,11 @@ Geofence bypass, time-zone errors, missing worked-time persistence, non-atomic s
 | Owner | @devops / @fullstack-engineer |
 | Review date | 2026-07-18 |
 
-Broken Compose paths, incomplete production images, absent database migrations, incomplete seed orchestration, and invalid CI gates prevent a reproducible installation and trustworthy release decision.
+Broken Compose paths, incomplete production images, and unresolved application failures still prevent a reproducible installation and trustworthy release decision.
 
-**Mitigation:** Remediate `CODE-BUG-005`, `019`, and `021`; validate immutable builds from the lockfile; commit and exercise migrations; test fresh database startup; run production-image smoke tests and a real CI integration gate.
+The 2026-07-17 remediation batch adds a verified fresh-database migration, fixes aggregate seed orchestration, and makes the CI gates execute real quality, integration, and browser checks. Risk remains open because Docker/Compose is not yet repaired and the browser gate correctly exposes unresolved authentication and web-admin defects.
+
+**Mitigation:** Finish `CODE-BUG-005` and remotely verify `CODE-BUG-019`; retain the fresh-database aggregate seed as regression evidence for fixed `CODE-BUG-021`; validate immutable builds from the lockfile; run production-image smoke tests and a real CI integration gate.
 
 **Contingency:** Keep the pilot blocked and retain the last known-good environment. Do not perform manual schema or container workarounds that cannot be reproduced from the repository.
 

@@ -9,10 +9,10 @@
 - **Verdict:** REJECTED — 4 Critical, 14 High, and 3 Medium findings.
 - **Scope:** commit range `08d9d25..9ed7be2`, 147 files.
 - **Canonical report:** [PRD-EPIC-002 code review](../../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md).
-- **Open work:** `CODE-BUG-002..022`; authentication, tenant isolation, payroll integrity, deployment, and CI are release blockers.
+- **Open work:** `CODE-BUG-002..020` and `CODE-BUG-022`; `CODE-BUG-021` is fixed. Authentication, tenant isolation, payroll integrity, deployment, and CI are release blockers.
 - **Next action:** Fix Critical issues first, then security/payroll High issues in bounded batches and request re-review after each batch.
 
-### Fresh verification evidence
+### Reviewed-head verification evidence (historical)
 
 | Check | Result |
 | --- | --- |
@@ -43,8 +43,23 @@
 
 - Critical: `CODE-BUG-002..005`.
 - High: `CODE-BUG-006..019`.
-- Medium: `CODE-BUG-020..022`.
+- Medium: `CODE-BUG-020` and `CODE-BUG-022`; `CODE-BUG-021` is fixed.
 - The next milestone is a successful re-review of the Critical and security/payroll High batches; no pilot date should be set before that gate passes.
+
+### CI and migration remediation evidence
+
+| Check | Local result on 2026-07-17 |
+| --- | --- |
+| Prisma client generation | Pass with the canonical shared schema path |
+| Lint / typecheck / unit | Pass; Attendance 29/29, Payroll 73 pass and 2 todo |
+| Coverage | Pass; Attendance 98.52% statements / 92.30% branches, Payroll 98.63% / 91.11% |
+| Production build | Pass: 4/4 packages |
+| Fresh PostgreSQL 16 migration | Pass: initial migration applied; schema up to date; 16 public tables |
+| Fresh aggregate seed | Pass: all four stages; randomized multi-month attendance dataset; 52 RBAC mappings |
+| Real integration gate | Pass: PostgreSQL, Redis, MinIO, bucket readiness, and API readiness exercised |
+| Playwright E2E | Executed with Chromium and live services: 5 pass, 2 fail on open `CODE-BUG-002` and `CODE-BUG-020` |
+
+`CODE-BUG-019` is in progress pending a fresh GitHub Actions run. The release verdict remains rejected: a red E2E job is expected until the authentication bypass and web-admin auth-state defects are remediated, and `CODE-BUG-005` remains open for Docker/Compose work.
 
 ## Gate to Resume Pilot
 
