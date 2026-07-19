@@ -24,8 +24,6 @@ const nextConfig = {
       // Catch-all for remaining /api/attendance/* (records, check-in, check-out, etc.)
       { source: '/api/attendance/:path*', destination: `${attendanceBase}/v1/attendance/:path*` },
 
-      // Internal API (service-to-service) — direct passthrough
-      { source: '/api/internal/:path*', destination: `${attendanceBase}/internal/:path*` },
     ]
   },
 }

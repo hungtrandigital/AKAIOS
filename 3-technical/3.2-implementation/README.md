@@ -9,7 +9,7 @@ This section contains detailed implementation documentation, including implement
 ### Key Documents
 
 - **[domain-specs.md](domain-specs.md)** - Implementation-specific domain specifications
-- **[api-contract.md](api-contract.md)** - API contract definitions
+- **[api-contract.md](api-contract.md)** - Index to the canonical OpenAPI contract
 - **[status/progress.md](status/progress.md)** - Current implementation status
 - **[history/](history/)** - Implementation history and logs
 - **[plans/](plans/)** - Detailed implementation plans
@@ -33,7 +33,7 @@ This section contains detailed implementation documentation, including implement
 1. **Review Plans** - Check [plans/plan-overview.md](plans/plan-overview.md) for overall strategy
 2. **Track Progress** - Update [status/progress.md](status/progress.md) regularly
 3. **Log History** - Document completed work in [history/](history/)
-4. **Update Specs** - Keep [domain-specs.md](domain-specs.md) and [api-contract.md](api-contract.md) current
+4. **Update Specs** - Keep [domain-specs.md](domain-specs.md) current and update the canonical OpenAPI file linked by [api-contract.md](api-contract.md)
 
 ## Related Sections
 
@@ -44,4 +44,3 @@ This section contains detailed implementation documentation, including implement
 ---
 
 *This section tracks the actual implementation of the technical specifications.*
-

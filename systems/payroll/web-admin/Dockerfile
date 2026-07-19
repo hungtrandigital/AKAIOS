@@ -7,16 +7,21 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /repo
 
 # Copy manifests only (cache layer)
-COPY package.json pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY systems/payroll/web-admin/package.json ./systems/payroll/web-admin/
+COPY systems/shared/package.json ./systems/shared/
 
 # Install with cache mount
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --filter @ak/payroll-web-admin... --frozen-lockfile || pnpm install --filter @ak/payroll-web-admin...
+    pnpm install --filter @ak/payroll-web-admin... --frozen-lockfile
 
 # Build
 FROM deps AS build
 WORKDIR /repo/systems/payroll/web-admin
+ARG ATTENDANCE_API_URL=http://localhost:3000
+ARG PAYROLL_API_URL=http://localhost:3001
+ENV ATTENDANCE_API_URL=$ATTENDANCE_API_URL
+ENV PAYROLL_API_URL=$PAYROLL_API_URL
 COPY systems/payroll/web-admin ./
 COPY systems/shared ./../../shared
 RUN pnpm build

@@ -11,19 +11,35 @@ import { z } from 'zod'
 import {
   prisma,
   issueAccessToken,
+  verifyPassword,
   generateOtp,
-  getSmsMode,
+  createEmployeeOtpChallenge,
+  verifyEmployeeOtpChallenge,
+  deleteEmployeeOtpChallenge,
+  sendEmployeeOtpSms,
+  decryptTotpSecret,
+  verifyTotpCode,
+  createTotpChallenge,
+  consumeTotpChallengeAttempt,
+  deleteTotpChallenge,
   generateRefreshToken,
   hashRefreshToken,
   getRefreshTokenTtlSeconds,
-  ValidationError,
   UnauthorizedError,
   NotFoundError,
 } from '@ak/shared'
 import { requireAuth } from '../plugins/auth.js'
 import { randomUUID } from 'node:crypto'
 
-const otpStore = new Map<string, { code: string; expiresAt: Date }>()
+function isAccountActive(user: {
+  status: string
+  role: string
+  employee?: { status: string } | null
+}): boolean {
+  if (user.status !== 'active') return false
+  if (user.role === 'employee') return user.employee?.status === 'active'
+  return user.employee?.status !== 'inactive' && user.employee?.status !== 'suspended'
+}
 
 const LoginSchema = z.object({
   phone: z.string().regex(/^\+84[0-9]{9}$/),
@@ -44,6 +60,10 @@ const OtpLoginSchema = z.object({
   otp: z.string().regex(/^[0-9]{6}$/),
 })
 
+const VerifyTwoFactorSchema = z.object({
+  totpCode: z.string().regex(/^[0-9]{6}$/),
+})
+
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post('/login', async (request, reply) => {
     const body = LoginSchema.parse(request.body)
@@ -51,10 +71,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       where: { phone: body.phone },
       include: { employee: true },
     })
-    if (!user || !user.passwordHash) {
+    if (!user || !user.passwordHash || user.role !== 'employee') {
       throw new UnauthorizedError('Invalid credentials')
     }
-    if (body.password.length < 8) {
+    const passwordMatches = await verifyPassword(user.passwordHash, body.password)
+    if (!passwordMatches || !isAccountActive(user)) {
       throw new UnauthorizedError('Invalid credentials')
     }
     const { token } = issueAccessToken({
@@ -87,6 +108,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return {
       accessToken: token,
       expiresIn: parseInt(process.env.JWT_ACCESS_TTL_SECONDS ?? '900', 10),
+      refreshToken: refresh.token,
       user: {
         id: user.id,
         phone: user.phone,
@@ -100,31 +122,40 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/request-otp', async (request) => {
     const body = OtpRequestSchema.parse(request.body)
-    const { code, expiresAt } = generateOtp()
-    otpStore.set(body.phone, { code, expiresAt })
-    if (getSmsMode() === 'mock') {
-      app.log.info({ phone: body.phone, otp: code }, 'MOCK MODE — OTP would be sent via SMS')
+    const user = await prisma.user.findUnique({
+      where: { phone: body.phone },
+      include: { employee: true },
+    })
+    if (!user || user.role !== 'employee' || !isAccountActive(user)) {
+      return { message: 'OTP sent (if account exists)' }
     }
+
+    const { code, expiresAt } = generateOtp()
+    const challengeCreated = await createEmployeeOtpChallenge(body.phone, code, expiresAt)
+    if (!challengeCreated) return { message: 'OTP sent (if account exists)' }
+    try {
+      await sendEmployeeOtpSms(body.phone, code)
+    } catch (error) {
+      await deleteEmployeeOtpChallenge(body.phone)
+      request.log.error({ err: error }, 'Employee OTP delivery failed')
+      throw error
+    }
+    // OTP material is intentionally never returned or logged.
     return { message: 'OTP sent (if account exists)' }
   })
 
   app.post('/login-otp', async (request) => {
     const body = OtpLoginSchema.parse(request.body)
-    const stored = otpStore.get(body.phone)
-    if (!stored) throw new ValidationError('No OTP requested for this phone')
-    if (new Date() > stored.expiresAt) {
-      otpStore.delete(body.phone)
-      throw new ValidationError('OTP expired')
-    }
-    if (stored.code !== body.otp) {
+    if (!await verifyEmployeeOtpChallenge(body.phone, body.otp)) {
       throw new UnauthorizedError('Invalid OTP')
     }
-    otpStore.delete(body.phone)
     const user = await prisma.user.findUnique({
       where: { phone: body.phone },
       include: { employee: true },
     })
-    if (!user) throw new NotFoundError('User', body.phone)
+    if (!user || user.role !== 'employee' || !isAccountActive(user)) {
+      throw new UnauthorizedError('Invalid or expired OTP')
+    }
     const { token } = issueAccessToken({
       userId: user.id,
       tenantId: user.tenantId,
@@ -159,7 +190,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/refresh', async (request, reply) => {
     // Accept refresh token from cookie OR body
-    const body = z.object({ refreshToken: z.string().optional() }).parse(request.body)
+    // Browser refresh calls commonly have no request body when the token is in
+    // the httpOnly cookie, so treat an absent body as an empty object.
+    const body = z.object({ refreshToken: z.string().optional() }).parse(request.body ?? {})
     const cookieToken = request.cookies.refreshToken
     const token = body.refreshToken ?? cookieToken
     if (!token) throw new UnauthorizedError('Missing refresh token')
@@ -181,24 +214,40 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (new Date() > stored.expiresAt) {
       throw new UnauthorizedError('Refresh token expired')
     }
-    if (stored.user.status !== 'active') {
+    if (!isAccountActive(stored.user)) {
       throw new UnauthorizedError('Account not active')
     }
 
-    // Rotate: revoke old, issue new in same family
+    // Rotate with a compare-and-set claim. Concurrent reuse cannot mint two
+    // descendants; a losing request revokes the whole family.
     const newRefresh = generateRefreshToken()
-    const newStored = await prisma.refreshToken.create({
-      data: {
-        userId: stored.userId,
-        tokenHash: newRefresh.tokenHash,
-        family: stored.family,
-        expiresAt: newRefresh.expiresAt,
-      },
+    const rotated = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.refreshToken.updateMany({
+        where: { id: stored.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      })
+      if (claimed.count !== 1) return false
+      const newStored = await tx.refreshToken.create({
+        data: {
+          userId: stored.userId,
+          tokenHash: newRefresh.tokenHash,
+          family: stored.family,
+          expiresAt: newRefresh.expiresAt,
+        },
+      })
+      await tx.refreshToken.update({
+        where: { id: stored.id },
+        data: { replacedBy: newStored.id },
+      })
+      return true
     })
-    await prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date(), replacedBy: newStored.id },
-    })
+    if (!rotated) {
+      await prisma.refreshToken.updateMany({
+        where: { family: stored.family },
+        data: { revokedAt: new Date() },
+      })
+      throw new UnauthorizedError('Refresh token reuse detected; all sessions revoked')
+    }
 
     const access = issueAccessToken({
       userId: stored.user.id,
@@ -225,16 +274,25 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.post('/logout', async (_request, reply) => {
-    // Revoke all refresh tokens for this session
+    const body = z.object({ refreshToken: z.string().optional() }).parse(_request.body ?? {})
+    // Browser sessions use the cookie; native sessions send the token body.
     const cookieToken = _request.cookies.refreshToken
-    if (cookieToken) {
-      const tokenHash = hashRefreshToken(cookieToken)
+    const sessionTokens = [cookieToken, body.refreshToken].filter(
+      (token): token is string => typeof token === 'string' && token.length > 0,
+    )
+    if (sessionTokens.length > 0) {
       await prisma.refreshToken.updateMany({
-        where: { tokenHash, revokedAt: null },
+        where: {
+          tokenHash: { in: sessionTokens.map((token) => hashRefreshToken(token)) },
+          revokedAt: null,
+        },
         data: { revokedAt: new Date() },
       })
     }
+    const totpChallenge = _request.cookies.totpChallenge
+    if (totpChallenge) await deleteTotpChallenge(totpChallenge)
     reply.clearCookie('refreshToken', { path: '/v1/auth' })
+    reply.clearCookie('totpChallenge', { path: '/' })
     return reply.status(204).send()
   })
 
@@ -243,23 +301,82 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const body = AdminLoginSchema.parse(request.body)
     const user = await prisma.user.findUnique({
       where: { email: body.email },
-      include: { employee: true },
+      include: { employee: true, totpCredential: true },
     })
-    if (!user || !user.passwordHash || user.status !== 'active') {
+    if (!user || !user.passwordHash || user.status !== 'active' || user.role === 'employee') {
       throw new UnauthorizedError('Invalid credentials')
     }
-    if (body.password.length < 8) {
+    const passwordMatches = await verifyPassword(user.passwordHash, body.password)
+    if (!passwordMatches || !isAccountActive(user)) {
       throw new UnauthorizedError('Invalid credentials')
     }
+
+    if (!user.totpCredential) {
+      throw new UnauthorizedError('Two-factor authentication enrollment required')
+    }
+
+    const challenge = await createTotpChallenge(user.id)
+    reply.setCookie('totpChallenge', challenge, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 300,
+      path: '/',
+    })
+    return {
+      message: '2FA verification required',
+      expiresIn: 300,
+    }
+  })
+
+  app.post('/verify-2fa', async (request, reply) => {
+    const body = VerifyTwoFactorSchema.parse(request.body)
+    const challenge = request.cookies.totpChallenge
+    if (!challenge) throw new UnauthorizedError('Invalid or expired 2FA challenge')
+    const userId = await consumeTotpChallengeAttempt(challenge)
+    if (!userId) {
+      reply.clearCookie('totpChallenge', { path: '/' })
+      throw new UnauthorizedError('Invalid or expired 2FA challenge')
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { employee: true, totpCredential: true },
+    })
+    if (!user || user.role === 'employee' || !isAccountActive(user) || !user.totpCredential) {
+      await deleteTotpChallenge(challenge)
+      reply.clearCookie('totpChallenge', { path: '/' })
+      throw new UnauthorizedError('Account not active')
+    }
+
+    const secret = decryptTotpSecret(user.totpCredential, `${user.tenantId}:${user.id}`)
+    const acceptedCounter = verifyTotpCode({
+      code: body.totpCode,
+      secret,
+      lastUsedCounter: user.totpCredential.lastUsedCounter,
+    })
+    if (acceptedCounter === null) throw new UnauthorizedError('Invalid 2FA code')
+
+    const replayGuard = await prisma.totpCredential.updateMany({
+      where: {
+        userId: user.id,
+        OR: [
+          { lastUsedCounter: null },
+          { lastUsedCounter: { lt: acceptedCounter } },
+        ],
+      },
+      data: { lastUsedCounter: acceptedCounter },
+    })
+    if (replayGuard.count !== 1) throw new UnauthorizedError('TOTP code already used')
+    await deleteTotpChallenge(challenge)
+    reply.clearCookie('totpChallenge', { path: '/' })
 
     const { token } = issueAccessToken({
       userId: user.id,
       tenantId: user.tenantId,
       role: user.role,
     })
-
     const refresh = generateRefreshToken()
-    const { randomUUID } = await import('node:crypto')
     const family = randomUUID()
     await prisma.refreshToken.create({
       data: {
@@ -269,7 +386,6 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         expiresAt: refresh.expiresAt,
       },
     })
-
     reply.setCookie('refreshToken', refresh.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -277,9 +393,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       maxAge: getRefreshTokenTtlSeconds(),
       path: '/v1/auth',
     })
-
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
-    app.log.info({ userId: user.id, email: user.email }, 'Admin login')
+    app.log.info({ userId: user.id, email: user.email }, 'Admin 2FA login')
 
     return {
       accessToken: token,
@@ -302,6 +417,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       include: { employee: true },
     })
     if (!user) throw new NotFoundError('User')
+    if (!isAccountActive(user)) {
+      throw new UnauthorizedError('Account not active')
+    }
     return {
       id: user.id,
       phone: user.phone,

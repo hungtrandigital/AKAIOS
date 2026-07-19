@@ -12,9 +12,17 @@ import {
   computeLatePenalty,
   computeAllowances,
   computeGrossAndNet,
+  assertMvpTaxMode,
   isWeekend,
   isHoliday,
 } from '../../src/engine/calculator.js'
+import {
+  applyPayrollOverrides,
+  getPayrollPeriodBounds,
+  resolveRecalculationAllowance,
+  sumPersistedMoney,
+} from '../../src/services/payroll-service.js'
+import { mvpMoneyString } from '../../src/routes/payroll.js'
 import {
   countWorkingDaysInMonth,
   countWorkingDaysInRange,
@@ -22,7 +30,12 @@ import {
   getLastDayOfMonth,
   getSundaysInMonth,
 } from '../../src/engine/working-days.js'
-import { isVietnamHoliday, VIETNAM_HOLIDAYS, getVietnamHolidayName } from '../../src/engine/holidays.js'
+import {
+  getVietnamCalendarDateKey,
+  isVietnamHoliday,
+  VIETNAM_HOLIDAYS,
+  getVietnamHolidayName,
+} from '../../src/engine/holidays.js'
 import type { PayrollRuleSnapshot, AttendanceRecord } from '../../src/engine/calculator.js'
 import { makeAttendance, buildWeekdayAttendance } from './_test-utils.js'
 
@@ -43,6 +56,7 @@ const DEFAULT_RULES: PayrollRuleSnapshot = {
   roundingMinutes: 15,
   workingHoursPerDay: 8,
   standardWorkingDaysPerMonth: 26,
+  taxMode: 'none',
 }
 
 function makeAttendance(
@@ -237,37 +251,31 @@ describe('Payroll Engine — BR-PAY rules', () => {
 
   describe('BR-PAY-004: Late penalty', () => {
     it('returns 0 when rules disabled (null perMinute)', () => {
-      const penalty = computeLatePenalty(60, 5, null, null)
+      const penalty = computeLatePenalty([60, 20], null, null)
       expect(penalty.isZero()).toBe(true)
     })
 
     it('returns 0 when no late minutes', () => {
-      const penalty = computeLatePenalty(0, 0, Money.fromVNĐ(1000), Money.fromVNĐ(5000))
+      const penalty = computeLatePenalty([], Money.fromVNĐ(1000), Money.fromVNĐ(5000))
       expect(penalty.isZero()).toBe(true)
     })
 
-    it('calculates penalty × days with cap', () => {
-      // 1000 VNĐ/min × 60min = 60,000/day
-      // capped at 50,000/day
-      // 3 days late = 50,000 × 3 = 150,000
+    it('applies the daily cap independently to unequal late days', () => {
       const penalty = computeLatePenalty(
-        60 * 3,
-        3,
+        [10, 60, 100],
         Money.fromVNĐ(1000),
         Money.fromVNĐ(50000)
       )
-      expect(penalty.toVNĐ()).toBe(150000)
+      expect(penalty.toVNĐ()).toBe(110000)
     })
 
-    it('no cap when maxPerDay=null', () => {
+    it('sums each late day once when maxPerDay=null', () => {
       const penalty = computeLatePenalty(
-        100,
-        2,
+        [10, 90],
         Money.fromVNĐ(1000),
         null
       )
-      // 1000 × 100 × 2 = 200,000
-      expect(penalty.toVNĐ()).toBe(200000)
+      expect(penalty.toVNĐ()).toBe(100000)
     })
   })
 
@@ -367,15 +375,49 @@ describe('Payroll Engine — BR-PAY rules', () => {
       // net = 10M - 2M - 500K = 7.5M (NO BHXH/PIT)
       expect(net.toVNĐ()).toBe(7500000)
     })
-  })
 
-  describe('BR-PAY-008: Period state machine (integration)', () => {
-    // Tested via routes in routes/payroll.test.ts (deferred to Phase 3 routes)
-    it.todo('open → calculating → calculated → approved → paid → locked')
-  })
+    it('recomputes gross and net when an allowance is overridden', () => {
+      const calculated = calculateLine(
+        { id: 'override', baseSalary: Money.fromVNĐ(10000000), salaryType: 'monthly' },
+        [makeAttendance(new Date('2026-07-13'), 'present', 480)],
+        DEFAULT_RULES,
+        { advance: Money.zero(), otherDeductions: Money.zero() }
+      )
+      const overridden = applyPayrollOverrides(
+        calculated,
+        Money.fromVNĐ(500000),
+        Money.fromVNĐ(100000),
+        Money.fromVNĐ(50000)
+      )
 
-  describe('BR-PAY-009: Re-calculation detection (integration)', () => {
-    it.todo('if attendance changes after calculated, recalc needed')
+      expect(overridden.gross.toVNĐ()).toBe(calculated.proratedBase.toVNĐ() + 500000)
+      expect(overridden.net.toVNĐ()).toBe(overridden.gross.toVNĐ() - 150000)
+    })
+
+    it('preserves allowances only when that field was explicitly overridden', () => {
+      const recalculated = Money.fromVNĐ(600000)
+      const previous = Money.fromVNĐ(300000)
+
+      expect(resolveRecalculationAllowance(recalculated, previous, false).toDBString())
+        .toBe('600000.00')
+      expect(resolveRecalculationAllowance(recalculated, previous, true).toDBString())
+        .toBe('300000.00')
+      expect(resolveRecalculationAllowance(recalculated, Money.zero(), true).toDBString())
+        .toBe('0.00')
+    })
+
+    it('sums the same quantized values that payroll lines persist', () => {
+      const third = Money.fromVNĐ(100).divide(3)
+
+      expect(sumPersistedMoney([third, third]).toDBString()).toBe('66.66')
+    })
+
+    it('accepts only bounded non-negative MVP money strings', () => {
+      expect(mvpMoneyString.safeParse('1234567.89').success).toBe(true)
+      expect(mvpMoneyString.safeParse('-1').success).toBe(false)
+      expect(mvpMoneyString.safeParse('100.001').success).toBe(false)
+      expect(mvpMoneyString.safeParse('100000000000000.00').success).toBe(false)
+    })
   })
 
   describe('BR-PAY-010: Holiday detection via input data', () => {
@@ -401,6 +443,9 @@ describe('Payroll Engine — BR-PAY rules', () => {
       ]
       const totals = aggregateAttendance(records)
       expect(totals.daysWorked).toBe(2) // absent + on_leave skipped
+      expect(totals.absentDays).toBe(1)
+      expect(totals.daysOnLeave).toBe(1)
+      expect(totals.workdayUnits).toBe(2)
       expect(totals.totalWorkMinutes).toBe(960)
     })
 
@@ -411,6 +456,17 @@ describe('Payroll Engine — BR-PAY rules', () => {
       const totals = aggregateAttendance(records)
       // weekend present: total goes to overtimeWeekend
       expect(totals.overtimeWeekendMinutes).toBe(480)
+    })
+
+    it('counts each weekend and holiday minute exactly once', () => {
+      const records: AttendanceRecord[] = [
+        makeAttendance(new Date('2026-07-12'), 'present', 540, 60),
+        makeAttendance(new Date('2026-05-01'), 'holiday', 540, 60),
+      ]
+      const totals = aggregateAttendance(records)
+
+      expect(totals.overtimeWeekendMinutes).toBe(540)
+      expect(totals.overtimeHolidayMinutes).toBe(540)
     })
 
     it('handles empty array', () => {
@@ -479,6 +535,56 @@ describe('Payroll Engine — BR-PAY rules', () => {
       expect(result.net.isZero()).toBe(true)
     })
 
+    it('prorates half-days, counts paid holidays, leave, and absence explicitly', () => {
+      const attendance = [
+        makeAttendance(new Date('2026-07-13'), 'half_day', 240),
+        makeAttendance(new Date('2026-09-02'), 'holiday', 0),
+        makeAttendance(new Date('2026-07-14'), 'on_leave', 0),
+        makeAttendance(new Date('2026-07-15'), 'absent', 0),
+      ]
+      const result = calculateLine(
+        { id: 'mixed', baseSalary: Money.fromVNĐ(10000000), salaryType: 'monthly' },
+        attendance,
+        DEFAULT_RULES,
+        { advance: Money.zero(), otherDeductions: Money.zero() },
+      )
+
+      expect(result).toMatchObject({
+        daysWorked: 2, daysOnLeave: 1, absentDays: 1, workdayUnits: 1.5,
+      })
+      expect(result.proratedBase.toVNĐ()).toBe(576923)
+    })
+
+    it('uses hourlyRate for regular and overtime minutes', () => {
+      const employee = {
+        id: 'hourly',
+        baseSalary: Money.zero(),
+        salaryType: 'hourly' as const,
+        hourlyRate: Money.fromVNĐ(60000),
+      }
+      const attendance = [
+        makeAttendance(new Date('2026-07-13'), 'present', 540, 60),
+        makeAttendance(new Date('2026-07-12'), 'present', 480),
+      ]
+      const result = calculateLine(employee, attendance, DEFAULT_RULES, {
+        advance: Money.zero(), otherDeductions: Money.zero(),
+      })
+
+      expect(result.proratedBase.toVNĐ()).toBe(480000)
+      expect(result.overtimeWeekdayAmount.toVNĐ()).toBe(90000)
+      expect(result.overtimeWeekendAmount.toVNĐ()).toBe(960000)
+      expect(result.gross.toVNĐ()).toBe(1530000)
+    })
+
+    it('rejects hourly employees without a positive hourlyRate', () => {
+      expect(() => calculateLine(
+        { id: 'hourly', baseSalary: Money.zero(), salaryType: 'hourly', hourlyRate: null },
+        [makeAttendance(new Date('2026-07-13'), 'present', 480)],
+        DEFAULT_RULES,
+        { advance: Money.zero(), otherDeductions: Money.zero() },
+      )).toThrow('positive hourlyRate')
+    })
+
     it('employee with full OT (weekday + weekend + holiday)', () => {
       const employee = {
         id: 'emp4',
@@ -522,6 +628,24 @@ describe('Payroll Engine — BR-PAY rules', () => {
   })
 
   describe('Edge cases per PRD-EPIC-002 spec', () => {
+    it('uses a half-open month interval that includes the complete last day', () => {
+      const { fromDate, toDateExclusive } = getPayrollPeriodBounds(2026, 7)
+      const firstCheckIn = new Date('2026-06-30T17:00:00.000Z')
+      const finalCheckIn = new Date('2026-07-31T16:59:59.999Z')
+
+      expect(fromDate.toISOString()).toBe('2026-06-30T17:00:00.000Z')
+      expect(toDateExclusive.toISOString()).toBe('2026-07-31T17:00:00.000Z')
+      expect(firstCheckIn.getTime()).toBeGreaterThanOrEqual(fromDate.getTime())
+      expect(finalCheckIn.getTime()).toBeLessThan(toDateExclusive.getTime())
+    })
+
+    it('classifies early Vietnam mornings by Vietnam calendar date', () => {
+      const mondayAt0030 = new Date('2026-07-12T17:30:00.000Z')
+
+      expect(getVietnamCalendarDateKey(mondayAt0030)).toBe('2026-07-13')
+      expect(isWeekend(mondayAt0030)).toBe(false)
+    })
+
     it('February (28 days) payroll: 20 working days expected', () => {
       const standardDays = countWorkingDaysInMonth(2026, 1)
       expect(standardDays).toBe(24) // 28 days - 4 Sundays
@@ -565,6 +689,20 @@ describe('Payroll Engine — BR-PAY rules', () => {
       // With MVP skip: net = proratedBase = 20M × 22/26 ≈ 16,923,076
       expect(result.net.toVNĐ()).toBeGreaterThan(16000000)
       expect(result.net.toVNĐ()).toBeLessThan(17000000)
+      expect(result.tax.tongKhauTru.isZero()).toBe(true)
+    })
+
+    it('rejects every compliance mode outside ADR-003 MVP', () => {
+      expect(() => assertMvpTaxMode('tncn_only')).toThrow(/outside the approved MVP scope/)
+      expect(() => assertMvpTaxMode('full')).toThrow(/outside the approved MVP scope/)
+      expect(() => assertMvpTaxMode('custom')).toThrow(/outside the approved MVP scope/)
+
+      expect(() => calculateLine(
+        { id: 'emp', baseSalary: Money.fromVNĐ(20000000), salaryType: 'monthly' },
+        [makeAttendance(new Date('2026-07-13'), 'present', 480)],
+        { ...DEFAULT_RULES, taxMode: 'full' },
+        { advance: Money.zero(), otherDeductions: Money.zero() }
+      )).toThrow(/use 'none'/)
     })
   })
 })

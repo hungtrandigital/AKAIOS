@@ -2,13 +2,15 @@
 
 import 'package:dio/dio.dart';
 import 'auth_storage.dart';
+import 'config.dart';
 
 class ApiException implements Exception {
   final String code;
   final String message;
   final int statusCode;
 
-  ApiException({required this.code, required this.message, required this.statusCode});
+  ApiException(
+      {required this.code, required this.message, required this.statusCode});
 
   @override
   String toString() => '$code: $message';
@@ -17,14 +19,23 @@ class ApiException implements Exception {
 class HttpClient {
   final Dio _dio;
   final AuthStorage _authStorage;
+  late final Dio _refreshDio;
+  Future<bool>? _refreshInFlight;
 
   HttpClient({required AuthStorage authStorage})
-    : _authStorage = authStorage,
-      _dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {'Content-Type': 'application/json'},
-      )) {
+      : _authStorage = authStorage,
+        _dio = Dio(BaseOptions(
+          baseUrl: AppConfig.apiBaseUrl,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 30),
+          headers: {'Content-Type': 'application/json'},
+        )) {
+    _refreshDio = Dio(BaseOptions(
+      baseUrl: AppConfig.apiBaseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {'Content-Type': 'application/json'},
+    ));
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await _authStorage.getAccessToken();
@@ -33,7 +44,25 @@ class HttpClient {
         }
         handler.next(options);
       },
-      onError: (err, handler) {
+      onError: (err, handler) async {
+        if (err.response?.statusCode == 401 &&
+            err.requestOptions.path != '/v1/auth/refresh' &&
+            err.requestOptions.extra['authRetried'] != true) {
+          final refreshed = await _refreshOnce();
+          if (refreshed) {
+            final token = await _authStorage.getAccessToken();
+            err.requestOptions.extra['authRetried'] = true;
+            err.requestOptions.headers['Authorization'] = 'Bearer $token';
+            try {
+              final response = await _dio.fetch<dynamic>(err.requestOptions);
+              handler.resolve(response);
+              return;
+            } on DioException catch (retryError) {
+              handler.next(retryError);
+              return;
+            }
+          }
+        }
         final status = err.response?.statusCode ?? 0;
         final data = err.response?.data;
         if (data is Map && data['error'] is Map) {
@@ -55,7 +84,43 @@ class HttpClient {
     ));
   }
 
-  Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query}) async {
+  Future<bool> _refreshOnce() async {
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+    final operation = _refreshAccessToken();
+    _refreshInFlight = operation;
+    try {
+      return await operation;
+    } finally {
+      _refreshInFlight = null;
+    }
+  }
+
+  Future<bool> _refreshAccessToken() async {
+    final refreshToken = await _authStorage.getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+    try {
+      final response = await _refreshDio.post<Map<String, dynamic>>(
+        '/v1/auth/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+      final data = response.data;
+      final accessToken = data?['accessToken'] as String?;
+      final rotatedRefreshToken = data?['refreshToken'] as String?;
+      if (accessToken == null || rotatedRefreshToken == null) return false;
+      await _authStorage.updateTokens(
+        accessToken: accessToken,
+        refreshToken: rotatedRefreshToken,
+      );
+      return true;
+    } on DioException {
+      await _authStorage.clear();
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>> get(String path,
+      {Map<String, dynamic>? query}) async {
     return _wrap(() => _dio.get(path, queryParameters: query));
   }
 
@@ -63,7 +128,8 @@ class HttpClient {
     return _wrap(() => _dio.post(path, data: data));
   }
 
-  Future<Map<String, dynamic>> _wrap(Future<Response<dynamic>> Function() fn) async {
+  Future<Map<String, dynamic>> _wrap(
+      Future<Response<dynamic>> Function() fn) async {
     try {
       final res = await fn();
       final data = res.data;

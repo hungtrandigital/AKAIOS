@@ -1,79 +1,82 @@
 # System Overview — AKAIUNSAN
 
-**Status:** Active
-**Last Updated:** 2026-07-16
+**Status:** Reconciled with the 2026-07-18 implementation tree
+
+**Last Updated:** 2026-07-18
+
 **Owner:** @system-architecture
+
 **Related:** PRD-EPIC-002
 
-## Purpose
-
-This document provides a high-level overview of all systems in AKAIUNSAN, their relationships, and how they work together. It maps to the actual `systems/` directory.
-
-## Systems Architecture
-
-### System Diagram
+## Systems
 
 ```mermaid
-graph LR
-    Employee[📱 Employee<br/>Flutter App] --> AttendanceAPI[Attendance API<br/>Fastify + TS]
-    BO[💻 BO / Supervisor<br/>Next.js Web Admin] --> AttendanceAPI
-    BO --> PayrollAPI[Payroll API<br/>Fastify + TS]
-    AttendanceAPI --> Postgres[(PostgreSQL 16<br/>Shared DB)]
-    PayrollAPI --> Postgres
-    AttendanceAPI --> Redis[(Redis 7)]
-    PayrollAPI --> Redis
-    AttendanceAPI --> MinIO[(MinIO<br/>Photos, PDFs)]
-    PayrollAPI -.Internal API.-> AttendanceAPI
+flowchart LR
+    Mobile[Flutter mobile] --> Attendance[Attendance API]
+    BO[BO / supervisor / admin] --> Web[Next.js web admin]
+    Web --> Attendance
+    Web --> Payroll[Payroll API]
+    Payroll -->|tenant-bound internal HTTP| Attendance
+    Attendance --> PG[(Shared PostgreSQL)]
+    Payroll --> PG
+    Attendance --> Redis[(Redis OTP/auth state)]
+    Attendance --> MinIO[(MinIO photos/reports)]
 ```
 
-### Systems List
+### Attendance
 
-#### `attendance` (PRD-EPIC-002)
+- **Location:** [systems/attendance](../../../systems/attendance/README.md)
+- **Purpose:** Employee authentication, project/shift operations, GPS/photo
+  check-in/out, audited attendance override, explicit supervisor membership, and
+  PDF/CSV customer reports.
+- **Runtime:** Fastify/TypeScript API plus Flutter Android/iOS scaffolds.
+- **Data services:** PostgreSQL, Redis OTP/challenge state, and private MinIO.
 
-- **Purpose:** Mobile employee check-in/out (GPS + photo), project management, real-time attendance view for supervisors, customer-facing reports (PDF/CSV by project).
-- **Location:** [`systems/attendance/`](../../../systems/attendance/README.md)
-- **Tech Stack:** Flutter 3.24 (mobile), Node.js 20 + Fastify + TypeScript (backend), PostgreSQL 16, Redis 7, MinIO (photos)
-- **Domain Context:** Attendance bounded context + Identity shared kernel
-- **Related:** See [Domain Specs](domain-specs.md#2-attendance-bounded-context)
+### Payroll
 
-#### `payroll` (PRD-EPIC-002)
+- **Location:** [systems/payroll](../../../systems/payroll/README.md)
+- **Purpose:** Monthly period calculation, rule versions, audited line overrides,
+  approval, paid/locked states, and XLSX export through the shared web admin.
+- **Runtime:** Fastify/TypeScript API plus Next.js 14 web admin.
+- **Attendance input:** `GET /internal/attendance` on Attendance with
+  `X-Internal-API-Key` and required tenant/employee/date scope.
 
-- **Purpose:** Web admin only — calculate monthly payroll, allow BO to override lines (advance, deductions), approve and lock periods, export Excel for accounting.
-- **Location:** [`systems/payroll/`](../../../systems/payroll/README.md)
-- **Tech Stack:** Node.js 20 + Fastify + TypeScript (backend), Next.js 14 (web admin), PostgreSQL 16, Redis 7, ExcelJS (export)
-- **Domain Context:** Payroll bounded context + Identity shared kernel
-- **Reads attendance data via:** `GET /internal/attendance` endpoint on attendance API (X-Internal-API-Key auth)
+## Shared Kernel and Repository Mapping
 
-## Cross-Cutting
+| Concern | Canonical implementation |
+| --- | --- |
+| Prisma schema and migrations | `systems/shared/src/db/prisma/` |
+| Auth, OTP/TOTP, JWT, refresh, RBAC | `systems/shared/src/auth/` |
+| Money/errors/storage/health helpers | `systems/shared/src/` |
+| Compose and Caddy | `systems/shared/docker-compose.yml`, `systems/shared/Caddyfile` |
+| Web admin for both APIs | `systems/payroll/web-admin/` |
+| Cross-system contract | [OpenAPI](api-contracts/openapi.yaml) |
 
-| Concern | Owner | Location |
-| --- | --- | --- |
-| Shared DB schema (users, projects, tenants) | Identity shared kernel | `systems/shared/db/prisma/schema.prisma` |
-| Auth (JWT issuance, refresh tokens) | Identity | `systems/shared/auth/` |
-| Common error types, logging | Cross-cutting | `systems/shared/` |
-| Deployment (Docker Compose stack) | @devops | `systems/attendance/docker-compose.yml` (single stack hosts both systems) |
+PostgreSQL is physically shared, but Payroll does not query Attendance records
+directly during calculation; the tenant-bound internal HTTP projection is the
+implemented boundary. Payroll still reads shared Identity/employee and payroll
+tables through Prisma.
 
-## Deployment Topology
+## Deployment Boundary
 
-```
-On-Premise Server (Ubuntu 22.04, 16GB RAM)
-├── Caddy (reverse proxy + TLS)
-├── Docker Compose
-│   ├── attendance-api (Fastify)
-│   ├── payroll-api (Fastify)
-│   ├── web-admin (Next.js — for both systems)
-│   ├── postgres (shared)
-│   ├── redis (shared)
-│   └── minio (photos only)
-└── Backup: daily pg_dump + MinIO sync to VPS
-```
+The repository ships a single-host Compose topology: Attendance `:3000`, Payroll
+`:3001`, web admin `:3002`, PostgreSQL, Redis, MinIO, and Caddy. Cloudflare Tunnel
+terminates public TLS and reaches Caddy on local HTTP. The main hostname serves
+web plus the mobile `/api/attendance/v1/*` prefix; a separate storage hostname
+routes presigned MinIO requests.
 
-External access via Cloudflare Tunnel → Caddy → backend containers.
-
-See [Infrastructure](../infrastructure.md) for full hosting details.
+Local image/configuration validation is complete. The live server, tunnel policy,
+log rotation, backup schedule/restore drill, native iOS build, remote CI for an
+immutable commit, and pilot/scale-out are not yet accepted.
 
 ## Future Systems
 
-- `recruitment` (potential epic after PRD-EPIC-002) — pipeline cho lao động phổ thông
-- `inventory` — quản lý vật tư/hóa chất per project
-- `quality-inspection` — supervisor photo evidence for service quality
+Recruitment, inventory, quality inspection, asynchronous workers, offline mobile
+sync, and high-availability infrastructure require separately approved work.
+
+## Related Documents
+
+- [Infrastructure](../infrastructure.md)
+- [System Design](../design-standards/system-design.md)
+- [Domain Specs](domain-specs.md)
+- [On-Premise Runbook](../../3.3-devops/server-steps.md)

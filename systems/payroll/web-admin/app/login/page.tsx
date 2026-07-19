@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { apiLogin } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,26 +21,10 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/attendance/auth/admin-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-        credentials: 'include',
-      })
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data?.message ?? 'Đăng nhập thất bại')
-      }
-      const data = await response.json()
-      if (data.accessToken) {
-        localStorage.setItem('ak_access_token', data.accessToken)
-        localStorage.setItem('ak_user_id', data.user?.id ?? '')
-        router.push('/attendance')
-      } else {
-        router.push(`/login/2fa?tempToken=${data.tempToken}`)
-      }
-    } catch (e: any) {
-      setError(e.message ?? 'Đã có lỗi xảy ra')
+      await apiLogin(email, password)
+      router.push('/login/2fa')
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Đã có lỗi xảy ra')
     } finally {
       setLoading(false)
     }

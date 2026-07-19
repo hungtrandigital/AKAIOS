@@ -90,6 +90,8 @@ enum AuditAction {
   override_attendance
   create_shift_assignment
   cancel_shift_assignment
+  grant_project_supervisor
+  revoke_project_supervisor
   // Payroll
   open_payroll_period
   calculate_payroll
@@ -142,8 +144,11 @@ model User {
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   employee      Employee?
   refreshTokens RefreshToken[]
+  totpCredential TotpCredential?
   auditLogs     AuditLog[]
   assignedShifts ShiftAssignment[] @relation("AssignedBy")
+  supervisedProjects ProjectSupervisor[] @relation("ProjectSupervisorUser")
+  grantedProjectSupervisors ProjectSupervisor[] @relation("ProjectSupervisorAssignedBy")
   overrideAttendance AttendanceRecord[] @relation("OverrideByAttendance")
   overridePayroll PayrollLine[] @relation("OverrideByPayroll")
   openedPeriods PayrollPeriod[] @relation("OpenedBy")
@@ -153,6 +158,23 @@ model User {
   @@index([phone])
   @@index([role])
   @@map("users")
+}
+
+model TotpCredential {
+  userId           String   @id @db.Uuid
+  secretCiphertext String
+  secretIv         String
+  secretAuthTag    String
+  keyVersion       Int      @default(1)
+  lastUsedCounter  BigInt?
+  enabledAt        DateTime @default(now())
+  rotatedAt        DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("totp_credentials")
 }
 
 model RefreshToken {
@@ -231,11 +253,28 @@ model Project {
   shiftAssignments  ShiftAssignment[]
   attendanceRecords AttendanceRecord[]
   customerReports   CustomerReport[]
+  supervisors       ProjectSupervisor[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([status])
   @@map("projects")
+}
+
+model ProjectSupervisor {
+  projectId   String   @db.Uuid
+  userId      String   @db.Uuid
+  assignedById String  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supervisor User    @relation("ProjectSupervisorUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User    @relation("ProjectSupervisorAssignedBy", fields: [assignedById], references: [id])
+
+  @@id([projectId, userId])
+  @@index([userId, projectId])
+  @@index([assignedById])
+  @@map("project_supervisors")
 }
 
 model Shift {
@@ -409,6 +448,7 @@ model PayrollLine {
   payrollPeriodId         String   @db.Uuid
   employeeId              String   @db.Uuid
   daysWorked              Int      @default(0)
+  workdayUnits            Decimal  @db.Decimal(5, 2) @default(0)
   daysOnLeave             Int      @default(0)
   totalWorkMinutes        Int      @default(0)
   overtimeWeekdayMinutes  Int      @default(0)
@@ -436,6 +476,7 @@ model PayrollLine {
   advance                 Decimal  @db.Decimal(15, 2) @default(0)
   otherDeductions         Decimal  @db.Decimal(15, 2) @default(0)
   net                     Decimal  @db.Decimal(15, 2)
+  allowancesOverridden    Boolean  @default(false)
   overrideReason          String?
   overrideById            String?  @db.Uuid
   overrideAt              DateTime?

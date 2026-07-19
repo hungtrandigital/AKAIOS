@@ -15,7 +15,7 @@
     "typecheck": "turbo run typecheck",
     "test": "pnpm test:unit",
     "test:unit": "turbo run test:unit --filter=@ak/attendance-api --filter=@ak/payroll-api",
-    "test:integration": "turbo run test:integration --filter=@ak/attendance-api",
+    "test:integration": "turbo run test:integration --filter=@ak/attendance-api --filter=@ak/payroll-api",
     "test:coverage": "turbo run test:coverage --filter=@ak/attendance-api --filter=@ak/payroll-api",
     "test:e2e": "turbo run test:e2e --filter=@ak/payroll-web-admin",
     "clean": "turbo run clean && rm -rf node_modules",
@@ -23,11 +23,11 @@
     "prisma:migrate:deploy": "pnpm --filter @ak/shared run prisma:migrate:deploy",
     "prisma:generate": "pnpm --filter @ak/shared run prisma:generate",
     "prisma:studio": "pnpm --filter @ak/shared run prisma:studio",
-    "docker:up": "docker compose -f systems/shared/docker-compose.yml up -d",
+    "docker:up": "docker compose --env-file .env -f systems/shared/docker-compose.yml up -d --build",
     "docker:up:dev": "docker compose -f systems/shared/docker-compose.dev.yml up -d",
-    "docker:down": "docker compose -f systems/shared/docker-compose.yml down",
+    "docker:down": "docker compose --env-file .env -f systems/shared/docker-compose.yml down",
     "docker:down:dev": "docker compose -f systems/shared/docker-compose.dev.yml down",
-    "docker:logs": "docker compose -f systems/shared/docker-compose.yml logs -f"
+    "docker:logs": "docker compose --env-file .env -f systems/shared/docker-compose.yml logs -f"
   },
   "eslintConfig": {
     "root": true,

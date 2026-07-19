@@ -131,3 +131,16 @@ Each layer is independently swappable:
 - DB → MySQL migration possible (Prisma supports both)
 
 ADR supersedes none. Superseded by none.
+
+## Implementation Note — 2026-07-18
+
+The accepted component choices remain, with these MVP refinements:
+
+- Redis stores atomic OTP/TOTP challenge and abuse-control state plus readiness
+  dependencies. Payroll runs synchronously and transactionally in the API; no
+  BullMQ queue or worker is shipped.
+- Caddy is the local HTTP origin reverse proxy. Cloudflare Tunnel terminates
+  public TLS at the edge, so Caddy auto-HTTPS is not used in the shipped topology.
+- “No cloud dependencies” applies only to durable application data/services.
+  Public access and production SMS depend on Cloudflare Tunnel and SpeedSMS;
+  GitHub Actions is the remote delivery gate.

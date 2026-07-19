@@ -1,13 +1,18 @@
 # Coding Standards — AKAIUNSAN Attendance + Payroll
 
-**Status:** Active — Phase 0 deliverable for PRD-EPIC-002
-**Last Updated:** 2026-07-16
+**Status:** Active baseline with current MVP deviations documented
+**Last Updated:** 2026-07-18
 **Owner:** @fullstack-engineer
 **Mandatory:** Per `[0-agents/workflows/development-rules.md]` (de facto factory standard)
 
 ## Overview
 
-Coding conventions for TypeScript (backend + web admin), Dart/Flutter (mobile), SQL/Prisma, and infrastructure code. Supplements `[0-agents/workflows/development-rules.md]` (KISS/DRY/YAGNI, kebab-case, <200-line files, no secrets, conventional commits, no AI references).
+Coding conventions for TypeScript (backend + web admin), Dart/Flutter (mobile),
+SQL/Prisma, and infrastructure code. These are the direction for new changes;
+they are not a claim that every MVP file already conforms. Current lint treats
+explicit `any` as warnings, several route/engine/test files exceed 200 lines, and
+routes/services use Prisma directly. Those deviations should be reduced in
+separately reviewed refactors rather than hidden in architecture claims.
 
 ## TypeScript Standards
 
@@ -35,7 +40,7 @@ Coding conventions for TypeScript (backend + web admin), Dart/Flutter (mobile), 
 ```
 
 ### Style
-- **No `any`** — use `unknown` + type narrowing if needed
+- **Avoid new `any`** — use `unknown` + type narrowing; the current lint rule is a warning while legacy occurrences are removed
 - **Prefer `const`** over `let`; never `var`
 - **Arrow functions** for callbacks; named functions for top-level
 - **Async/await** over `.then()` chains
@@ -72,7 +77,7 @@ Coding conventions for TypeScript (backend + web admin), Dart/Flutter (mobile), 
 - **Never log sensitive data:** passwords, OTP, full payment card, full bank account
 
 ### File Size Limits
-- Max 200 lines per file (per `[development-rules.md:8-12]`)
+- Target max 200 lines per hand-written file (per `[development-rules.md:8-12]`); this is not yet an automated repository-wide gate
 - If exceeded, split: extract classes, extract constants, extract types
 - Exception: generated files (Prisma client, OpenAPI types) can exceed
 
@@ -98,7 +103,11 @@ Coding conventions for TypeScript (backend + web admin), Dart/Flutter (mobile), 
 - Avoid setState for anything beyond ephemeral UI state
 - Async values via `AsyncValue<T>` from Riverpod
 
-### Architecture
+### Architecture Target
+
+The current MVP uses `core/`, `features/auth/{data,presentation}`, and
+`features/attendance/{data,presentation}`. The deeper entity/use-case layering
+below is a future scaling pattern, not the shipped directory inventory.
 
 ```
 lib/
@@ -132,8 +141,8 @@ lib/
 - Use Prisma schema (single source of truth for DB structure)
 - Model names: PascalCase, plural for tables (`employees`, `projects`)
 - Field names: camelCase in Prisma → snake_case in DB (Prisma handles)
-- Always include `id` (UUID), `createdAt`, `updatedAt` on every model
-- Soft delete: `deletedAt DateTime?` on main entities
+- Use UUID IDs and lifecycle timestamps where the model requires them; join/value models may use composite keys or fewer timestamps
+- `Employee`/`Project` use `deletedAt`; `Shift` uses `isActive`. Do not assume a global soft-delete layer
 
 ### Migrations
 - One migration per PR (no mega-migrations)
@@ -151,22 +160,27 @@ lib/
 ### URL Structure
 
 ```
-/api/v1/{resource}              # Collection
-/api/v1/{resource}/{id}         # Single resource
-/api/v1/{resource}/{id}/{sub}    # Sub-resource
-/api/internal/{resource}         # Internal-only (service-to-service)
+/v1/{resource}                   # Canonical Fastify collection
+/v1/{resource}/{id}              # Canonical Fastify resource
+/v1/{resource}/{id}/{sub}        # Canonical Fastify sub-resource
+/internal/{resource}             # Private service-to-service endpoint
 ```
+
+Public mobile traffic uses Caddy prefix `/api/attendance/v1/*`, which strips
+`/api/attendance` before forwarding. Web-admin uses same-origin `/api/*` aliases
+implemented by Next.js rewrites.
 
 ### HTTP Methods
 - `GET` — read
 - `POST` — create
 - `PUT` — full update
 - `PATCH` — partial update
-- `DELETE` — soft delete (set `deletedAt`)
+- `DELETE` — soft-delete resource roots that own `deletedAt`; association/join
+  resources such as project-supervisor membership may be hard-deleted when the
+  mutation is authorized and audited
 
 ### Status Codes
-- `200` — success with body
-- `201` — created with body
+- `200` — success with body, including current create endpoints
 - `204` — success no body (e.g., DELETE)
 - `400` — validation error
 - `401` — unauthorized (missing/invalid JWT)
@@ -177,16 +191,16 @@ lib/
 - `500` — server error
 
 ### Request/Response Format
-- All requests/responses: JSON
+- Requests and normal API responses are JSON; `204` has no body and payroll export returns XLSX binary
 - Errors return: `{ error: { code: string, message: string, details?: object } }`
 - Pagination: query params `?page=1&limit=50`; response: `{ data: [...], pagination: { page, limit, total, totalPages } }`
 - Timestamps: ISO 8601 UTC (e.g., `2026-07-16T08:30:00Z`); convert to VN time (UTC+7) at presentation layer
 - Money: VNĐ as integer or Decimal; **NEVER** as float
 
 ### Versioning
-- URL-based (`/api/v1/...`)
+- URL-based (`/v1/...` inside services; public proxy prefixes are deployment concerns)
 - Breaking change → bump version (`/api/v2/...`)
-- Old version supported for 6 months after new version release
+- No six-month compatibility policy is implemented for this internal MVP; define one before a breaking version is introduced
 
 ### Authentication
 - Bearer JWT in `Authorization` header
@@ -202,7 +216,7 @@ lib/
 
 ### Backend (TypeScript)
 - **Unit tests:** Vitest (faster than Jest, ESM-native)
-- **Integration tests:** Vitest + testcontainers (real Postgres/Redis/MinIO in Docker for tests)
+- **Integration tests:** Vitest against environment-provided real PostgreSQL/Redis/MinIO services; CI provisions those services directly
 - **E2E tests:** Playwright (for critical user flows: login, check-in, payroll approval)
 - **Test naming:** `describe('ClassName') > it('should do X when Y')`
 - **Test structure:** Arrange-Act-Assert (AAA)
@@ -210,8 +224,7 @@ lib/
 ### Mobile (Flutter)
 - **Unit tests:** `flutter_test` for domain layer
 - **Widget tests:** `flutter_test` for UI components
-- **Integration tests:** `integration_test` package for E2E flows
-- **Mocking:** `mocktail` (better than mockito for null safety)
+- **Current mobile tests:** `flutter_test` unit/smoke coverage. Device-level `integration_test` and a mocking library are future additions
 
 ### What to Test
 - All business logic in services
@@ -251,7 +264,7 @@ feat(attendance): add GPS validation for check-in
 fix(payroll): correct OT calculation for overnight shifts
 refactor(mobile): extract auth provider to separate file
 docs(api): add OpenAPI spec for /api/v1/attendance
-test(payroll): add 100+ test cases for payroll engine
+test(payroll): cover month-end payroll calculation
 ```
 
 ### Branching
@@ -278,17 +291,17 @@ test(payroll): add 100+ test cases for payroll engine
 ### Input Validation
 - Validate ALL user input at API boundary (Fastify JSON schema or Zod)
 - Sanitize strings before DB queries (Prisma handles SQL injection, but validate format)
-- Reject oversized payloads (max 10 MB for normal, 50 MB for photo upload)
+- Attendance limits JSON bodies to 7 MiB so a decoded JPEG can be capped at 5 MiB; other services use their Fastify defaults unless explicitly configured
 
 ### Authentication & Authorization
 - Passwords: Argon2id only (no bcrypt, no plain SHA)
 - JWT signing keys: 256-bit random, rotated yearly
 - 2FA for admin role (TOTP, Google Authenticator)
-- Rate limiting: 100 req/min unauth, 600 req/min per user authenticated
+- Production APIs currently enforce a global 100 requests/minute limit; auth endpoints add atomic OTP/challenge abuse controls
 
 ### Dependency Management
-- Pin exact versions for production dependencies (no `^` in `package.json` for prod)
-- Use `npm audit` / `yarn audit` in CI weekly
+- The lockfile is the reproducibility boundary; manifests currently use semver ranges, so production/CI must install with `--frozen-lockfile`
+- Dependency vulnerability automation is not present in the current workflow; add it as separately approved CI work
 - Update dependencies monthly (low-risk patch updates)
 - Major updates: schedule, test, deploy separately
 
@@ -311,12 +324,11 @@ Each system (`systems/[name]/`) MUST have README.md with:
 
 ### API Documentation
 - OpenAPI 3.1 spec in `3-technical/3.1-system-foundation/architecture/api-contracts/`
-- Generated client types (TypeScript) for backend ↔ web admin consistency
-- Generated Dart types (openapi-generator) for mobile app
+- Generated TypeScript/Dart OpenAPI clients are not shipped in the MVP; consumers use hand-written clients that must be reconciled against the canonical OpenAPI contract
 
 ## Related Documents
 
-- [Development Rules](../../../../0-agents/workflows/development-rules.md) — Factory-de-facto standard
+- [Development Rules](../../../0-agents/workflows/development-rules.md) — Factory-de-facto standard
 - [System Design](system-design.md) — Architecture overview
 - [Domain Specs](../architecture/domain-specs.md) — DDD model
-- [Fullstack Engineer Agent](../../../../0-agents/agents/core-agents/fullstack-engineer.md) — Process
+- [Fullstack Engineer Agent](../../../0-agents/agents/core-agents/fullstack-engineer.md) — Process

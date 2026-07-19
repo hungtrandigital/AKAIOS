@@ -77,3 +77,22 @@ If on-prem becomes infeasible (cost of redundancy, scale limit hit), migration t
 - Available budget for ops team > $500/mo
 
 ADR supersedes none. Superseded by none.
+
+## Implementation Note — 2026-07-18
+
+- The committed Compose topology has eight services: Attendance API, Payroll API,
+  web admin, PostgreSQL, Redis, MinIO, Caddy, and one-shot `db-migrate`.
+- Cloudflare terminates public TLS; Caddy receives local HTTP origin traffic.
+- Off-host backup is an operator gate, not repository-provisioned infrastructure.
+  The runbook requires encrypted Restic snapshots to a configured SFTP target or
+  rotated off-site USB, failure alerting, checksums, and a weekly restore drill.
+  Until that schedule and restore evidence exist on the real host, the stated
+  RTO/RPO and theft/damage mitigation are unvalidated objectives.
+- The original “all records stay physically in the office” statement is only
+  true when the approved off-host target also remains in Vietnam (for example,
+  a rotated encrypted device stored at another Vietnamese site). An SFTP/VPS
+  target outside Vietnam creates an encrypted cross-border data copy and requires
+  explicit BO/privacy approval; do not assume the earlier Singapore example meets
+  the intended residency policy.
+- The weekly drill in the active runbook supersedes the earlier quarterly cadence
+  in this ADR's operational-requirements list.

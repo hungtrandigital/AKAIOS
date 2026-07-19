@@ -40,7 +40,9 @@
     "db:seed:attendance": "tsx src/db/seeds/attendance-demo.ts",
     "db:seed:rbac": "tsx src/db/seeds/rbac.ts",
     "db:seed:all": "pnpm db:seed && pnpm db:seed:demo && pnpm db:seed:attendance && pnpm db:seed:rbac",
-    "db:reset": "prisma migrate reset --schema=src/db/prisma/schema.prisma --skip-seed && pnpm db:seed:all"
+    "db:reset": "prisma migrate reset --schema=src/db/prisma/schema.prisma --skip-seed && pnpm db:seed:all",
+    "auth:provision-operator": "tsx src/auth/provision-operator.ts",
+    "auth:enroll-totp": "tsx src/auth/enroll-totp.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.668.0",

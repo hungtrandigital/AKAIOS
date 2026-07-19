@@ -1,206 +1,131 @@
 # Payroll System — Architecture
 
-**Status:** Phase 0 — Architecture defined (PRD-EPIC-002)
-**Last Updated:** 2026-07-16
+**Status:** Implemented; local remediation/review gate GO (PRD-EPIC-002)
+
+**Last Updated:** 2026-07-18
+
 **Owner:** @system-architecture + @fullstack-engineer
 
-## Cross-Cutting Reference
+## Cross-Cutting References
 
-This system follows the shared architecture defined in:
-- [Infrastructure](../../3-technical/3.1-system-foundation/infrastructure.md)
-- [System Design](../../3-technical/3.1-system-foundation/design-standards/system-design.md)
-- [Domain Specs — Payroll](../../3-technical/3.1-system-foundation/architecture/domain-specs.md#3-payroll-bounded-context)
-- [API Contracts](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
-- [Coding Standards](../../3-technical/3.1-system-foundation/design-standards/coding-standards.md)
+- [Infrastructure](../../../3-technical/3.1-system-foundation/infrastructure.md)
+- [System design](../../../3-technical/3.1-system-foundation/design-standards/system-design.md)
+- [Payroll domain specs](../../../3-technical/3.1-system-foundation/architecture/domain-specs.md#3-payroll-bounded-context)
+- [OpenAPI contract](../../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
+- [ADR-003: no VN compliance calculation in MVP](../../../8-governance/decision-log/adr-003-skip-vn-compliance-mvp.md)
 
-This document adds **payroll-specific** architectural details only.
+## Purpose and Boundaries
 
-## System Purpose
+Payroll lets authorized BO/admin users open a monthly period, calculate employee
+lines from Attendance, review audited overrides, approve/mark paid/lock the
+period, and export Excel. It reads Attendance through the internal API and owns
+payroll periods, lines, rules, and payroll audit events.
 
-Web-admin-only system for BO to compute monthly payroll, approve, and export Excel for accounting.
+BHXH/PIT calculation is outside the MVP. No executable compliance mode may alter
+gross or net pay under ADR-003.
 
 ## Components
 
-### Backend API (Fastify)
+### Payroll API
 
-**Routes:**
-- `/v1/payroll-periods/*` — open, calculate, approve, lock, export
-- `/v1/payroll-lines/:id/override` — manual override
-- `/v1/payroll-rules` — current rule config
-- `/v1/audit-logs` — admin-only query
+Fastify mounts permission-gated routes below `/v1/payroll`:
 
-**Pure Engine (most-tested code):**
-- `engine/calculator.ts` — takes (employee, attendance[], rules) → PayrollLine
-- `engine/rules.ts` — applies rounding, multipliers, etc.
+- `GET/POST /periods`
+- `GET /periods/:id`
+- `POST /periods/:id/calculate`
+- `POST /periods/:id/approve`
+- `POST /periods/:id/mark-paid`
+- `POST /periods/:id/lock`
+- `GET /periods/:id/export`
+- `POST /lines/:id/override`
+- `GET/POST /rules`
 
-**Services:**
-- `PayrollPeriodService` — openPeriod(), calculateAll(), approve(), lock()
-- `AttendanceClient` — HTTP client to attendance API `/internal/attendance`
-- `ExcelExporter` — uses ExcelJS to format Vietnamese accounting template
+Every object lookup includes the authenticated tenant. BO and system-admin
+permissions are checked at the route boundary; raw IDs cannot cross tenants.
 
-**Background Jobs (BullMQ):**
-- `payroll-calculate` — triggered by `/calculate` route; iterates employees, calls engine, persists lines
-- `payroll-export-cleanup` — weekly, removes exports older than 90 days from local storage
+### Calculation path
 
-### Web Admin (Next.js)
+Calculation is synchronous and transactional in the API; no BullMQ worker is
+shipped in the MVP.
 
-**Key pages:**
-1. `/login` — admin login (email + password + 2FA)
-2. `/payroll/periods` — list all periods, status filter
-3. `/payroll/periods/new` — open new period (year, month)
-4. `/payroll/periods/[id]` — period detail with all lines, status actions
-5. `/payroll/periods/[id]/calculate` — trigger calculation (button)
-6. `/payroll/lines/[id]/edit` — override single line (advance, deductions)
-7. `/payroll/rules` — view current rules (admin only edit)
-8. `/audit` — audit log query (system_admin only)
+1. Serialize calculation by locking the period and verify that its state permits
+   calculation.
+2. Request the inclusive Vietnam calendar range from Attendance using the
+   internal API key.
+3. Use the pure engine for working days, prorated base, OT, late penalty, and
+   rule-derived allowances.
+4. Re-read existing lines inside the transaction so concurrent overrides cannot
+   be lost.
+5. Preserve only fields explicitly marked as manual overrides, upsert decimal
+   values, and atomically set the period to `calculated`.
+6. On failure, roll back the lines and period state together.
 
-**State:**
-- React Query (TanStack Query) for server state
-- Forms with React Hook Form + Zod validation
+Money uses decimal-backed value objects and string API inputs; JavaScript binary
+floating point is not used for persisted payroll arithmetic.
 
-## Payroll Engine (core)
+### Overrides and audit
 
-The engine is a **pure function** (no I/O, no DB) for testability:
+Overrides are allowed only in valid period states and are tenant scoped. Advance,
+other deductions, and allowances are validated as non-negative decimal strings.
+`allowancesOverridden` distinguishes a manual allowance from rule-derived data so
+later recalculation preserves only intentional edits. Clearing that marker
+recomputes the allowance from the active rule. Each payroll-line override records
+previous/new values and the actor; calculation, approval, export, and rule updates
+also emit audit rows.
 
-```typescript
-// engine/calculator.ts
-function calculateLine(
-  employee: EmployeeSnapshot,
-  attendance: AttendanceRecord[],
-  rules: PayrollRule,
-  inputs: { advance: Decimal, otherDeductions: Decimal }
-): PayrollLine {
-  const workingDays = countWorkingDaysInPeriod(...)
-  const actualDaysWorked = countDaysWithPresentOrLate(attendance)
-  const totalMinutes = sumTotalMinutesWorked(attendance)
-  const otWeekdayMin = sumOTMinutes(attendance, 'weekday')
-  const otWeekendMin = sumOTMinutes(attendance, 'weekend')
-  const otHolidayMin = sumOTMinutes(attendance, 'holiday')
-  const lateMin = sumLateMinutes(attendance)
+Existing installations must reconcile historical manual allowance rows after
+migration; see the deployment runbook before recalculating migrated periods.
 
-  const proratedBase = employee.baseSalary.mul(actualDaysWorked).div(workingDays)
-  const hourlyRate = employee.baseSalary.div(workingDays).div(rules.workingHoursPerDay).div(60)
-  const otWeekday = hourlyRate.mul(otWeekdayMin).mul(rules.otWeekdayMultiplier)
-  const otWeekend = hourlyRate.mul(otWeekendMin).mul(rules.otWeekendMultiplier)
-  const otHoliday = hourlyRate.mul(otHolidayMin).mul(rules.otHolidayMultiplier)
-  const allowances = rules.mealAllowancePerDay.mul(actualDaysWorked).plus(rules.phoneAllowance ?? 0)
-  const latePenalty = min(lateMin.mul(rules.latePenaltyPerMinute ?? 0), rules.maxLatePenaltyPerDay ?? Infinity).mul(countLateDays(attendance))
+### Web admin
 
-  const gross = proratedBase.plus(otWeekday).plus(otWeekend).plus(otHoliday).minus(latePenalty).plus(allowances)
-  const net = gross.minus(inputs.advance).minus(inputs.otherDeductions)
+The shared Next.js admin exposes `/login`, `/login/2fa`, `/attendance`,
+`/payroll`, `/projects`, `/employees`, `/executive`, and `/admin/rbac`. Browser
+API calls remain same-origin and Next rewrites them to the internal Attendance and
+Payroll service names in production.
 
-  return { /* all fields */ }
-}
-```
+## State Machine
 
-**Tested with Vitest, target 100% coverage, with edge cases:**
-- Month with 28/30/31 days
-- February in leap year
-- Overnight shifts spanning midnight
-- VN holidays (1/1, 30/4, 1/5, 2/9, etc.)
-- Empty attendance (all absent)
-- Partial month (NV mới vào giữa tháng)
-- Rounding 22 min → 15, 38 min → 45
-- Negative gross (NV làm thiếu giờ + penalty > base) → return 0
-- Decimal precision (1.5x of 48,000 VND/hr × 30 min = 36,000, not 35,999.99)
+`open → calculating → calculated → approved → paid → locked`
 
-## Data Flow
+- Calculate is explicit and serialized.
+- Overrides are rejected after approval.
+- Approval requires a fully calculated period.
+- Paid/locked transitions require their dedicated permissions.
+- Calculate and approve transitions plus line overrides are audited. Mark-paid
+  and lock currently persist state/timestamps but do not yet emit `AuditLog`; do
+  not treat the payroll audit trail as transition-complete.
 
-```
-User Action: BO clicks "Approve" on period
-     ↓
-POST /v1/payroll-periods/:id/approve
-     ↓
-Service checks: period.status = calculated, user.role = bo_admin
-     ↓
-Update DB: status=approved, approvedAt=now, approvedBy=userId
-     ↓
-Emit PayrollApproved event
-     ↓
-Return updated PayrollPeriod
-```
+## Core Invariants
 
-## State Machine (PayrollPeriod)
+- Attendance range includes the final calendar day of the month.
+- Weekend and holiday categories are mutually exclusive; OT is not double-counted.
+- Gross/net and deductions remain internally consistent after calculate or override.
+- Concurrent calculation/override cannot silently discard a committed edit.
+- Tenant and RBAC predicates apply to every payroll read/mutation.
+- Compliance deductions remain zero in the MVP.
 
-```
-            ┌──────────────┐
-            │    open      │ ──── BO opens new period
-            └──────┬───────┘
-                   │ BO triggers calculate
-                   ▼
-            ┌──────────────┐
-            │ calculating │ ──── Job runs in background
-            └──────┬───────┘
-                   │ Job completes (all lines created)
-                   ▼
-            ┌──────────────┐
-            │ calculated   │ ──── BO reviews lines + overrides
-            └──────┬───────┘
-                   │ BO approves
-                   ▼
-            ┌──────────────┐
-            │  approved    │ ──── No more line edits allowed
-            └──────┬───────┘
-                   │ BO marks paid
-                   ▼
-            ┌──────────────┐
-            │    paid      │ ──── Money transferred to employees
-            └──────┬───────┘
-                   │ system_admin locks
-                   ▼
-            ┌──────────────┐
-            │   locked     │ ──── Immutable archive
-            └──────────────┘
-```
+## Validation
 
-## Key Business Rules (BR)
-
-See [Domain Specs](../../3-technical/3.1-system-foundation/architecture/domain-specs.md#business-rules-payroll). Top rules:
-
-| ID | Rule | Implementation |
-| --- | --- | --- |
-| BR-PAY-001 | Pro-rated base | `engine/calculator.ts:proratedBase` |
-| BR-PAY-002 | OT calculation | `engine/calculator.ts:otWeekday/Weekend/Holiday` |
-| BR-PAY-003 | Time rounding | `engine/rules.ts:roundToNearest(roundingMinutes)` |
-| BR-PAY-007 | Net = gross - deductions | `engine/calculator.ts:net` (no compliance in MVP) |
-| BR-PAY-008 | Period state machine | `PayrollPeriodService` enforces transitions |
-| BR-PAY-009 | Manual recalc only | Re-calculate endpoint requires explicit trigger, logs audit |
-
-## Excel Export Format
-
-Standard Vietnamese accounting template:
-
-| Mã NV | Họ tên | Ngày công | Phụ cấp | OT thường | OT CN | OT lễ | Lương gross | Tạm ứng | Khấu trừ khác | Thực nhận |
-|---|---|---|---|---|---|---|---|---|---|---|
-| NV001 | Nguyễn Văn A | 22 | 880,000 | 720,000 | 0 | 0 | 9,140,000 | 1,000,000 | 0 | 8,140,000 |
-
-Excel format: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, generated via ExcelJS.
+- Payroll unit tests: 107/107.
+- Fresh-database integration: 1/1, including concurrent calculation/override.
+- Coverage: 98.76% statements/lines, 94.39% branches, and 100% functions.
+- Independent payroll review: GO with no blocking findings.
+- Live web-admin Playwright: 7/7 against fresh migrations and seeded TOTP admins.
+- Production API and web-admin images build successfully.
 
 ## Deployment
 
-- Single Docker container `payroll-api` (Fastify, port 3001)
-- Single Docker container `web-admin` (Next.js, port 3002)
-- Shared Postgres + Redis with attendance system
-- Exposed via Caddy at `https://ak-tunnel.example.com/api/v1/payroll/*` and `/web/*`
+Use the shared PostgreSQL/Redis infrastructure, Payroll Dockerfile, web-admin
+Dockerfile, Compose stack, and Caddy configuration. Apply every committed
+migration, run the mandatory idempotent RBAC seed, and reconcile legacy manual
+allowance overrides before recalculation.
 
-## Testing Strategy
+Follow the [on-premise runbook](../../../3-technical/3.3-devops/server-steps.md).
 
-- **Engine (calculator + rules):** Vitest unit tests, **target 100% coverage**
-- **Routes:** Integration tests with testcontainers
-- **State machine:** Unit tests for each transition + invalid transitions
-- **Excel export:** Snapshot tests comparing against golden files
-- **Web admin:** React Testing Library + Vitest for components, Playwright for E2E
+## Future Enhancements
 
-## Future Enhancements (out of MVP)
-
-- VN compliance engine (BHXH/PIT, see ADR-003)
-- Auto-transfer integration with bank APIs
-- Bulk-line override UI for common adjustments
-- Recurring deductions (parking, union fees)
-- Multi-period comparison reports
-
-## Related Documents
-
-- [PRD-EPIC-002 Plan](../../3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md)
-- [System Design](../../3-technical/3.1-system-foundation/design-standards/system-design.md#payroll-system-components)
-- [ADR-003: Skip VN Compliance](../../8-governance/decision-log/adr-003-skip-vn-compliance-mvp.md)
+- VN compliance engine under a separately approved scope/ADR.
+- Bank-transfer integration and dual-control payment workflow.
+- Bulk override tooling and multi-period comparison reports.
+- Asynchronous calculation only if a future scale profile requires it and adds
+  durable job/idempotency semantics.

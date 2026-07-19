@@ -98,9 +98,21 @@ export async function apiLogin(email: string, password: string) {
     const data = await response.json().catch(() => ({}))
     throw new Error(data?.error?.message ?? 'Login failed')
   }
-  const data = await response.json()
-  if (data.accessToken) setToken(data.accessToken)
-  return data
+  return response.json()
+}
+
+export async function apiVerifyTwoFactor(totpCode: string) {
+  const response = await fetch('/api/attendance/auth/verify-2fa', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ totpCode }),
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data?.error?.message ?? 'Two-factor verification failed')
+  }
+  return response.json()
 }
 
 export async function apiLogout() {

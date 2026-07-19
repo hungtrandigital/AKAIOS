@@ -2,7 +2,7 @@
 # Run backends locally with `pnpm dev` so you can edit + hot-reload.
 #
 # Usage from repo root:
-#   docker compose -f systems/attendance/docker-compose.dev.yml up -d
+#   docker compose -f systems/shared/docker-compose.dev.yml up -d
 #   pnpm dev
 #
 # Connect:

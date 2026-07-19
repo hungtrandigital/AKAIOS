@@ -50,8 +50,8 @@ Standardize the factory's outer/core agents as the reusable leader layer for mul
 - [ ] Story 1 (PRD-SLICE-001): Standardize leader orchestration rules across all core agents
   - [ ] Task 1 (CODE-TASK-001): Add explicit leader-orchestration guidance without changing the existing workflow order
   - [ ] Task 2 (CODE-TASK-002): Align specialist-to-skill pairings with the real skill library in `0-agents/agents/skills/`
-- [ ] Story 2 (PRD-SLICE-002): Keep the current mode and workflow layer unchanged while improving agent depth
-- [ ] Story 3 (PRD-SLICE-003): Improve handoff quality so the factory can be reused across many projects
+  - [ ] Keep the current mode and workflow layer unchanged while improving agent depth
+  - [ ] Improve handoff quality so the factory can be reused across many projects
 
 **Related Documents:**
 - [Active Slice Plan](../../3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md)
@@ -74,7 +74,7 @@ type: epic
 domain: product
 status: in-progress
 created: 2026-07-16
-updated: 2026-07-17
+updated: 2026-07-18
 priority: high
 owner: @fullstack-engineer
 phases: [plan, code, review]
@@ -116,11 +116,10 @@ Xây dựng 2 hệ thống: `attendance` (mobile app check-in/out theo ca tại 
 - [Systems README](../../systems/README.md)
 - [Code Review — 2026-07-17](../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md)
 
-**Known Issues (2026-07-17 review):**
-- Verdict: **REJECTED** — 4 Critical, 14 High, and 3 Medium findings (`CODE-BUG-002..022`).
-- Deployment blockers: authentication bypass, cross-tenant payroll/attendance mutations, unusable production build/database initialization, and invalid CI quality gates.
-- Payroll blockers: month-end attendance omission, non-atomic calculation, broken override invariants, double-counted OT, and executable compliance drift outside ADR-003.
-- Epic remains `in-progress`; Pilot and Scale-out cannot start until Critical and security/payroll High bugs pass re-review.
+**Review and remediation status:**
+- The historical 2026-07-17 verdict was **REJECTED** with 4 Critical, 14 High, and 3 Medium findings (`CODE-BUG-002..022`).
+- All 21 findings are fixed in the current remediation tree. Independent attendance/auth/mobile and payroll reviewers returned working-tree **GO**, Docs Guardian returned **GO** for `CODE-BUG-022`, and local unit, coverage, fresh-database integration, browser E2E, production image, configuration, and Android gates pass.
+- The epic remains `in-progress`: commit/push, remote CI, and a new immutable SHA-pinned review are required before the 1–2 project pilot; pilot acceptance is required before scale-out.
 
 
 ## Backlog Items (Unprioritized)

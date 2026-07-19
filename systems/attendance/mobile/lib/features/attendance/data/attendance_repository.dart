@@ -1,6 +1,15 @@
 // Attendance repository — check-in/out + today's assignment.
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/auth_storage.dart';
 import '../../../core/http_client.dart';
+
+final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
+  return AttendanceRepository(
+    http: HttpClient(authStorage: ref.read(authStorageProvider)),
+  );
+});
 
 class ShiftAssignment {
   final String id;
@@ -43,8 +52,12 @@ class ShiftAssignment {
       endTime: (shift?['endTime'] ?? '') as String,
       date: DateTime.parse(j['date'] as String),
       attendanceRecordId: record?['id'] as String?,
-      checkInAt: record?['checkInAt'] != null ? DateTime.parse(record!['checkInAt'] as String) : null,
-      checkOutAt: record?['checkOutAt'] != null ? DateTime.parse(record!['checkOutAt'] as String) : null,
+      checkInAt: record?['checkInAt'] != null
+          ? DateTime.parse(record!['checkInAt'] as String)
+          : null,
+      checkOutAt: record?['checkOutAt'] != null
+          ? DateTime.parse(record!['checkOutAt'] as String)
+          : null,
     );
   }
 }
@@ -73,7 +86,11 @@ class AttendanceRepository {
   }) async {
     final res = await _http.post('/v1/attendance/check-in', data: {
       'shiftAssignmentId': shiftAssignmentId,
-      'gps': {'latitude': latitude, 'longitude': longitude, 'accuracy': accuracy},
+      'gps': {
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy
+      },
       'photoBase64': photoBase64,
     });
     return res;
@@ -88,7 +105,11 @@ class AttendanceRepository {
   }) async {
     return _http.post('/v1/attendance/check-out', data: {
       'shiftAssignmentId': shiftAssignmentId,
-      'gps': {'latitude': latitude, 'longitude': longitude, 'accuracy': accuracy},
+      'gps': {
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy
+      },
       'photoBase64': photoBase64,
     });
   }

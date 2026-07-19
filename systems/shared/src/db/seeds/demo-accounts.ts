@@ -149,6 +149,11 @@ const DEMO_ACCOUNTS = [
 async function createDemoAccounts() {
   console.log('Creating demo accounts...\n')
   const passwordHash = await hashPassword(DEMO_PASSWORD)
+  const membershipAdmin = await prisma.user.findFirst({
+    where: { tenantId: AK_TENANT_ID, role: UserRole.system_admin, status: 'active' },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (!membershipAdmin) throw new Error('Seeded system admin required before demo project memberships')
 
   for (const acc of DEMO_ACCOUNTS) {
     // Upsert user
@@ -185,12 +190,21 @@ async function createDemoAccounts() {
       },
     })
 
-    // For supervisors, link to their flagship project (assign as project supervisor via shift assignment today)
+    // Demo supervisors receive explicit, idempotent project membership.
     if ('projectCode' in acc && acc.projectCode) {
       const project = await prisma.project.findUnique({
         where: { tenantId_code: { tenantId: AK_TENANT_ID, code: acc.projectCode } },
       })
       if (project) {
+        await prisma.projectSupervisor.upsert({
+          where: { projectId_userId: { projectId: project.id, userId: user.id } },
+          update: { assignedById: membershipAdmin.id },
+          create: {
+            projectId: project.id,
+            userId: user.id,
+            assignedById: membershipAdmin.id,
+          },
+        })
         // Create a "supervisor on duty" assignment for today
         const today = new Date()
         today.setHours(0, 0, 0, 0)
@@ -213,7 +227,7 @@ async function createDemoAccounts() {
               projectId: project.id,
               shiftId: morningShift.id,
               date: today,
-              assignedById: user.id,
+              assignedById: membershipAdmin.id,
               status: 'scheduled',
             },
           })

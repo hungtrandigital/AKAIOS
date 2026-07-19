@@ -6,6 +6,9 @@ import { prisma, ForbiddenError, NotFoundError, ConflictError, BusinessRuleViola
 import { requireAuth } from '../plugins/auth.js'
 import { requirePermission } from '@ak/shared'
 import { detectShiftConflict } from '../services/schedule-service.js'
+import { getSupervisorProjectIds, supervisorCanAccessProject } from '../services/project-access.js'
+import { CalendarDateSchema } from '../schemas/calendar-date.js'
+import { toPublicAttendanceRecord } from '../services/photo-service.js'
 
 const ShiftSchema = z.object({
   name: z.string().min(1),
@@ -21,9 +24,17 @@ const AssignmentSchema = z.object({
   employeeId: z.string().uuid(),
   projectId: z.string().uuid(),
   shiftId: z.string().uuid(),
-  date: z.string(),
+  date: CalendarDateSchema,
   notes: z.string().optional(),
 })
+
+const assignmentEmployeeSelect = {
+  id: true,
+  userId: true,
+  employeeCode: true,
+  fullName: true,
+  status: true,
+} as const
 
 export const shiftRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', { preHandler: [requireAuth, requirePermission('attendance.shifts.manage')] }, async () => {
@@ -33,8 +44,8 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/', { preHandler: [requireAuth, requirePermission('attendance.shifts.manage')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
-    if (!['bo_admin', 'system_admin', 'supervisor'].includes(request.user.role)) {
-      throw new ForbiddenError()
+    if (request.user.role !== 'bo_admin' && request.user.role !== 'system_admin') {
+      throw new ForbiddenError('Only BO/admin can create shift templates')
     }
     const body = ShiftSchema.parse(request.body)
     return prisma.shift.create({ data: body })
@@ -45,25 +56,47 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
     const q = z.object({
       employeeId: z.string().uuid().optional(),
       projectId: z.string().uuid().optional(),
-      from: z.string().optional(),
-      to: z.string().optional(),
+      from: CalendarDateSchema.optional(),
+      to: CalendarDateSchema.optional(),
+    }).refine((value) => !value.from || !value.to || value.from <= value.to, {
+      message: 'from must be on or before to',
     }).parse(request.query)
 
-    const where: any = { tenantId: request.user.tenantId }
+    const supervisorProjectIds = request.user.role === 'supervisor'
+      ? await getSupervisorProjectIds(request.user.userId, request.user.tenantId)
+      : undefined
+    const where: any = {
+      project: {
+        tenantId: request.user.tenantId,
+        ...(supervisorProjectIds ? { id: { in: supervisorProjectIds } } : {}),
+      },
+    }
     if (q.employeeId) where.employeeId = q.employeeId
     if (q.projectId) where.projectId = q.projectId
     if (q.from || q.to) {
       where.date = {}
-      if (q.from) where.date.gte = new Date(q.from)
-      if (q.to) where.date.lte = new Date(q.to)
+      if (q.from) where.date.gte = new Date(`${q.from}T00:00:00.000Z`)
+      if (q.to) where.date.lte = new Date(`${q.to}T00:00:00.000Z`)
     }
     const assignments = await prisma.shiftAssignment.findMany({
       where,
-      include: { employee: true, project: true, shift: true, attendanceRecord: true },
+      include: {
+        employee: { select: assignmentEmployeeSelect },
+        project: true,
+        shift: true,
+        attendanceRecord: true,
+      },
       orderBy: { date: 'asc' },
       take: 200,
     })
-    return { data: assignments }
+    return {
+      data: await Promise.all(assignments.map(async (assignment) => ({
+        ...assignment,
+        attendanceRecord: assignment.attendanceRecord
+          ? await toPublicAttendanceRecord(assignment.attendanceRecord)
+          : null,
+      }))),
+    }
   })
 
   app.post('/assignments', { preHandler: [requireAuth, requirePermission('attendance.shifts.manage')] }, async (request) => {
@@ -72,6 +105,7 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
       throw new ForbiddenError()
     }
     const body = AssignmentSchema.parse(request.body)
+    const assignmentDate = new Date(`${body.date}T00:00:00.000Z`)
 
     const [employee, project, shift] = await Promise.all([
       prisma.employee.findUnique({ where: { id: body.employeeId } }),
@@ -81,6 +115,14 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
     if (!employee || employee.tenantId !== request.user.tenantId) throw new NotFoundError('Employee')
     if (!project || project.tenantId !== request.user.tenantId) throw new NotFoundError('Project')
     if (!shift) throw new NotFoundError('Shift')
+    if (request.user.role === 'supervisor'
+      && !await supervisorCanAccessProject(
+        request.user.userId,
+        request.user.tenantId,
+        project.id,
+      )) {
+      throw new NotFoundError('Project', project.id)
+    }
 
     const existing = await prisma.shiftAssignment.findUnique({
       where: {
@@ -88,7 +130,7 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
           employeeId: body.employeeId,
           projectId: body.projectId,
           shiftId: body.shiftId,
-          date: new Date(body.date),
+          date: assignmentDate,
         },
       },
     })
@@ -96,13 +138,13 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
 
     // BR-ATT-006: Check for schedule conflict with existing assignments on the same date
     const employeeAssignments = await prisma.shiftAssignment.findMany({
-      where: { employeeId: body.employeeId, date: new Date(body.date) },
+      where: { employeeId: body.employeeId, date: assignmentDate },
       include: { shift: true },
     })
     const conflictResult = detectShiftConflict(
       {
         employeeId: body.employeeId,
-        date: new Date(body.date),
+        date: assignmentDate,
         shiftId: body.shiftId,
         startTime: shift.startTime,
         endTime: shift.endTime,
@@ -129,7 +171,7 @@ export const shiftRoutes: FastifyPluginAsync = async (app) => {
         employeeId: body.employeeId,
         projectId: body.projectId,
         shiftId: body.shiftId,
-        date: new Date(body.date),
+        date: assignmentDate,
         notes: body.notes,
         assignedById: request.user.userId,
       },

@@ -6,6 +6,24 @@ export interface Holiday {
   name: string
 }
 
+/** Vietnam currently uses UTC+07:00 year-round (Asia/Ho_Chi_Minh). */
+export const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000
+
+/** Return the Vietnam calendar date containing an absolute instant. */
+export function getVietnamCalendarDateKey(date: Date): string {
+  const vietnamDate = new Date(date.getTime() + VIETNAM_UTC_OFFSET_MS)
+  return [
+    vietnamDate.getUTCFullYear(),
+    String(vietnamDate.getUTCMonth() + 1).padStart(2, '0'),
+    String(vietnamDate.getUTCDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+/** Sunday in the Vietnam business calendar, independent of the server timezone. */
+export function isVietnamSunday(date: Date): boolean {
+  return new Date(date.getTime() + VIETNAM_UTC_OFFSET_MS).getUTCDay() === 0
+}
+
 // Hardcoded for AKAIUNSAN. In production, move to DB table for tenant-specific.
 export const VIETNAM_HOLIDAYS: Holiday[] = [
   { date: '2026-01-01', name: 'Tết Dương lịch' },
@@ -31,7 +49,7 @@ export const VIETNAM_HOLIDAYS: Holiday[] = [
 export function isVietnamHoliday(date: Date | string): boolean {
   const dateStr = typeof date === 'string'
     ? date
-    : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    : getVietnamCalendarDateKey(date)
   return VIETNAM_HOLIDAYS.some((h) => h.date === dateStr)
 }
 
@@ -39,7 +57,7 @@ export function isVietnamHoliday(date: Date | string): boolean {
 export function getVietnamHolidayName(date: Date | string): string | null {
   const dateStr = typeof date === 'string'
     ? date
-    : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    : getVietnamCalendarDateKey(date)
   const h = VIETNAM_HOLIDAYS.find((x) => x.date === dateStr)
   return h ? h.name : null
 }

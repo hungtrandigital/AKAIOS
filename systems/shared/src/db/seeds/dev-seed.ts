@@ -8,6 +8,7 @@ import {
   ShiftAssignmentStatus,
 } from '@prisma/client'
 import { hashPassword } from '../../auth/password.js'
+import { encryptTotpSecret } from '../../auth/otp.js'
 import { isWeekend } from '../../engine-helpers.js'
 
 const prisma = new PrismaClient()
@@ -88,6 +89,46 @@ export async function seedDevData(): Promise<{
     },
   })
 
+  // CI/dev only: enroll the seeded E2E admin with an ephemeral secret supplied
+  // by the environment. Production admins use the operator enrollment command.
+  const e2eTotpSecret = process.env.E2E_TOTP_SECRET
+  if (e2eTotpSecret) {
+    const envelope = encryptTotpSecret(e2eTotpSecret, `${adminUser.tenantId}:${adminUser.id}`)
+    await prisma.totpCredential.upsert({
+      where: { userId: adminUser.id },
+      update: { ...envelope, lastUsedCounter: null, rotatedAt: new Date() },
+      create: { userId: adminUser.id, ...envelope },
+    })
+
+    const e2ePasswordHash = process.env.E2E_ADMIN_PASSWORD
+      ? await hashPassword(process.env.E2E_ADMIN_PASSWORD)
+      : adminPassword
+    for (let index = 0; index < 5; index += 1) {
+      const e2eAdmin = await prisma.user.upsert({
+        where: { phone: `+8490999900${index}` },
+        update: {
+          email: `e2e-admin-${index}@ak.local`,
+          passwordHash: e2ePasswordHash,
+          role: UserRole.system_admin,
+          status: 'active',
+        },
+        create: {
+          tenantId: tenant.id,
+          phone: `+8490999900${index}`,
+          email: `e2e-admin-${index}@ak.local`,
+          passwordHash: e2ePasswordHash,
+          role: UserRole.system_admin,
+        },
+      })
+      const e2eEnvelope = encryptTotpSecret(e2eTotpSecret, `${e2eAdmin.tenantId}:${e2eAdmin.id}`)
+      await prisma.totpCredential.upsert({
+        where: { userId: e2eAdmin.id },
+        update: { ...e2eEnvelope, lastUsedCounter: null, rotatedAt: new Date() },
+        create: { userId: e2eAdmin.id, ...e2eEnvelope },
+      })
+    }
+  }
+
   const boUser = await prisma.user.upsert({
     where: { phone: '+84900000002' },
     update: {},
@@ -161,6 +202,27 @@ export async function seedDevData(): Promise<{
             headerText: `BÁO CÁO DỊCH VỤ VỆ SINH - ${c.name.toUpperCase()}`,
             footerText: 'Cảm ơn Quý khách đã sử dụng dịch vụ AKAIUNSAN',
           },
+        },
+      })
+    )
+  )
+
+  // Explicit demo-only supervisor authorization. Production is intentionally
+  // not backfilled from historical shift assignments.
+  await Promise.all(
+    supervisors.map((supervisor, index) =>
+      prisma.projectSupervisor.upsert({
+        where: {
+          projectId_userId: {
+            projectId: projects[index % projects.length]!.id,
+            userId: supervisor.id,
+          },
+        },
+        update: { assignedById: adminUser.id },
+        create: {
+          projectId: projects[index % projects.length]!.id,
+          userId: supervisor.id,
+          assignedById: adminUser.id,
         },
       })
     )

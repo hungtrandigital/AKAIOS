@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **PRD-EPIC-002 remediation (working-tree review GO; immutable CI pending):** Added explicit audited
+  `ProjectSupervisor` membership, Redis-backed employee OTP challenges with SpeedSMS delivery,
+  encrypted admin TOTP enrollment, and native refresh-token support.
+- **PRD-EPIC-002 production bootstrap:** Added an idempotent production operator
+  provisioning command that creates the first system admin without running demo seeds and
+  hands off to the existing encrypted TOTP enrollment flow.
+- **PRD-EPIC-002 mobile delivery:** Added Android/iOS Flutter platform projects, secure refresh-token storage and single-flight refresh, required camera/location permissions, generated localization sources, CI analysis/tests, and Android APK artifact generation pinned to Flutter 3.24.5.
 - **PRD-EPIC-002 code review:** Published the canonical 2026-07-17 review report with the frozen commit range, verification evidence, verdict, and `CODE-BUG-002..022` remediation backlog.
 - Operations domain structure: templates (hiring plan, onboarding, JD), tracking registry (OPS-TASK-XXX), metrics glossary, strategy, and changelog
 - Role-specific JD copies: Senior Backend Engineer, Product Manager with OPS linkage and parent epics
@@ -21,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
+- Reconciled the PRD-EPIC-002 backlog, active plan, progress, work-item registry, risk register, deployment guidance, API/domain contracts, and system READMEs with the 2026-07-18 remediation evidence. The historical rejected review remains unchanged; the new immutable review artifact awaits a commit SHA.
 - Corrected PRD-EPIC-002 lifecycle metadata and synchronized the active epic, product backlog, work-item registry, progress status, governance risks, and review navigation with the rejected review gate.
 - Archived the superseded `docs/review/REVIEW_PLAN.md` content under `archives/2026-07-17-prd-epic-002-review-plan/` and retained a redirect to the canonical plan/result.
 - Reframed the core agents in `0-agents/agents/` as the reusable leader layer for multi-project work: each core agent now preserves existing process ownership while explicitly pairing `agency-agents` specialists with matching local skills.
@@ -43,16 +51,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
+- **PRD-EPIC-002 remediation (working-tree review GO):** Implemented tenant/project-scoped
+  supervisor authorization, safe employee/report DTO boundaries, atomic attendance checkout
+  and override total recomputation, Vietnam calendar handling, geofence enforcement, and
+  bounded mobile photo/MinIO routing. Public attendance projections now expose only short-lived
+  presigned photo URLs, and Prisma `DATE` lookups use exact Vietnam work-date keys. Independent
+  attendance/auth/mobile review found no blockers.
+- **PRD-EPIC-002 payroll remediation:** Enforced payroll RBAC and tenant scope, serialized period calculation, re-read lines inside transactions, made money inputs decimal-safe, tracked explicit allowance overrides, fixed month-end and weekend/holiday rules, and kept BHXH/PIT out of MVP calculations. Independent payroll review found no blockers.
+- **PRD-EPIC-002 service boundary:** Replaced Payroll's direct Attendance-table read with
+  a tenant/date-scoped internal HTTP projection protected by a constant-time API-key check;
+  kept the route off the public Caddy surface and exempted it from the public request quota.
+  Payroll now returns safe 502/503 responses for invalid and unavailable Attendance dependencies.
+- **PRD-EPIC-002 browser gate:** Added five independent seeded TOTP admins and passed the live Playwright suite 7/7 on a fresh five-migration database. Added `E2E_TOTP_SECRET` to Turbo's `test:e2e` environment allowlist so Actions can execute authenticated scenarios.
+- **PRD-EPIC-002 deployment remediation:** Repaired lockfile-backed production builds, Compose/Caddy routing, migration orchestration, and Docker build context filtering; all three application images build locally, with the largest BuildKit application-context transfer under 0.7 MB after generated Next.js/mobile outputs are excluded. Release evidence must record resolved image IDs/digests and tag the exact release SHA because upstream base-image tags remain mutable.
 - **PRD-EPIC-002 CI remediation:** Corrected the Prisma schema path, added real unit/integration/E2E entry points, enforced ≥90% coverage over core attendance/payroll logic, and replaced skipped or incomplete Actions checks with independent quality, build, live-service integration, and Playwright jobs; remote execution was verified by [Actions run 29555194773](https://github.com/hungtrandigital/AKAIOS/actions/runs/29555194773).
 - **PRD-EPIC-002 database baseline:** Added and verified the immutable initial Prisma migration on a fresh PostgreSQL 16 database; added the production-safe `prisma:migrate:deploy` command.
 - **PRD-EPIC-002 seed orchestration:** Removed the duplicate `db:seed:all` key so attendance and RBAC seed stages are no longer silently omitted from the aggregate command.
+- **PRD-EPIC-002 documentation remediation:** Reconciled the canonical plan, status, domain model, OpenAPI 3.1 contract, runbook, ADRs, risk register, and system READMEs with the implemented boundaries and verified evidence; Docs Guardian returned GO for `CODE-BUG-022` on 2026-07-19.
 - Cleared remaining references to legacy numbered product foundation paths (plan/boost scaffolds) and added a redirect notice in the old backlog file to point to `product-backlog/backlog.md`.
 - **Structure:** Fixed `financial-modeling` skill to follow Agent Skills Spec (moved from `skills/financial-modeling.md` to `skills/financial-modeling/SKILL.md` with proper YAML frontmatter)
 - **Finance-director agent:** Enhanced to explicitly activate `financial-modeling` skill during all projection work (steps 3, 4, 5) and added mandatory skill usage pattern
 - **Cursor modes:** Added missing `/refactor` command to Cursor to match `0-agents/mode/refactor.md`
 
 ### Security
-- **Review findings (open):** Confirmed password authentication bypass, payroll/attendance cross-tenant mutation, sensitive employee data disclosure, and spoofable OTP rate limiting. No security fix is claimed in this entry.
+- **Working-tree review GO; immutable CI pending:** Password verification, inactive-account enforcement,
+  mandatory admin TOTP, OTP abuse controls, refresh-token CAS rotation, and project membership
+  grant/revoke audit boundaries now have fresh-database integration coverage.
+- **Historical review findings:** The 2026-07-17 review confirmed password authentication bypass, payroll/attendance cross-tenant mutation, sensitive employee data disclosure, and spoofable OTP rate limiting. Those findings are fixed in the 2026-07-18 remediation tree; remote CI and SHA-pinned review evidence remain pending.
 
 ## [2.0.0] - 2025-12-14 (Factory AI 2.0)
 

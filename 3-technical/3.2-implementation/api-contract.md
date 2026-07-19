@@ -1,54 +1,13 @@
-# API Contract
+# API Contract Index
 
-## Overview
+The canonical, machine-readable contract for the implemented Attendance,
+Payroll, authentication, reporting, RBAC, and internal service endpoints is:
 
-This document defines the API contracts for the system, including endpoints, request/response formats, and authentication.
+- [OpenAPI 3.1 contract](../3.1-system-foundation/architecture/api-contracts/openapi.yaml)
 
-## API Endpoints
+Do not define a second endpoint catalog in this implementation folder. Update
+the canonical OpenAPI file with every route, request, response, authentication,
+or status-code change, then reconcile the implementation and tests against it.
 
-### Endpoint 1: `/api/v1/resource`
-**Method:** `GET`  
-**Description:** *Endpoint description*
-
-**Request:**
-```json
-{
-  "field1": "value1"
-}
-```
-
-**Response:**
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-
-**Status Codes:**
-- `200 OK` - Success
-- `400 Bad Request` - Invalid request
-- `404 Not Found` - Resource not found
-
----
-
-### Endpoint 2: `/api/v1/resource`
-*Repeat structure above*
-
-## Authentication
-
-*Describe authentication mechanism*
-
-## API Versioning
-
-*API versioning strategy*
-
-## Related Documents
-
-- **[Domain Specs](domain-specs.md)** - Domain model that APIs expose
-- **[API Contracts Directory](../3.1-system-foundation/architecture/api-contracts/)** - Additional API documentation
-
----
-
-*Keep API contracts updated as endpoints evolve. Consider using OpenAPI/Swagger for detailed documentation.*
-
+Implementation-specific domain constraints remain in
+[domain-specs.md](domain-specs.md).

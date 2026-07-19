@@ -4,7 +4,14 @@
 export { prisma, Prisma } from './db/client.js'
 
 // Storage
-export { getMinIOClient, ensureBuckets, uploadObject, getPresignedUrl, MINIO_BUCKET_NAMES } from './storage/minio.js'
+export {
+  getMinIOClient,
+  ensureBuckets,
+  uploadObject,
+  deleteObject,
+  getPresignedUrl,
+  MINIO_BUCKET_NAMES,
+} from './storage/minio.js'
 
 // Health checks
 export {
@@ -21,6 +28,26 @@ export type { JwtClaims, IssueTokenInput } from './auth/jwt.js'
 export { hashPassword, verifyPassword } from './auth/password.js'
 export { generateOtp, isOtpValid, getSmsMode, generateRefreshToken, hashRefreshToken, getRefreshTokenTtlSeconds } from './auth/refresh-token.js'
 export type { GeneratedOtp, RefreshTokenRecord } from './auth/refresh-token.js'
+export {
+  generateTotpSecret,
+  encodeBase32,
+  decodeBase32,
+  loadTotpEncryptionKey,
+  encryptTotpSecret,
+  decryptTotpSecret,
+  generateTotpCode,
+  verifyTotpCode,
+  buildTotpUri,
+  createTotpChallenge,
+  consumeTotpChallengeAttempt,
+  deleteTotpChallenge,
+  createEmployeeOtpChallenge,
+  verifyEmployeeOtpChallenge,
+  deleteEmployeeOtpChallenge,
+  sendEmployeeOtpSms,
+  closeAuthRedisClient,
+} from './auth/otp.js'
+export type { TotpSecretEnvelope } from './auth/otp.js'
 export { requirePermission, loadUserPermissions, userHasPermission } from './auth/rbac.js'
 export type { RequestLike } from './auth/rbac.js'
 

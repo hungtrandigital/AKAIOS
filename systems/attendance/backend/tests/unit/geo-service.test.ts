@@ -51,13 +51,13 @@ describe('GeoService', () => {
   })
 
   describe('validateGeofence (BR-ATT-010 — low accuracy)', () => {
-    it('passes (warn-only) if GPS accuracy > 50m', () => {
+    it('does not allow client-reported poor accuracy to bypass the geofence', () => {
       const userGps = new GPSCoordinate({
         latitude: 10.8000, // far away
         longitude: 106.7000,
         accuracy: 100, // poor GPS
       })
-      expect(() => validateGeofence(userGps, project, { warnOnlyOnLowAccuracy: true })).not.toThrow()
+      expect(() => validateGeofence(userGps, project)).toThrow(/Check-in location is/)
     })
   })
 

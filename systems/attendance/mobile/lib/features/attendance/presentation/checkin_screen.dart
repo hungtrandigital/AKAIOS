@@ -12,7 +12,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/http_client.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/attendance_repository.dart';
-import 'today_screen.dart';
 
 class CheckScreen extends ConsumerStatefulWidget {
   final String shiftAssignmentId;
@@ -54,8 +53,10 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
         throw Exception('GPS service disabled');
       }
       _position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
       );
     } catch (e) {
       setState(() => _errorMsg = e.toString());
@@ -117,7 +118,10 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isCheckOut ? 'Check-out thành công' : 'Check-in thành công')),
+        SnackBar(
+            content: Text(widget.isCheckOut
+                ? 'Check-out thành công'
+                : 'Check-in thành công')),
       );
       context.go('/today');
     } on ApiException catch (e) {
@@ -151,16 +155,18 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
                       children: [
                         const Icon(Icons.location_on),
                         const SizedBox(width: 8),
-                        Text('Vị trí', style: Theme.of(context).textTheme.titleMedium),
+                        Text('Vị trí',
+                            style: Theme.of(context).textTheme.titleMedium),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    if (_position != null)
-                      Text('Lat: ${_position!.latitude.toStringAsFixed(6)}')
-                    else
+                    if (_position != null) ...[
+                      Text('Lat: ${_position!.latitude.toStringAsFixed(6)}'),
+                      Text('Lng: ${_position!.longitude.toStringAsFixed(6)}'),
+                    ] else
                       const Text('Chưa lấy vị trí'),
-                    Text('Lng: ${_position!.longitude.toStringAsFixed(6)}'),
-                    Text('Accuracy: ${_position?.accuracy.toStringAsFixed(1) ?? '-'} m'),
+                    Text(
+                        'Accuracy: ${_position?.accuracy.toStringAsFixed(1) ?? '-'} m'),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: _loading ? null : _getGps,
@@ -179,40 +185,42 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.camera_alt),
-                          const SizedBox(width: 8),
-                          Text('Ảnh xác nhận', style: Theme.of(context).textTheme.titleMedium),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_photo != null)
-                        Container(
-                          height: 200,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                          ),
-                          child: Image.file(File(_photo!.path), fit: BoxFit.cover),
-                        )
-                      else
-                        Container(
-                          height: 200,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                            color: Colors.grey[200],
-                          ),
-                          child: const Center(child: Text('Chưa chụp ảnh')),
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.camera_alt),
+                        const SizedBox(width: 8),
+                        Text('Ảnh xác nhận',
+                            style: Theme.of(context).textTheme.titleMedium),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (_photo != null)
+                      Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
                         ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: _loading ? null : _takePhoto,
-                        icon: const Icon(Icons.camera),
-                        label: Text(_photo == null ? l.takePhoto : l.retakePhoto),
+                        child:
+                            Image.file(File(_photo!.path), fit: BoxFit.cover),
+                      )
+                    else
+                      Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          color: Colors.grey[200],
+                        ),
+                        child: const Center(child: Text('Chưa chụp ảnh')),
                       ),
-                    ],
-                  ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _loading ? null : _takePhoto,
+                      icon: const Icon(Icons.camera),
+                      label: Text(_photo == null ? l.takePhoto : l.retakePhoto),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -229,7 +237,8 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(widget.isCheckOut ? l.submitCheckOut : l.submitCheckIn),
+                  : Text(
+                      widget.isCheckOut ? l.submitCheckOut : l.submitCheckIn),
             ),
           ],
         ),

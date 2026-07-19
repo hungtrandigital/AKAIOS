@@ -29,7 +29,7 @@ related_ids:
   - CODE-BUG-021
   - CODE-BUG-022
 created: 2026-07-16
-updated: 2026-07-17
+updated: 2026-07-19
 priority: high
 owner: "@fullstack-engineer"
 phases:
@@ -74,6 +74,16 @@ related_domain_docs:
 - Canonical report: [PRD-EPIC-002 code review](../../../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md).
 - Vietnam tax/insurance remains outside MVP under ADR-003; executable modes other than `none` must not affect MVP payroll.
 
+### Remediation re-review — 2026-07-18
+
+- Independent attendance/auth/mobile and payroll reviewers returned **GO** on the current working tree with no blocking findings.
+- All 21 findings are fixed and locally validated; Docs Guardian returned GO for `CODE-BUG-022` on 2026-07-19. The evidence includes 150 unit tests, 8 fresh-database integration tests, 7 live Playwright scenarios, coverage above 90%, production package/image builds, fresh migrations, Compose/Caddy validation, OpenAPI 3.1 parse/semantic validation, Flutter analysis/tests, and an Android APK build.
+- The release remains pending an immutable commit SHA and successful GitHub Actions run. A new SHA-pinned review report will be published after commit; the 2026-07-17 rejected report remains immutable historical evidence.
+- Immutable CI/review is necessary but not sufficient for pilot. The epic remains
+  `in-progress`; unmet PRD-SLICE-003..005 acceptance items must be completed or
+  explicitly deferred with product-owner approval before the 1–2 project pilot,
+  and pilot/scale-out acceptance remains outstanding.
+
 ## Findings Note
 
 Exploration ngày 2026-07-16 xác nhận:
@@ -84,15 +94,15 @@ Exploration ngày 2026-07-16 xác nhận:
 
 → Epic này **tự sản xuất** các architecture docs thật (thay vì điền vào template) như là deliverable của Phase 0. Nếu user muốn "lean hơn", Phase 0 rút gọn xuống MVP-spec; Phase 0 đầy đủ mới tạo nền tái sử dụng được cho epic sau.
 
-## Decisions (Cần User Approve trước khi Phase 1)
+## Decisions
 
 | # | Quyết định | Lựa chọn | Lý do |
 | --- | --- | --- | --- |
-| 1 | Tên hệ thống (kebab-case) | `attendance-payroll` | Mô tả cả 2 domain; tuân thủ `[system-creation-workflow.md:64-68]`. **Cần user approve trước khi tạo `systems/attendance-payroll/`** |
+| 1 | System boundaries | `attendance` + `payroll`, shared infrastructure in `systems/shared` | Separates the two bounded contexts while retaining one database/runtime stack for the MVP |
 | 2 | Phạm vi MVP | **Attendance + Payroll + Customer report** (user chọn) | Full scope, dù có pilot để giảm rủi ro |
 | 3 | Rollout | Pilot 1–2 dự án đầu (user chọn) | Validate trước khi scale 15 dự án |
 | 4 | VN compliance | **Bỏ qua** ở MVP — BO xử lý thủ công (user chọn) | Đơn giản hóa bảng lương (gross + OT cơ bản); có thể thêm compliance engine ở epic sau |
-| 5 | Hosting | **On-premise** server công ty (user chọn) | Data nội bộ, latency thấp tới site, không phụ thuộc cloud; cần HTTPS + VPN/port-forward cho mobile |
+| 5 | Hosting | **On-premise** server + Cloudflare Tunnel (user chọn) | Data services remain on-prem; Cloudflare provides public edge TLS over an outbound tunnel, with no inbound port-forward |
 | 6 | Mobile platform | **Native iOS + Android** (user chọn) | UX tốt nhất cho 200 NV |
 | 7 | Check-in method | GPS + ảnh chụp lúc in/out (user chọn) | Cân bằng bảo mật & chi phí; không cần ML face-match ở MVP |
 | 8 | Tech stack | Architect đề xuất — đề xuất dưới đây, chốt qua ADR | Per `[core-agents/system-architecture.md:62-81]` |
@@ -105,14 +115,14 @@ Exploration ngày 2026-07-16 xác nhận:
 | Backend API | **Node.js 20 + Fastify + TypeScript** | Type-safe, ecosystem JWT/auth/ORM rộng, dev VN dễ tuyển, async I/O tốt cho 200 user đồng thời |
 | Web admin | **Next.js 14 (App Router) + TypeScript** | Cùng ecosystem TS, build nhanh, deploy Docker dễ |
 | Database | **PostgreSQL 16** | Quan hệ chặt cho HR/payroll, JSONB cho metadata linh hoạt, mature |
-| Cache / queue | **Redis 7** | Session cache, BullMQ cho job bảng lương cuối tháng |
+| Cache / auth state | **Redis 7** | OTP challenges and abuse controls; refresh-token families are hashed in PostgreSQL, and payroll calculation is transactional in the API |
 | Object storage (ảnh check-in) | **MinIO** (S3-compatible, self-hosted) | On-premise friendly, không phụ thuộc AWS, chi phí = 0 |
-| Reverse proxy + TLS | **Caddy** hoặc **nginx** | Auto HTTPS nếu có domain; reverse proxy cho backend + Next |
+| Reverse proxy + TLS | **Caddy 2 origin + Cloudflare edge TLS** | Caddy routes local services over HTTP origin; Cloudflare terminates public HTTPS through the outbound tunnel |
 | Container | **Docker Compose** trên 1 server Linux (Ubuntu 22.04) | Đơn giản cho on-premise; scale lên Kubernetes chỉ khi >1 server |
-| CI | **GitHub Actions** (nếu repo host GitHub) hoặc **Gitea Actions** (nếu self-host) | Tự động lint + test + build APK/IPA |
+| CI | **GitHub Actions** | Lint, tests, coverage, fresh-service integration/E2E, production build, and Android APK; iOS requires a separate Apple toolchain/signing gate |
 
 **Tuân thủ factory gates:**
-- Tất cả code nằm trong `systems/attendance-payroll/` (sau khi user approve tên)
+- Product code is split between `systems/attendance`, `systems/payroll`, and `systems/shared`
 - 5 architecture docs **được tạo ra trong Phase 0** (chứ không dùng template)
 - Coverage floor **≥90%** (theo `[code.md:47]`); target 100% cho domain logic chấm công/tính lương
 - Plan format copy từ `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md`
@@ -140,34 +150,15 @@ Exploration ngày 2026-07-16 xác nhận:
 ### High-Level Diagram
 
 ```
-┌──────────────────┐                    ┌──────────────────────────────┐
-│  Mobile App      │   HTTPS / TLS      │   On-Premise Server          │
-│  (Flutter)       │ ◄──────────────►   │   ┌────────────────────┐    │
-│  iOS + Android   │                    │   │  Caddy (TLS + RP)  │    │
-│                  │                    │   └─────────┬──────────┘    │
-│  - Login (OTP)   │                    │             │               │
-│  - Xem ca        │                    │   ┌─────────▼──────────┐    │
-│  - Check-in/out  │                    │   │  Backend (Fastify) │    │
-│    (GPS + ảnh)   │                    │   │  TypeScript        │    │
-│  - Lịch sử cá    │                    │   └─────────┬──────────┘    │
-│  nhân             │                    │             │               │
-└──────────────────┘                    │   ┌─────────▼──────────┐    │
-                                         │   │  Web Admin         │    │
-                                         │   │  (Next.js)         │    │
-                                         │   └─────────┬──────────┘    │
-                                         │             │               │
-                                         │   ┌─────────▼──────────┐    │
-                                         │   │  PostgreSQL 16     │    │
-                                         │   │  Redis 7           │    │
-                                         │   │  MinIO (ảnh)       │    │
-                                         │   └────────────────────┘    │
-                                         └──────────────────────────────┘
-                                                       ▲
-┌──────────────────┐                                  │
-│  Web Admin       │  HTTPS                            │
-│  (Next.js)       │ ◄────────────────────────────────┘
-│  BO / Supervisor │
-└──────────────────┘
+Mobile / browser ──HTTPS──► Cloudflare edge + Tunnel
+                              │ HTTP origin :80
+                              ▼
+                         Caddy reverse proxy
+                         ├── Attendance API ──┬── PostgreSQL
+                         │                    ├── Redis
+                         │                    └── private MinIO
+                         └── Web Admin ───────┬── Attendance API
+                                              └── Payroll API ──HTTP/internal──► Attendance API
 ```
 
 ### Core Domain Model (sẽ chi tiết trong `domain-specs.md` ở Phase 0)
@@ -183,7 +174,7 @@ Tenant (1) ─── (n) Project  (15 dự án thuộc AKAIUNSAN)
                       │  produces
                       ▼
                  AttendanceRecord
-                 (in/out timestamps, GPS, photo URLs, status)
+                 (in/out timestamps, GPS, private photo object keys, status)
                       │
                       │  feeds
                       ▼
@@ -192,8 +183,8 @@ Tenant (1) ─── (n) Project  (15 dự án thuộc AKAIUNSAN)
 
 User:  employee | supervisor | bo_admin | system_admin
 Shift: ca_sáng (6-14h) | ca_chiều (14-22h) | ca_tối (22-6h) | custom
-AttendanceRecord.status: present | late | absent | half_day | leave | holiday
-PayrollLine.gross = base + ot_weekday*1.5 + ot_weekend*2 + ot_holiday*3 + allowances
+AttendanceRecord.status: present | late | early_leave | half_day | absent | on_leave | holiday
+PayrollLine.gross = monthly_prorata_or_hourly_regular + category_OT - late_penalty + allowances
 PayrollLine.deductions = advance | other (compliance để BO tính)
 ```
 
@@ -207,52 +198,47 @@ Sẽ cập nhật `3-technical/3.1-system-foundation/infrastructure.md` (tạo m
 
 ```
 PRD-EPIC-002 (this epic)
-├── PRD-SLICE-001: Foundation (Phase 0 + 1)
-│   ├── CODE-TASK-003: System scaffold + 5 architecture docs
-│   ├── CODE-TASK-004: Docker Compose stack trên on-prem
-│   ├── CODE-TASK-005: CI pipeline (lint + test + build)
-│   └── CODE-TASK-006: Auth (OTP cho NV, email+pwd cho admin)
+├── PRD-SLICE-002: Foundation (Phase 0 + 1)
+│   ├── CODE-TASK-003: Produce 5 architecture docs
+│   ├── CODE-TASK-004: Scaffold systems/attendance + systems/payroll
+│   ├── CODE-TASK-005: Create ADR-001/002/003
+│   └── CODE-TASK-006: Docker Compose stack + Caddy reverse proxy
 │
-├── PRD-SLICE-002: Attendance (Phase 2)
-│   ├── CODE-TASK-007: Backend CRUD Project, Shift, Employee
-│   ├── CODE-TASK-008: Backend Schedule engine (gán ca tự động + manual override)
-│   ├── CODE-TASK-009: Backend Check-in/out endpoint (GPS + ảnh, validation phạm vi)
-│   ├── CODE-TASK-010: Mobile app — login + dashboard + check-in/out flow
-│   ├── CODE-TASK-011: Web admin — xem realtime attendance, manual adjust
-│   └── CODE-TASK-012: Tests: domain logic + GPS validation + photo upload
+├── PRD-SLICE-003: Attendance (Phase 2)
+│   ├── Backend Project, Shift, Employee, Schedule, Check-in/out, report APIs
+│   ├── Flutter login + today + check-in/out flow
+│   ├── Web-admin realtime attendance + audited override
+│   └── Unit/integration/mobile/browser regression coverage
 │
-├── PRD-SLICE-003: Payroll (Phase 3)
-│   ├── CODE-TASK-013: Backend Payroll engine (gross, OT, deductions cơ bản)
-│   ├── CODE-TASK-014: Backend PayrollPeriod + PayrollLine persistence
-│   ├── CODE-TASK-015: Web admin — bảng lương UI, duyệt, xuất Excel
-│   └── CODE-TASK-016: Tests: payroll engine + edge cases (cuối tháng 31 ngày, nghỉ phép, làm tròn giờ)
+├── PRD-SLICE-004: Payroll (Phase 3)
+│   ├── Payroll engine + period/line persistence
+│   ├── Web-admin review, approve, and Excel export
+│   └── Unit/integration/browser regression coverage
 │
-├── PRD-SLICE-004: Customer Report (Phase 4)
-│   ├── CODE-TASK-017: Backend Report generator (PDF, CSV, theo dự án)
-│   ├── CODE-TASK-018: Web admin — UI chọn dự án + kỳ + preview báo cáo
-│   └── CODE-TASK-019: Templates cho 15 dự án (tùy biến header khách hàng)
+├── PRD-SLICE-005: Customer Report (Phase 4)
+│   ├── Tenant/project-scoped PDF and CSV generator
+│   └── Web-admin executive/report visibility
 │
-├── PRD-SLICE-005: Pilot (Phase 5)
+├── PRD-SLICE-006: Pilot (Phase 5)
 │   ├── OPS-TASK-006: Chọn 1–2 dự án pilot (user)
-│   ├── CODE-TASK-020: On-site training + support
-│   ├── CODE-TASK-021: Bug-fix sprint 2 tuần sau pilot
-│   └── MKT-TASK-XXX (optional): Thu thập feedback từ giám sát dự án pilot
+│   ├── On-site training + support
+│   └── Pilot feedback and remediation backlog
 │
-└── PRD-SLICE-006: Scale-out (Phase 6)
+└── PRD-SLICE-007: Scale-out (Phase 6)
     ├── OPS-TASK-007: Rollout plan 13 dự án còn lại
-    ├── CODE-TASK-022: Multi-project conflict handling (NV làm nhiều dự án)
-    └── CODE-TASK-023: Performance tuning (nếu cần)
+    ├── Multi-project conflict handling
+    └── Performance tuning if pilot evidence requires it
 ```
 
-**ID sequence chú ý:** `PRD-EPIC-002` (PRD-EPIC-001 đã có), `PRD-SLICE-002..006` (SLICE-001 đã có cho meta epic), `CODE-TASK-003+` (TASK-001/002 đã có cho meta), `OPS-TASK-006+` (OPS-TASK-001/005 đã có cho hiring plans).
+**ID sequence:** `PRD-EPIC-002`, `PRD-SLICE-002..007`, registered foundation tasks `CODE-TASK-003..006`, and operations tasks `OPS-TASK-006..007`. Feature implementation below the foundation is tracked at slice level; no orphan `CODE-TASK-007+` IDs are implied.
 
 ## Implementation Phases
 
 ### Phase 0 — Architecture (Foundation, 1 tuần)
 **Priority:** Highest (gate cho mọi code sau)
 **Goals:**
-- User approve tên hệ thống `attendance-payroll`
-- Tạo `systems/attendance-payroll/` từ TEMPLATE-SYSTEM
+- Chốt cấu trúc tách `systems/attendance` + `systems/payroll`, dùng `systems/shared` cho hạ tầng chung
+- Tạo hai system scaffold từ TEMPLATE-SYSTEM
 - Sản xuất 5 architecture docs thật (không điền vào template):
   - `3-technical/3.1-system-foundation/infrastructure.md` — Tech stack + on-prem setup + cost estimate
   - `3-technical/3.1-system-foundation/design-standards/system-design.md` — C4 diagrams (Context, Container, Component, Code)
@@ -262,25 +248,25 @@ PRD-EPIC-002 (this epic)
 - Tạo ADR-001 (tech stack), ADR-002 (on-prem), ADR-003 (bỏ qua compliance ở MVP) trong `8-governance/decision-log/`
 - Cập nhật `systems/README.md` + `3-technical/3.1-system-foundation/architecture/system-overview.md` để map system mới
 
-**Tasks (CODE-TASK-003):** owner @system-architecture, @fullstack-engineer
+**Tasks:** CODE-TASK-003 and CODE-TASK-005; owner @system-architecture, @fullstack-engineer
 **Success Metrics:** Cả 5 docs tồn tại + nội dung thật (không phải placeholder); ADR-001/002/003 accepted; user approve name.
 
 ### Phase 1 — Foundation Build (2 tuần)
 **Priority:** High
 **Goals:**
-- Scaffold `systems/attendance-payroll/` (backend Fastify + mobile Flutter + web Next.js + Docker Compose + CI)
+- Scaffold `systems/attendance` và `systems/payroll` (Fastify APIs + Flutter + Next.js) cùng Compose/CI trong shared/root
 - Auth (OTP cho nhân viên qua SMS gateway của VN, email+password+2FA cho admin)
 - DB schema + migrations (Prisma)
 - Dev environment chạy được trên laptop
 
-**Tasks:** CODE-TASK-004, 005, 006
+**Tasks:** CODE-TASK-004 and CODE-TASK-006
 **Success Metrics:** `docker compose up` chạy local, login flow pass tests, CI green trên PR đầu tiên.
 
 ### Phase 2 — Attendance (3 tuần)
 **Priority:** High (core feature của MVP)
 **Goals:** Mobile app check-in/out bằng GPS + ảnh, web admin xem realtime + override
 
-**Tasks:** CODE-TASK-007 → 012
+**Tracking:** PRD-SLICE-003
 **Coverage:** ≥90% (target 100%) cho schedule engine, GPS validation, attendance logic
 **Success Metrics:**
 - 10 NV test thật trong dev environment, check-in/out ổn định 1 tuần
@@ -291,7 +277,7 @@ PRD-EPIC-002 (this epic)
 **Priority:** High
 **Goals:** Tính bảng lương cơ bản (gross + OT + deductions), xuất Excel
 
-**Tasks:** CODE-TASK-013 → 016
+**Tracking:** PRD-SLICE-004
 **Coverage:** ≥90% cho payroll engine (nhiều edge case: tháng 28/30/31 ngày, làm tròn giờ, OT cuối tuần vs ngày lễ, nghỉ phép không lương)
 **Success Metrics:**
 - Payroll cho tháng test khớp với tính tay của BO trong phạm vi ±1 giờ làm tròn
@@ -301,14 +287,14 @@ PRD-EPIC-002 (this epic)
 **Priority:** Medium
 **Goals:** Auto-generate báo cáo PDF/CSV gửi 15 khách hàng
 
-**Tasks:** CODE-TASK-017 → 019
+**Tracking:** PRD-SLICE-005
 **Success Metrics:** 15 dự án có template riêng (logo, header), xuất PDF cho 1 dự án trong <10s
 
 ### Phase 5 — Pilot (2 tuần)
 **Priority:** High (gate trước scale-out)
 **Goals:** Triển khai thật ở 1–2 dự án đầu
 
-**Tasks:** OPS-TASK-006, CODE-TASK-020, 021
+**Tracking:** PRD-SLICE-006 and OPS-TASK-006
 **Success Metrics:**
 - 30–60 NV ở pilot projects dùng app hàng ngày trong 2 tuần không lỗi nghiêm trọng
 - BO duyệt được bảng lương pilot tháng đầu tiên từ hệ thống (không cần Excel)
@@ -318,7 +304,7 @@ PRD-EPIC-002 (this epic)
 **Priority:** Medium (chỉ chạy nếu pilot pass)
 **Goals:** Triển khai 13 dự án còn lại + xử lý NV làm nhiều dự án
 
-**Tasks:** OPS-TASK-007, CODE-TASK-022, 023
+**Tracking:** PRD-SLICE-007 and OPS-TASK-007
 **Success Metrics:** 200 NV dùng ổn định; payroll tháng đầu tiên full-rollout chạy mượt
 
 ## Risks & Mitigations
@@ -326,7 +312,7 @@ PRD-EPIC-002 (this epic)
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | 200 NV phản đối mobile app (quen giấy/giọng nói) | High — adoption fail | Training on-site + tiếng Việt thuần + UX đơn giản (1 nút to); Phase 5 pilot validate trước |
-| Site mất 4G/WiFi khi check-in | High — miss records | Cache local + retry queue; cho phép supervisor manual add attendance có audit trail |
+| Site mất 4G/WiFi khi check-in | High — miss records | MVP uses an audited supervisor override/fallback process; offline retry queue is a future enhancement and must be validated before any offline claim |
 | Bảng lương tính sai gây tranh cấp | High — pháp lý + morale | 100% test cho payroll engine + chạy song song Excel 1 tháng trước khi cắt |
 | On-prem server hỏng (cháy, HDD chết) | High — mất data | Daily backup Postgres + MinIO ra ổ ngoài hoặc 1 VPS backup; test restore hàng quý |
 | Server on-prem không có static IP / domain | Medium — mobile không truy cập được | Dùng Cloudflare Tunnel hoặc Tailscale (VPN miễn phí) làm bridge |
@@ -357,27 +343,23 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
    - 1 bảng lương full-rollout chạy đúng từ đầu đến cuối (tính lương → duyệt → xuất Excel → BO gửi)
    - 15 báo cáo khách hàng gửi đúng hẹn tháng đầu tiên
 
-## Critical Files to be Created
+## Critical Delivery Files
 
-### Phase 0 — Architecture docs (sẽ tạo mới, thay template rỗng)
+### Phase 0 — Architecture docs (delivered)
 - `3-technical/3.1-system-foundation/infrastructure.md` (thay template)
 - `3-technical/3.1-system-foundation/design-standards/system-design.md` (thay template)
 - `3-technical/3.1-system-foundation/architecture/domain-specs.md` (thay template)
 - `3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml` (mới)
 - `3-technical/3.1-system-foundation/design-standards/coding-standards.md` (thay template)
-- `systems/README.md` (cập nhật để list `attendance-payroll`)
+- `systems/README.md` (lists the split `attendance` and `payroll` systems)
 - `8-governance/decision-log/adr-001-tech-stack.md`, `adr-002-on-premise.md`, `adr-003-skip-vn-compliance-mvp.md`
 
 ### Phase 1+ — Code
-- `systems/attendance-payroll/README.md`
-- `systems/attendance-payroll/docs/{architecture,api-contracts,deployment}.md`
-- `systems/attendance-payroll/backend/` (Fastify + TypeScript)
-- `systems/attendance-payroll/mobile/` (Flutter)
-- `systems/attendance-payroll/web-admin/` (Next.js)
-- `systems/attendance-payroll/db/` (Prisma migrations)
-- `systems/attendance-payroll/tests/` (unit, integration, e2e)
-- `systems/attendance-payroll/docker-compose.yml`
-- `3-technical/3.3-devops/server-steps.md` (cập nhật với on-prem deploy runbook)
+- `systems/attendance/` — Fastify API, Flutter app, tests, and system docs
+- `systems/payroll/` — Fastify API, Next.js web admin, tests, and system docs
+- `systems/shared/` — shared auth/domain utilities, Prisma schema/migrations, Caddy, and Compose
+- `.github/workflows/ci.yml` — quality, live integration/E2E, production build, and Flutter gates
+- `3-technical/3.3-devops/server-steps.md` — on-premise deployment and upgrade runbook
 
 ### Tracking
 - `3-technical/3.2-implementation/status/work-items-registry.md` (thêm PRD-EPIC-002 + slices + tasks)
@@ -385,47 +367,54 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - `2-product-foundation/product-backlog/backlog.md` (Epic 2)
 - `8-governance/changelog.md` (mỗi phase close)
 
-## Open Questions for User (resolve trước Phase 0 close)
+## Resolved Decisions and Remaining Pilot Inputs
 
-1. **Tên hệ thống**: `attendance-payroll` OK chưa, hay muốn tách `attendance` + `payroll`?
-2. **Pilot projects**: Cụ thể 1–2 dự án nào? (Phase 5 cần biết để setup seed data)
-3. **SMS gateway**: Dùng nhà cung cấp nào (eSignal, SpeedSMS, VNPT API)? Hay skip OTP ở MVP và dùng password thường?
-4. **Domain cho server on-prem**: Có domain thật + Cloudflare Tunnel, hay dùng Tailscale VPN thuần?
-5. **Ngân sách server**: Approximate budget cho 1 server on-prem (RAM, CPU, SSD)? Hay sẵn server, cần mình viết runbook?
+1. **Resolved — system split:** `systems/attendance` and `systems/payroll`, with shared infrastructure in `systems/shared`.
+2. **Remaining — pilot projects:** select the specific 1–2 projects and accountable supervisors for Phase 5.
+3. **Resolved — SMS gateway:** SpeedSMS in production; mock mode is restricted to non-production environments.
+4. **Remaining — production endpoint:** supply the real domain/Cloudflare Tunnel configuration (or approve a different private-access topology).
+5. **Remaining — server capacity:** confirm the on-premise hardware/backup budget against the runbook sizing.
 
 ## Known Issues & Bugs
 
 | ID | Severity | Summary | Status |
 | --- | --- | --- | --- |
-| CODE-BUG-002 | Critical | Password authentication bypass | open |
-| CODE-BUG-003 | Critical | Payroll RBAC and cross-tenant IDOR | open |
-| CODE-BUG-004 | Critical | Attendance override cross-team/cross-tenant IDOR | open |
-| CODE-BUG-005 | Critical | Production build and database initialization unusable | open |
-| CODE-BUG-006 | High | Missing 2FA and inactive-account enforcement | open |
-| CODE-BUG-007 | High | Supervisor PII and password-hash disclosure | open |
-| CODE-BUG-008 | High | Spoofable OTP rate-limit boundary | open |
-| CODE-BUG-009 | High | GPS accuracy bypasses geofence | open |
-| CODE-BUG-010 | High | Attendance race and missing worked-time persistence | open |
-| CODE-BUG-011 | High | Vietnam timezone/calendar drift | open |
-| CODE-BUG-012 | High | Customer-report authorization and tenant leakage | open |
-| CODE-BUG-013 | High | Mobile/photo/MinIO path cannot operate as shipped | open |
-| CODE-BUG-014 | High | Payroll excludes the last day of month | open |
-| CODE-BUG-015 | High | Payroll calculation is non-atomic and unrecoverable | open |
-| CODE-BUG-016 | High | Payroll override breaks money and state invariants | open |
-| CODE-BUG-017 | High | Weekend/holiday overtime double-counted | open |
-| CODE-BUG-018 | High | Out-of-scope compliance changes unauditable net pay | open |
+| CODE-BUG-002 | Critical | Password authentication bypass | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-003 | Critical | Payroll RBAC and cross-tenant IDOR | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-004 | Critical | Attendance override cross-team/cross-tenant IDOR | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-005 | Critical | Production build and database initialization unusable | fixed; local Docker/fresh-DB gates pass 2026-07-18 |
+| CODE-BUG-006 | High | Missing 2FA and inactive-account enforcement | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-007 | High | Supervisor PII and password-hash disclosure | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-008 | High | Spoofable OTP rate-limit boundary | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-009 | High | GPS accuracy bypasses geofence | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-010 | High | Attendance race and missing worked-time persistence | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-011 | High | Vietnam timezone/calendar drift | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-012 | High | Customer-report authorization and tenant leakage | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-013 | High | Mobile/photo/MinIO path cannot operate as shipped | fixed; Android validation passes 2026-07-18 |
+| CODE-BUG-014 | High | Payroll excludes the last day of month | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-015 | High | Payroll calculation is non-atomic and unrecoverable | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-016 | High | Payroll override breaks money and state invariants | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-017 | High | Weekend/holiday overtime double-counted | fixed; local re-review GO 2026-07-18 |
+| CODE-BUG-018 | High | Out-of-scope compliance changes unauditable net pay | fixed; ADR-003 invariant tested 2026-07-18 |
 | CODE-BUG-019 | High | CI/integration/coverage quality gate invalid | fixed (GitHub Actions run 29555194773 verified 2026-07-17) |
-| CODE-BUG-020 | Medium | Web-admin auth state, E2E, and checkout display defects | open |
+| CODE-BUG-020 | Medium | Web-admin auth state, E2E, and checkout display defects | fixed; Playwright 7/7 on 2026-07-18 |
 | CODE-BUG-021 | Medium | Aggregate seed omits attendance and RBAC data | fixed (fresh-database aggregate seed verified 2026-07-17) |
-| CODE-BUG-022 | Medium | Canonical documentation and implementation drift | open |
+| CODE-BUG-022 | Medium | Canonical documentation and implementation drift | fixed; Docs Guardian GO 2026-07-19 |
 
-### Remediation batch — CI and migration baseline (2026-07-17)
+### Historical remediation batch — CI and migration baseline (2026-07-17)
 
 - Linked findings: `CODE-BUG-019` and the database-initialization portion of `CODE-BUG-005`.
 - Local verification passes for Prisma generation, lint, typecheck, unit tests, ≥90% coverage, production build, a fresh PostgreSQL 16 migration deploy, and a real PostgreSQL/Redis/MinIO integration test.
 - The aggregate seed now runs dev, demo-account, attendance, and RBAC stages once in order; a fresh-database run completed with a randomized multi-month attendance dataset and 52 role-permission mappings, closing `CODE-BUG-021`.
 - The browser gate now installs Chromium, migrates and seeds a fresh database, starts both APIs and the web admin, then runs all Playwright tests. Its local run reports 5 pass and 2 fail; the failures reproduce open `CODE-BUG-002` and `CODE-BUG-020` instead of being skipped or ignored.
 - `CODE-BUG-005` remains open because production Docker/Compose validation is outside this batch. `CODE-BUG-019` is fixed by [GitHub Actions run 29555194773](https://github.com/hungtrandigital/AKAIOS/actions/runs/29555194773): quality, build, integration, and browser jobs all executed; the overall run remains red only because E2E reproduces open `CODE-BUG-002` and `CODE-BUG-020`.
+
+### Remediation closure (2026-07-18)
+
+- Production Docker images, Compose, Caddy, and the five-migration fresh-database path now pass locally, closing the remaining `CODE-BUG-005` scope.
+- Auth, tenant/project authorization, attendance, reporting, payroll, mobile, and web-admin findings have adversarial regression coverage; the fresh live browser suite passes 7/7.
+- Turbo now passes the ephemeral TOTP secret into `test:e2e`, matching the GitHub Actions job and preventing authenticated scenarios from failing before execution.
+- Closure is recorded at working-tree level. Commit/push, immutable review metadata, and the remote Actions result are still required before pilot deployment.
 
 ## Related Documents
 

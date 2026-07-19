@@ -1,24 +1,26 @@
 # @ak/shared — Shared Code & Infrastructure
 
 **Location:** `systems/shared/`
-**Status:** Phase 1 active
+**Status:** Active shared runtime for the Attendance, Payroll, and web services
 
 ## Purpose
 
 Two things in this directory:
 
 1. **`@ak/shared` package** (`src/`) — shared TypeScript code between attendance-api and payroll-api
-2. **Shared deployment infrastructure** (`docker-compose.yml`, `docker-compose.dev.yml`, `Caddyfile`) — runs both backends + databases on one server
+2. **Shared deployment infrastructure** (`docker-compose.yml`, `docker-compose.dev.yml`, `Caddyfile`) — runs the APIs, web admin, data services, migration job, and reverse proxy on one server
 
 ## Shared Infrastructure Files
 
 | File | Purpose |
 | --- | --- |
-| `docker-compose.yml` | Production stack: attendance-api + payroll-api + Postgres + Redis + MinIO + Caddy |
+| `docker-compose.yml` | Eight-service production stack: attendance-api + payroll-api + web-admin + one-shot db-migrate + Postgres + Redis + MinIO + Caddy |
 | `docker-compose.dev.yml` | Dev-only infra: Postgres + Redis + MinIO (run backends locally via `pnpm dev`) |
-| `Caddyfile` | Reverse proxy config (routes to both backends, TLS termination) |
+| `Caddyfile` | Reverse proxy config; Cloudflare terminates public TLS in the documented deployment |
 
-The Dockerfiles live with each backend (`systems/attendance/backend/Dockerfile` and `systems/payroll/backend/Dockerfile`), not here — they belong with the code they build.
+Application Dockerfiles live with the code they build: the two backend Dockerfiles
+are under `systems/attendance/backend/` and `systems/payroll/backend/`, while the
+web-admin Dockerfile is under `systems/payroll/web-admin/`.
 
 ## @ak/shared Package
 
@@ -69,7 +71,7 @@ shared/
 │   ├── auth/
 │   │   ├── jwt.ts                  # JWT issue/verify
 │   │   ├── password.ts             # Argon2id wrapper
-│   │   └── otp.ts                  # OTP generation (mock mode in Phase 1)
+│   │   └── otp.ts                  # Redis-backed OTP flow and SMS provider selection
 │   └── types/
 │       ├── index.ts                # Re-exports
 │       ├── errors.ts               # Domain error classes
@@ -97,8 +99,8 @@ The initial migration is the baseline for fresh databases. Do not edit an applie
 
 ## Conventions
 
-- All exports must be typed (no `any`)
-- Each file ≤200 lines
+- New exports should be typed; remaining explicit-`any` warnings are tracked deviations
+- Keep new files at or below 200 lines where practical; existing larger files require incremental refactoring
 - Pure utilities (no I/O outside db/auth) → easy to test in isolation
 - No business logic here — that's per-system (attendance, payroll)
 

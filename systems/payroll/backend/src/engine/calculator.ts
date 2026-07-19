@@ -6,11 +6,11 @@
 //
 // Coverage target: 100% (pure function, exhaustive edge cases).
 
-import { Money } from '@ak/shared'
+import { BusinessRuleViolationError, Money } from '@ak/shared'
 import { roundMinutes } from './working-days.js'
 import { computeVietnamTax, type TaxBreakdown } from './vietnam-tax.js'
 import type { TaxMode } from '@prisma/client'
-import { isVietnamHoliday } from './holidays.js'
+import { isVietnamHoliday, isVietnamSunday } from './holidays.js'
 
 // ============================================================================
 // TYPES
@@ -18,8 +18,9 @@ import { isVietnamHoliday } from './holidays.js'
 
 export interface EmployeeSnapshot {
   id: string
-  baseSalary: Money         // Monthly or hourly rate (see salaryType)
+  baseSalary: Money
   salaryType: 'monthly' | 'hourly'
+  hourlyRate?: Money | null
 }
 
 export interface PayrollRuleSnapshot {
@@ -81,6 +82,9 @@ export interface PayrollInputs {
 export interface CalculatedLine {
   // Inputs (passed through)
   daysWorked: number
+  daysOnLeave: number
+  absentDays: number
+  workdayUnits: number
   totalWorkMinutes: number
   overtimeWeekdayMinutes: number
   overtimeWeekendMinutes: number
@@ -119,6 +123,9 @@ export function aggregateAttendance(
   attendance: AttendanceRecord[]
 ): {
   daysWorked: number
+  daysOnLeave: number
+  absentDays: number
+  workdayUnits: number
   totalWorkMinutes: number
   overtimeWeekdayMinutes: number
   overtimeWeekendMinutes: number
@@ -126,6 +133,9 @@ export function aggregateAttendance(
   lateMinutes: number
 } {
   let daysWorked = 0
+  let daysOnLeave = 0
+  let absentDays = 0
+  let workdayUnits = 0
   let totalWorkMinutes = 0
   let overtimeWeekdayMinutes = 0
   let overtimeWeekendMinutes = 0
@@ -133,16 +143,31 @@ export function aggregateAttendance(
   let lateMinutes = 0
 
   for (const r of attendance) {
-    if (r.status === 'absent' || r.status === 'on_leave') continue
+    if (r.status === 'absent') {
+      absentDays++
+      continue
+    }
+    if (r.status === 'on_leave') {
+      daysOnLeave++
+      continue
+    }
     daysWorked++
+    // `daysWorked` is the integer attendance-day count persisted for display.
+    // Monthly proration uses explicit workday units so half-days are not overpaid;
+    // a holiday is one paid standard day even when no work timestamps exist.
+    workdayUnits += r.status === 'half_day' ? 0.5 : 1
     totalWorkMinutes += r.totalWorkMinutes
     lateMinutes += r.lateMinutes
 
     // Holiday check uses BOTH status AND actual date (engine agnostic to input quality)
     if (r.status === 'holiday' || isHoliday(r.date)) {
-      overtimeHolidayMinutes += r.overtimeMinutes + r.totalWorkMinutes
+      // totalWorkMinutes already includes the overtime portion. On a holiday,
+      // every worked minute receives the holiday multiplier exactly once.
+      overtimeHolidayMinutes += r.totalWorkMinutes
     } else if (r.isWeekend) {
-      overtimeWeekendMinutes += r.overtimeMinutes + r.totalWorkMinutes
+      // totalWorkMinutes already includes the overtime portion. Adding
+      // overtimeMinutes again would double-count the tail of the shift.
+      overtimeWeekendMinutes += r.totalWorkMinutes
     } else {
       overtimeWeekdayMinutes += r.overtimeMinutes
     }
@@ -150,6 +175,9 @@ export function aggregateAttendance(
 
   return {
     daysWorked,
+    daysOnLeave,
+    absentDays,
+    workdayUnits,
     totalWorkMinutes,
     overtimeWeekdayMinutes,
     overtimeWeekendMinutes,
@@ -160,8 +188,8 @@ export function aggregateAttendance(
 
 /**
  * BR-PAY-001: Pro-rated base salary.
- * Formula: proratedBase = baseSalary × (daysWorked / standardWorkingDaysInMonth)
- * Note: if daysWorked > standardWorkingDays, proratedBase = baseSalary (no cap)
+ * Formula: proratedBase = baseSalary × (workdayUnits / standardWorkingDaysInMonth)
+ * Workday units above the configured standard are capped at the monthly base.
  */
 export function computeProratedBase(
   baseSalary: Money,
@@ -176,8 +204,7 @@ export function computeProratedBase(
 
 /**
  * BR-PAY-002: OT calculation.
- * Formula: hourlyRate × OT_minutes × multiplier
- * hourlyRate = baseSalary / (standardWorkingDays × workingHoursPerDay) / 60
+ * Formula for monthly employees: derived minute rate × OT minutes × multiplier.
  */
 export function computeOvertimeAmount(
   baseSalary: Money,
@@ -211,30 +238,38 @@ export function applyOTRounding(
 /**
  * BR-PAY-004: Late penalty calculation.
  * Returns 0 if rules disabled (null).
- * Formula: pen = min(lateMinutes × perMinute, maxPerDay) × daysLate
+ * Formula: sum(min(dayLateMinutes × perMinute, maxPerDay))
  */
 export function computeLatePenalty(
-  lateMinutes: number,
-  daysLate: number,
+  lateMinutesByDay: number[],
   perMinute: Money | null,
   maxPerDay: Money | null
 ): Money {
-  if (!perMinute || lateMinutes <= 0 || daysLate <= 0) return Money.zero()
-  const perDayPenalty = perMinute.multiply(lateMinutes)
-  const capped = maxPerDay ? Money.min(perDayPenalty, maxPerDay) : perDayPenalty
-  return capped.multiply(daysLate)
+  if (!perMinute) return Money.zero()
+  return lateMinutesByDay.reduce((total, minutes) => {
+    if (minutes <= 0) return total
+    const dailyPenalty = perMinute.multiply(minutes)
+    return total.add(maxPerDay ? Money.min(dailyPenalty, maxPerDay) : dailyPenalty)
+  }, Money.zero())
+}
+
+function requireHourlyRate(employee: EmployeeSnapshot): Money {
+  if (!employee.hourlyRate || !employee.hourlyRate.isGreaterThan(Money.zero())) {
+    throw new BusinessRuleViolationError('Hourly employee requires a positive hourlyRate')
+  }
+  return employee.hourlyRate
 }
 
 /**
  * BR-PAY-005: Allowances.
- * total = mealAllowancePerDay × daysWorked + phoneAllowance
+ * total = mealAllowancePerDay × workdayUnits + phoneAllowance
  */
 export function computeAllowances(
-  daysWorked: number,
+  workdayUnits: number,
   mealPerDay: Money | null,
   phone: Money | null
 ): Money {
-  const meal = mealPerDay ? mealPerDay.multiply(daysWorked) : Money.zero()
+  const meal = mealPerDay ? mealPerDay.multiply(workdayUnits) : Money.zero()
   const phoneAllow = phone ?? Money.zero()
   return meal.add(phoneAllow)
 }
@@ -282,6 +317,8 @@ export function calculateLine(
   rules: PayrollRuleSnapshot,
   inputs: PayrollInputs
 ): CalculatedLine {
+  assertMvpTaxMode(rules.taxMode)
+
   // 1. Aggregate attendance
   const totals = aggregateAttendance(attendance)
 
@@ -296,80 +333,72 @@ export function calculateLine(
   )
 
   // 3. BR-PAY-001: Pro-rated base
-  const proratedBase = computeProratedBase(
-    employee.baseSalary,
-    totals.daysWorked,
-    rules.standardWorkingDaysPerMonth
-  )
+  const hourlyRate = employee.salaryType === 'hourly' ? requireHourlyRate(employee) : null
+  const regularHourlyMinutes = Math.max(0, totals.totalWorkMinutes
+    - totals.overtimeWeekdayMinutes
+    - totals.overtimeWeekendMinutes
+    - totals.overtimeHolidayMinutes)
+  const proratedBase = hourlyRate
+    ? hourlyRate.multiply(regularHourlyMinutes).divide(60)
+    : computeProratedBase(
+        employee.baseSalary,
+        totals.workdayUnits,
+        rules.standardWorkingDaysPerMonth
+      )
 
   // 4. BR-PAY-002: OT amounts
-  const otWeekdayAmount = computeOvertimeAmount(
-    employee.baseSalary,
-    roundedOT.weekday,
-    rules.standardWorkingDaysPerMonth,
-    rules.workingHoursPerDay,
-    rules.otWeekdayMultiplier
-  )
-  const otWeekendAmount = computeOvertimeAmount(
-    employee.baseSalary,
-    roundedOT.weekend,
-    rules.standardWorkingDaysPerMonth,
-    rules.workingHoursPerDay,
-    rules.otWeekendMultiplier
-  )
-  const otHolidayAmount = computeOvertimeAmount(
-    employee.baseSalary,
-    roundedOT.holiday,
-    rules.standardWorkingDaysPerMonth,
-    rules.workingHoursPerDay,
-    rules.otHolidayMultiplier
-  )
+  const overtimeAmount = (minutes: number, multiplier: number) => hourlyRate
+    ? hourlyRate.multiply(minutes).divide(60).multiply(multiplier)
+    : computeOvertimeAmount(
+        employee.baseSalary,
+        minutes,
+        rules.standardWorkingDaysPerMonth,
+        rules.workingHoursPerDay,
+        multiplier
+      )
+  const otWeekdayAmount = overtimeAmount(roundedOT.weekday, rules.otWeekdayMultiplier)
+  const otWeekendAmount = overtimeAmount(roundedOT.weekend, rules.otWeekendMultiplier)
+  const otHolidayAmount = overtimeAmount(roundedOT.holiday, rules.otHolidayMultiplier)
 
   // 5. BR-PAY-004: Late penalty
-  // Count distinct days with late (not just total minutes)
-  const daysLate = attendance.filter((r) => r.lateMinutes > 0 && r.status !== 'absent' && r.status !== 'on_leave').length
+  const lateMinutesByDay = attendance
+    .filter((r) => r.status !== 'absent' && r.status !== 'on_leave')
+    .map((r) => r.lateMinutes)
   const latePenalty = computeLatePenalty(
-    totals.lateMinutes,
-    daysLate,
+    lateMinutesByDay,
     rules.latePenaltyPerMinute,
     rules.maxLatePenaltyPerDay
   )
 
   // 6. BR-PAY-005: Allowances
   const allowances = computeAllowances(
-    totals.daysWorked,
+    totals.workdayUnits,
     rules.mealAllowancePerDay,
     rules.phoneAllowance
   )
 
-  // 7. BR-PAY-006 — Gross
-  const gross = proratedBase
-    .add(otWeekdayAmount)
-    .add(otWeekendAmount)
-    .add(otHolidayAmount)
-    .subtract(latePenalty)
-    .add(allowances)
+  // 7. BR-PAY-006 + BR-PAY-007 — one MVP money invariant.
+  // ADR-003 permits only BO-entered advance and other deductions.
+  const { gross, net } = computeGrossAndNet(
+    proratedBase,
+    otWeekdayAmount,
+    otWeekendAmount,
+    otHolidayAmount,
+    latePenalty,
+    allowances,
+    inputs.advance,
+    inputs.otherDeductions
+  )
 
-  // 8. BR-VN-TAX-001..005 — Vietnam tax/insurance deductions
-  const tax = computeVietnamTax(gross, rules.taxMode, {
-    bhxhRateNv: rules.bhxhRateNv ?? undefined,
-    bhxhRateDn: rules.bhxhRateDn ?? undefined,
-    bhytRateNv: rules.bhytRateNv ?? undefined,
-    bhytRateDn: rules.bhytRateDn ?? undefined,
-    bhtnRateNv: rules.bhtnRateNv ?? undefined,
-    bhtnRateDn: rules.bhtnRateDn ?? undefined,
-    dependentCount: rules.dependentCount ?? 0,
-  })
-
-  // 9. BR-PAY-007 — Net (after ALL deductions)
-  const net = gross
-    .subtract(tax.tongKhauTru)
-    .subtract(inputs.advance)
-    .subtract(inputs.otherDeductions)
-  const netSafe = net.isLessThan(Money.zero()) ? Money.zero() : net
+  // Keep the existing response shape while guaranteeing a zero compliance
+  // breakdown throughout the approved MVP path.
+  const tax = computeVietnamTax(gross, 'none')
 
   return {
     daysWorked: totals.daysWorked,
+    daysOnLeave: totals.daysOnLeave,
+    absentDays: totals.absentDays,
+    workdayUnits: totals.workdayUnits,
     totalWorkMinutes: totals.totalWorkMinutes,
     overtimeWeekdayMinutes: roundedOT.weekday,
     overtimeWeekendMinutes: roundedOT.weekend,
@@ -385,7 +414,16 @@ export function calculateLine(
     tax,
     advance: inputs.advance,
     otherDeductions: inputs.otherDeductions,
-    net: netSafe,
+    net,
+  }
+}
+
+/** ADR-003 gate: compliance modes are not executable in the MVP. */
+export function assertMvpTaxMode(taxMode: TaxMode): void {
+  if (taxMode !== 'none') {
+    throw new BusinessRuleViolationError(
+      `Tax mode '${taxMode}' is outside the approved MVP scope; use 'none'`
+    )
   }
 }
 
@@ -395,7 +433,7 @@ export function calculateLine(
 
 /** Is given date a weekend (Sunday) in Vietnam work calendar? */
 export function isWeekend(date: Date): boolean {
-  return date.getDay() === 0 // Sunday
+  return isVietnamSunday(date)
 }
 
 /**

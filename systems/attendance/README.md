@@ -1,7 +1,7 @@
 # Attendance System
 
 **System Name:** `attendance`
-**Status:** Phase 0 — architecture defined, code pending (PRD-EPIC-002)
+**Status:** Remediation/code gate complete; remaining MVP slice and pilot acceptance pending (PRD-EPIC-002)
 **Owner:** @fullstack-engineer
 
 ## Overview
@@ -12,7 +12,10 @@ Hệ thống chấm công cho nhân viên vệ sinh AKAIUNSAN tại 15 dự án.
 
 - **~200 nhân viên vệ sinh** (employees): dùng mobile app để check-in/out tại site
 - **~15 giám sát dự án** (supervisors): xem real-time, override khi cần
-- **~3-5 BO staff**: CRUD dự án, NV, ca, xem báo cáo khách hàng
+- **~3-5 BO staff**: xem dự án/NV trên web và dùng API được phân quyền cho CRUD dự án, NV, ca và báo cáo khách hàng
+
+The current Projects and Employees web pages are read-only and no shift-management
+page is shipped; creation/update operations are API/operator workflows for now.
 
 ### Out of Scope
 
@@ -28,10 +31,10 @@ Hệ thống chấm công cho nhân viên vệ sinh AKAIUNSAN tại 15 dự án.
 | Backend API | Node.js 20 LTS + Fastify + TypeScript (strict mode) |
 | ORM | Prisma 5 (shared with payroll) |
 | Database | PostgreSQL 16 (shared with payroll) |
-| Cache / queue | Redis 7 + BullMQ (shared with payroll) |
+| Cache / auth state | Redis 7 for OTP challenges and abuse controls; refresh-token records are in PostgreSQL |
 | Object storage | MinIO (S3-compatible, self-hosted) — for check-in photos + generated PDFs |
-| Tests | Vitest + testcontainers + Playwright |
-| Auth | JWT (15-min access) + refresh token (30-day, httpOnly cookie) |
+| Tests | Vitest with fresh real services + Playwright |
+| Auth | Employee SMS OTP; admin password + TOTP; JWT access + rotating refresh tokens |
 
 ## Quick Start
 
@@ -46,21 +49,33 @@ Hệ thống chấm công cho nhân viên vệ sinh AKAIUNSAN tại 15 dự án.
 ### Local Development
 
 ```bash
-# 1. From repo root, start shared infrastructure
-cd systems/attendance
+# From repo root: install and start PostgreSQL :5433, Redis :6380, MinIO :9100.
+pnpm install --frozen-lockfile
 cp .env.example .env
-docker compose -f docker-compose.dev.yml up -d postgres redis minio
+pnpm docker:up:dev
 
-# 2. Run backend in dev mode
-cd backend
-pnpm install
-pnpm prisma migrate dev
-pnpm dev   # http://localhost:3000
+# Edit .env once: use the dev endpoints above and paste three independently
+# generated JWT_SECRET, INTERNAL_API_KEY, and TOTP_ENCRYPTION_KEY values.
+# Generate them once with: openssl rand -hex 32 (twice) and
+# openssl rand -base64 32 (once). Do not regenerate them per terminal.
 
-# 3. Run mobile app
-cd ../mobile
+# Root scripts do not auto-load .env. Load the same file before setup:
+set -a; source .env; set +a
+pnpm prisma:generate
+pnpm prisma:migrate:deploy
+# Local/demo only: creates the development tenant, users, employees, shifts,
+# attendance samples, and the idempotent RBAC catalog. Never run on pilot/prod.
+pnpm --filter @ak/shared db:seed:all
+
+# Terminal 1 (blocks): load that same .env, then start the API.
+set -a; source .env; set +a
+pnpm --filter @ak/attendance-api dev   # http://localhost:3000
+
+# Terminal 2: run the mobile app.
+cd systems/attendance/mobile
 flutter pub get
-flutter run   # with Android emulator / iOS simulator running)
+flutter gen-l10n
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 ```
 
 ## Directory Structure
@@ -69,24 +84,16 @@ flutter run   # with Android emulator / iOS simulator running)
 attendance/
 ├── README.md                 # This file
 ├── docs/
-│   ├── architecture.md       # Attendance-specific architecture
-│   ├── api-contracts.md      # Cross-references shared openapi.yaml
-│   └── deployment.md         # On-prem deploy runbook
+│   └── architecture.md       # Attendance-specific architecture
 ├── backend/                  # Fastify API (TS)
 │   ├── src/
 │   │   ├── routes/           # HTTP route handlers
 │   │   ├── services/         # Business logic (attendance, schedule)
-│   │   ├── repositories/     # Prisma queries
-│   │   ├── domain/           # Value objects (GPSCoordinate, etc.)
 │   │   ├── plugins/          # Fastify plugins (auth, rate-limit, etc.)
 │   │   └── server.ts
 │   ├── tests/
 │   │   ├── unit/
-│   │   ├── integration/      # testcontainers (real Postgres/Redis/MinIO)
-│   │   └── e2e/              # Playwright
-│   ├── prisma/
-│   │   ├── schema.prisma     # Shared with payroll
-│   │   └── migrations/
+│   │   └── integration/      # real Postgres/Redis/MinIO
 │   └── package.json
 ├── mobile/                   # Flutter app
 │   ├── lib/
@@ -100,14 +107,14 @@ attendance/
 │   ├── test/
 │   ├── android/
 │   └── ios/
-└── docker-compose.dev.yml    # Local dev stack
+└── ../shared/                # Shared Prisma schema/migrations and Compose stacks
 ```
 
 ## Documentation
 
 - **[Architecture](docs/architecture.md)** — Attendance-specific architecture details
-- **[API Contracts](docs/api-contracts.md)** — Cross-references [shared openapi.yaml](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
-- **[Deployment](docs/deployment.md)** — On-prem deploy + runbook
+- **[API Contracts](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)** — Canonical shared OpenAPI contract
+- **[Deployment](../../3-technical/3.3-devops/server-steps.md)** — On-prem deploy + runbook
 - **[Shared Architecture](../../3-technical/3.1-system-foundation/)** — Cross-cutting docs (infrastructure, system-design, domain-specs, coding-standards)
 
 ## Related Systems
@@ -123,4 +130,4 @@ attendance/
 
 ---
 
-*Phase 0 architecture complete. Implementation starts Phase 1 (foundation build).*
+*The review-remediation gate passes locally as of 2026-07-18. Mobile history and remaining slice/pilot acceptance, commit, remote CI, and live evidence remain.*

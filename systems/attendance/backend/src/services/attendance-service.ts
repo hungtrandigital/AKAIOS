@@ -3,6 +3,9 @@
 
 import { AttendanceStatus, BusinessRuleViolationError } from '@ak/shared'
 
+export const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh'
+const VIETNAM_UTC_OFFSET = '+07:00'
+
 export interface ShiftTimeInfo {
   startTime: string   // "HH:mm"
   endTime: string     // "HH:mm"
@@ -29,13 +32,38 @@ export function parseShiftTime(time: string): { hours: number; minutes: number }
   return { hours: h, minutes: m }
 }
 
-/** Build a Date for a given calendar date + "HH:mm" string. */
+/** Return the Vietnam calendar date (YYYY-MM-DD) containing an instant. */
+export function getVietnamDateKey(instant = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant)
+}
+
+/** Return the UTC instants bounding the current Vietnam calendar day. */
+export function getVietnamDayBounds(instant = new Date()): { start: Date; end: Date } {
+  const dateKey = getVietnamDateKey(instant)
+  const start = new Date(`${dateKey}T00:00:00.000${VIETNAM_UTC_OFFSET}`)
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) }
+}
+
+/** Build a UTC instant for a Vietnam calendar date + "HH:mm" shift time. */
 export function buildShiftDateTime(date: Date, time: string, isNextDay = false): Date {
   const { hours, minutes } = parseShiftTime(time)
-  const result = new Date(date)
-  result.setHours(hours, minutes, 0, 0)
-  if (isNextDay) result.setDate(result.getDate() + 1)
+  const dateKey = date.toISOString().slice(0, 10)
+  const hh = String(hours).padStart(2, '0')
+  const mm = String(minutes).padStart(2, '0')
+  const result = new Date(`${dateKey}T${hh}:${mm}:00.000${VIETNAM_UTC_OFFSET}`)
+  if (isNextDay) result.setUTCDate(result.getUTCDate() + 1)
   return result
+}
+
+/** Persistable paid work duration after the shift's unpaid break. */
+export function computeWorkedMinutes(checkInAt: Date, checkOutAt: Date, breakMinutes: number): number {
+  const elapsedMinutes = Math.floor((checkOutAt.getTime() - checkInAt.getTime()) / 60_000)
+  return Math.max(0, elapsedMinutes - Math.max(0, breakMinutes))
 }
 
 /**

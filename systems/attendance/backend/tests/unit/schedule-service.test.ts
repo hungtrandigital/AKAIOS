@@ -50,17 +50,17 @@ describe('assertNotTooFarInPast', () => {
 
   it('accepts today and dates inside the allowed window', () => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date(2026, 6, 17, 12))
-    expect(() => assertNotTooFarInPast(new Date(2026, 6, 17))).not.toThrow()
-    expect(() => assertNotTooFarInPast(new Date(2026, 6, 10))).not.toThrow()
+    vi.setSystemTime(new Date('2026-07-17T05:00:00.000Z'))
+    expect(() => assertNotTooFarInPast(new Date('2026-07-17T00:00:00.000Z'))).not.toThrow()
+    expect(() => assertNotTooFarInPast(new Date('2026-07-10T00:00:00.000Z'))).not.toThrow()
   })
 
   it('rejects assignments older than the configured window', () => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date(2026, 6, 17, 12))
-    expect(() => assertNotTooFarInPast(new Date(2026, 6, 9)))
+    vi.setSystemTime(new Date('2026-07-17T05:00:00.000Z'))
+    expect(() => assertNotTooFarInPast(new Date('2026-07-09T00:00:00.000Z')))
       .toThrow(BusinessRuleViolationError)
-    expect(() => assertNotTooFarInPast(new Date(2026, 6, 15), 1))
+    expect(() => assertNotTooFarInPast(new Date('2026-07-15T00:00:00.000Z'), 1))
       .toThrow('Cannot check in for assignment more than 1 days in the past')
   })
 })

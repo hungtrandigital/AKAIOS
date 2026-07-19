@@ -1,7 +1,7 @@
 # Payroll System
 
 **System Name:** `payroll`
-**Status:** Phase 0 — architecture defined, code pending (PRD-EPIC-002)
+**Status:** Remediation/code gate complete; remaining MVP slice and pilot acceptance pending (PRD-EPIC-002)
 **Owner:** @fullstack-engineer
 
 ## Overview
@@ -10,8 +10,11 @@ Hệ thống tính lương cho nhân viên AKAIUNSAN. Back Office mở kỳ lư�
 
 ### Target Users
 
-- **~3-5 BO staff** (`bo_admin` role): mở kỳ, tính lương, override từng line, duyệt, xuất Excel
-- **~1-2 system admin** (`system_admin` role): config OT rules, lock period, view audit log
+- **~3-5 BO staff** (`bo_admin` role): web UI hiện mở/tính/duyệt/xuất kỳ lương; API còn hỗ trợ override line, rules, paid và lock
+- **~1-2 system admin** (`system_admin` role): dùng các API được phân quyền cho cấu hình/khóa; audit-log UI/API chưa được ship
+
+Line-level review/override controls, rule management, paid/lock controls, and an
+audit-log view remain web-slice work; backend capability does not imply a shipped UI.
 
 ### Out of Scope (MVP)
 
@@ -27,10 +30,10 @@ Hệ thống tính lương cho nhân viên AKAIUNSAN. Back Office mở kỳ lư�
 | Backend API | Node.js 20 LTS + Fastify + TypeScript (strict mode) |
 | ORM | Prisma 5 (shared with attendance) |
 | Database | PostgreSQL 16 (shared with attendance) |
-| Cache / queue | Redis 7 + BullMQ (used for monthly calculation jobs) |
+| Cache | Redis 7 (shared runtime infrastructure); payroll calculation is transactional in the API |
 | Web admin | Next.js 14 (App Router) + TypeScript |
-| Tests | Vitest + testcontainers |
-| Auth | JWT (15-min access) + refresh token (shared with attendance) |
+| Tests | Vitest against fresh real services + Playwright through web admin |
+| Auth | Admin password + TOTP, JWT access, and rotating refresh token (shared with attendance) |
 
 ## Quick Start
 
@@ -43,21 +46,29 @@ Hệ thống tính lương cho nhân viên AKAIUNSAN. Back Office mở kỳ lư�
 ### Local Development
 
 ```bash
-# 1. From repo root, start shared infrastructure (shared with attendance)
-cd systems/payroll
+# From repo root: install and start PostgreSQL :5433, Redis :6380, MinIO :9100.
+pnpm install --frozen-lockfile
 cp .env.example .env
-docker compose -f docker-compose.dev.yml up -d postgres redis
+pnpm docker:up:dev
 
-# 2. Run backend in dev mode
-cd backend
-pnpm install
-pnpm prisma migrate dev
-pnpm dev   # http://localhost:3001
+# Edit .env once: use the dev endpoints above and paste three independently
+# generated JWT_SECRET, INTERNAL_API_KEY, and TOTP_ENCRYPTION_KEY values.
+# Generate them once with: openssl rand -hex 32 (twice) and
+# openssl rand -base64 32 (once). Do not regenerate them per terminal.
 
-# 3. Run web admin
-cd ../web-admin
-pnpm install
-pnpm dev   # http://localhost:3002
+# Load the same file for setup. Root scripts do not auto-load it.
+set -a; source .env; set +a
+pnpm prisma:generate
+pnpm prisma:migrate:deploy
+# Local/demo only: creates the development tenant, users, employees, shifts,
+# attendance samples, and the idempotent RBAC catalog. Never run on pilot/prod.
+pnpm --filter @ak/shared db:seed:all
+
+# Each command below blocks. Run it in a separate terminal after loading the
+# same .env with: set -a; source .env; set +a
+pnpm --filter @ak/attendance-api dev   # http://localhost:3000
+pnpm --filter @ak/payroll-api dev      # http://localhost:3001
+pnpm --filter @ak/payroll-web-admin dev # http://localhost:3002
 ```
 
 ## Directory Structure
@@ -66,48 +77,41 @@ pnpm dev   # http://localhost:3002
 payroll/
 ├── README.md                 # This file
 ├── docs/
-│   ├── architecture.md       # Payroll-specific architecture
-│   ├── api-contracts.md      # Cross-references shared openapi.yaml
-│   └── deployment.md         # On-prem deploy runbook
+│   └── architecture.md       # Payroll-specific architecture
 ├── backend/                  # Fastify API (TS)
 │   ├── src/
-│   │   ├── routes/           # payroll-periods, payroll-lines, payroll-rules, audit
+│   │   ├── routes/           # payroll periods, lines, rules, and audit-producing actions
 │   │   ├── services/         # Business logic (payroll engine, rules)
 │   │   ├── engine/           # Pure payroll calculation (no I/O)
 │   │   │   ├── calculator.ts
-│   │   │   └── rules.ts
+│   │   │   ├── holidays.ts
+│   │   │   ├── vietnam-tax.ts
+│   │   │   └── working-days.ts
 │   │   ├── clients/          # Internal HTTP client (attendance)
-│   │   ├── repositories/     # Prisma queries
 │   │   └── server.ts
 │   ├── tests/
-│   │   ├── unit/             # Engine tests (100% coverage target)
-│   │   ├── integration/
-│   │   └── e2e/
+│   │   ├── unit/
+│   │   └── integration/
 │   └── package.json
 ├── web-admin/                # Next.js 14
-│   ├── app/
-│   │   ├── (auth)/
-│   │   ├── payroll/
-│   │   │   ├── periods/
-│   │   │   ├── lines/
-│   │   │   └── rules/
-│   │   └── layout.tsx
+│   ├── app/                  # login/2fa, attendance, payroll, projects, employees, RBAC
 │   ├── components/
+│   ├── e2e/
 │   └── package.json
-└── docker-compose.dev.yml
+└── ../shared/                # Shared Prisma schema/migrations and Compose stacks
 ```
 
 ## Documentation
 
 - **[Architecture](docs/architecture.md)** — Payroll engine design, calculation flow
-- **[API Contracts](docs/api-contracts.md)** — Cross-references [shared openapi.yaml](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
-- **[Deployment](docs/deployment.md)** — On-prem deploy runbook
+- **[API Contracts](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)** — Canonical shared OpenAPI contract
+- **[Deployment](../../3-technical/3.3-devops/server-steps.md)** — On-prem deploy runbook
 
 ## Key Concepts
 
 - **Payroll Period:** Một tháng (vd: 2026-07). Có state machine: `open → calculating → calculated → approved → paid → locked`.
 - **Payroll Line:** Một dòng lương của 1 NV trong 1 period.
-- **Payroll Engine:** Pure function tính lương từ attendance input + rules. 100% test coverage.
+- **Payroll Engine:** Pure function tính lương từ attendance input + rules. Current package coverage is 98.76% statements/lines, 94.39% branches, and 100% functions.
 - **Payroll Rule:** Config cho OT rates, allowances, rounding, etc. Versioned theo `effectiveFrom`.
 
 ## Calculation Flow
@@ -115,9 +119,9 @@ payroll/
 ```
 [BO mở period 2026-07]
      ↓
-[POST /v1/payroll-periods/:id/calculate]
+[POST /v1/payroll/periods/:id/calculate]
      ↓
-[BullMQ job: calculator.ts]
+[Transactional payroll service + calculator.ts]
      ↓
 For each active employee:
   Pull attendance from /internal/attendance (HTTP call)
@@ -128,13 +132,13 @@ For each active employee:
      ↓
 [period.status = calculated]
      ↓
-[BO reviews + overrides individual lines]
+[BO reviews period in the current UI; line override remains backend-only]
      ↓
-[POST /v1/payroll-periods/:id/approve]
+[POST /v1/payroll/periods/:id/approve]
      ↓
 [period.status = approved]
      ↓
-[GET /v1/payroll-periods/:id/export?format=xlsx]
+[GET /v1/payroll/periods/:id/export]
      ↓
 [BO imports Excel into accounting software]
 ```
@@ -152,4 +156,4 @@ For each active employee:
 
 ---
 
-*Phase 0 architecture complete. Implementation starts Phase 1 (foundation build).*
+*The review-remediation gate passes locally as of 2026-07-18. Remaining slice/pilot acceptance, commit, remote CI, and live evidence remain.*

@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api'
 import { TopNav } from '@/components/TopNav'
 import { useAuth } from '@/components/AuthProvider'
 import { AttendanceOverrideModal } from '@/components/AttendanceOverrideModal'
+import { formatVietnamLongDate, getVietnamDateKey } from '@/lib/vietnam-date'
 
 interface AttendanceRecord {
   id: string
@@ -34,7 +35,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 
 export default function AttendancePage() {
   const { user } = useAuth()
-  const today = new Date().toISOString().split('T')[0]
+  const today = getVietnamDateKey()
   const [overrideTarget, setOverrideTarget] = useState<AttendanceRecord | null>(null)
   const [filter, setFilter] = useState('')
 
@@ -73,7 +74,7 @@ export default function AttendancePage() {
           <div>
             <h1 className="page-title">📍 Chấm công hôm nay</h1>
             <p className="page-subtitle">
-              {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {formatVietnamLongDate()}
               {' '}· Tự động refresh mỗi 30s
             </p>
           </div>
@@ -135,7 +136,7 @@ export default function AttendancePage() {
                         </div>
                       </td>
                       <td>{r.checkInAt ? new Date(r.checkInAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                      <td>{r.checkOutAt ? new Date(r.checkInAt!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }).replace(r.checkInAt!, r.checkOutAt) : '—'}</td>
+                      <td>{r.checkOutAt ? new Date(r.checkOutAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                       <td>{r.totalMinutesWorked ? `${Math.round(r.totalMinutesWorked / 60 * 10) / 10}h` : '—'}</td>
                       <td>
                         <span className={`badge ${STATUS_BADGE[r.status]?.cls ?? 'badge-neutral'}`}>

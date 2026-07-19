@@ -5,15 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/auth_storage.dart';
-import '../../../core/http_client.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/attendance_repository.dart';
 import '../../auth/data/auth_repository.dart';
-
-final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
-  return AttendanceRepository(http: HttpClient(authStorage: ref.read(authStorageProvider)));
-});
 
 class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key});
@@ -85,19 +79,23 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
                         Text('${l.shift}: ${assignment.shiftName}'),
-                        Text('${l.shiftTime}: ${assignment.startTime} - ${assignment.endTime}'),
-                        Text('Date: ${DateFormat('yyyy-MM-dd').format(assignment.date)}'),
+                        Text(
+                            '${l.shiftTime}: ${assignment.startTime} - ${assignment.endTime}'),
+                        Text(
+                            'Date: ${DateFormat('yyyy-MM-dd').format(assignment.date)}'),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 24),
                 if (assignment.checkInAt != null)
-                  Text(l.checkedIn(DateFormat('HH:mm').format(assignment.checkInAt!)))
+                  Text(l.checkedIn(
+                      DateFormat('HH:mm').format(assignment.checkInAt!)))
                 else
                   Text(l.notCheckedIn),
                 if (assignment.checkOutAt != null)
-                  Text(l.checkedOut(DateFormat('HH:mm').format(assignment.checkOutAt!))),
+                  Text(l.checkedOut(
+                      DateFormat('HH:mm').format(assignment.checkOutAt!))),
                 const Spacer(),
                 if (assignment.checkInAt == null)
                   ElevatedButton.icon(

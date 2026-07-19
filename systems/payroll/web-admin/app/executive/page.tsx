@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { TopNav } from '@/components/TopNav'
 import { useAuth } from '@/components/AuthProvider'
+import { formatVietnamLongDate, getVietnamDateKey } from '@/lib/vietnam-date'
 
 interface Employee { id: string; status: string }
 interface Project { id: string; status: string; name: string; clientName: string }
@@ -29,9 +30,10 @@ const PERIOD_STATUS: Record<string, { label: string; cls: string }> = {
 
 export default function ExecutivePage() {
   const { user } = useAuth()
-  const today = new Date().toISOString().split('T')[0]
-  const month = new Date().getMonth() + 1
-  const year = new Date().getFullYear()
+  const today = getVietnamDateKey()
+  const [yearText, monthText] = today.split('-')
+  const month = Number(monthText)
+  const year = Number(yearText)
 
   const employeesQuery = useQuery({
     queryKey: ['employees'],
@@ -75,7 +77,7 @@ export default function ExecutivePage() {
           <div>
             <h1 className="page-title">📊 CEO Dashboard</h1>
             <p className="page-subtitle">
-              Tổng quan toàn hệ thống · {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              Tổng quan toàn hệ thống · {formatVietnamLongDate()}
             </p>
           </div>
         </div>

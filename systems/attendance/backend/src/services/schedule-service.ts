@@ -1,6 +1,7 @@
 // ScheduleService — assigns employees to shifts per project, detects conflicts.
 
 import { BusinessRuleViolationError } from '@ak/shared'
+import { getVietnamDateKey } from './attendance-service.js'
 
 export interface ExistingAssignment {
   employeeId: string
@@ -56,9 +57,9 @@ function toMinutes(hhmm: string): number {
  * BR-ATT-008: Disallow check-in for assignment more than 7 days in the past.
  */
 export function assertNotTooFarInPast(assignmentDate: Date, maxDaysBack = 7): void {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const daysBack = Math.floor((today.getTime() - assignmentDate.getTime()) / (1000 * 60 * 60 * 24))
+  const today = Date.parse(`${getVietnamDateKey()}T00:00:00.000Z`)
+  const assignmentDay = Date.parse(`${assignmentDate.toISOString().slice(0, 10)}T00:00:00.000Z`)
+  const daysBack = Math.floor((today - assignmentDay) / (1000 * 60 * 60 * 24))
   if (daysBack > maxDaysBack) {
     throw new BusinessRuleViolationError(
       `Cannot check in for assignment more than ${maxDaysBack} days in the past`,

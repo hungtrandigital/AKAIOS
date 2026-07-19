@@ -1,15 +1,14 @@
 // HTTP client to attendance API — reads attendance data for payroll calculation.
 // Uses X-Internal-API-Key header for service-to-service auth.
 
-import { prisma, Money, UnauthorizedError } from '@ak/shared'
-
-const ATTENDANCE_API_URL = process.env.ATTENDANCE_API_URL ?? 'http://localhost:3000'
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? ''
+import { DomainError, ForbiddenError, UnauthorizedError } from '@ak/shared'
+import { getVietnamCalendarDateKey, isVietnamSunday } from '../engine/holidays.js'
 
 interface AttendanceApiRecord {
   id: string
   shiftAssignmentId: string
   employeeId: string
+  workDate: string
   checkInAt: string | null
   checkOutAt: string | null
   totalMinutesWorked: number | null
@@ -17,6 +16,16 @@ interface AttendanceApiRecord {
   lateMinutes: number | null
   status: string
 }
+
+const ATTENDANCE_STATUSES = new Set<AggregatedAttendanceRecord['status']>([
+  'present',
+  'late',
+  'early_leave',
+  'half_day',
+  'absent',
+  'on_leave',
+  'holiday',
+])
 
 export interface AggregatedAttendanceRecord {
   date: Date
@@ -27,89 +36,104 @@ export interface AggregatedAttendanceRecord {
   isWeekend: boolean
 }
 
+const ATTENDANCE_REQUEST_TIMEOUT_MS = 5_000
+
 /**
  * Pull attendance records for given employees in a date range from attendance API.
  * Server-to-server call; uses X-Internal-API-Key.
  */
 export async function fetchAttendanceForPeriod(
+  tenantId: string,
   employeeId: string,
   fromDate: Date,
-  toDate: Date
+  toDateExclusive: Date
 ): Promise<AggregatedAttendanceRecord[]> {
-  const url = new URL('/api/internal/attendance', ATTENDANCE_API_URL)
+  const attendanceApiUrl = process.env.ATTENDANCE_API_URL ?? 'http://localhost:3000'
+  const internalApiKey = process.env.INTERNAL_API_KEY ?? ''
+  const url = new URL('/internal/attendance', attendanceApiUrl)
+  url.searchParams.set('tenantId', tenantId)
   url.searchParams.set('employeeId', employeeId)
-  url.searchParams.set('from', fromDate.toISOString().split('T')[0]!)
-  url.searchParams.set('to', toDate.toISOString().split('T')[0]!)
+  url.searchParams.set('from', getVietnamCalendarDateKey(fromDate))
+  // The attendance HTTP endpoint accepts an inclusive calendar-day `to`.
+  // Convert our payroll half-open bound to its final included instant first.
+  const finalIncludedInstant = new Date(toDateExclusive.getTime() - 1)
+  url.searchParams.set('to', getVietnamCalendarDateKey(finalIncludedInstant))
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      'X-Internal-API-Key': INTERNAL_API_KEY,
-      'Content-Type': 'application/json',
-    },
-  })
-
-  if (!response.ok) {
-    throw new UnauthorizedError(`Attendance API error: ${response.status}`)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      headers: {
+        'X-Internal-API-Key': internalApiKey,
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(ATTENDANCE_REQUEST_TIMEOUT_MS),
+    })
+  } catch {
+    throw new DomainError(
+      'ATTENDANCE_API_UNAVAILABLE',
+      'Attendance API is unavailable',
+      503,
+    )
   }
 
-  const json = (await response.json()) as { data: AttendanceApiRecord[] }
+  if (response.status === 401) throw new UnauthorizedError('Attendance API rejected the internal key')
+  if (response.status === 403) throw new ForbiddenError('Attendance API denied the internal request')
+  if (!response.ok) throw new DomainError(
+    'ATTENDANCE_API_ERROR',
+    `Attendance API returned ${response.status}`,
+    502,
+  )
+
+  let json: unknown
+  try {
+    json = await response.json()
+  } catch {
+    throw new DomainError('ATTENDANCE_API_ERROR', 'Attendance API returned invalid JSON', 502)
+  }
+  if (!isObject(json) || !Array.isArray(json.data)) {
+    throw new DomainError('ATTENDANCE_API_ERROR', 'Attendance API returned an invalid payload', 502)
+  }
   return json.data.map(mapRecord)
 }
 
-function mapRecord(r: AttendanceApiRecord): AggregatedAttendanceRecord {
-  const date = r.checkInAt ? new Date(r.checkInAt) : new Date()
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isNullableNonNegativeInteger(value: unknown): value is number | null {
+  return value === null || (Number.isInteger(value) && (value as number) >= 0)
+}
+
+function parseWorkDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date
+}
+
+function mapRecord(value: unknown): AggregatedAttendanceRecord {
+  if (!isObject(value)) {
+    throw new DomainError('ATTENDANCE_API_ERROR', 'Attendance API returned an invalid record', 502)
+  }
+  const r = value as unknown as AttendanceApiRecord
+  const date = parseWorkDate(r.workDate)
+  if (
+    !date
+    || typeof r.id !== 'string'
+    || typeof r.shiftAssignmentId !== 'string'
+    || typeof r.employeeId !== 'string'
+    || !ATTENDANCE_STATUSES.has(r.status as AggregatedAttendanceRecord['status'])
+    || !isNullableNonNegativeInteger(r.totalMinutesWorked)
+    || !isNullableNonNegativeInteger(r.overtimeMinutes)
+    || !isNullableNonNegativeInteger(r.lateMinutes)
+  ) {
+    throw new DomainError('ATTENDANCE_API_ERROR', 'Attendance API returned an invalid record', 502)
+  }
   return {
     date,
     status: r.status as AggregatedAttendanceRecord['status'],
     totalWorkMinutes: r.totalMinutesWorked ?? 0,
     overtimeMinutes: r.overtimeMinutes ?? 0,
     lateMinutes: r.lateMinutes ?? 0,
-    isWeekend: date.getDay() === 0, // Sunday only
+    isWeekend: isVietnamSunday(date),
   }
 }
-
-/**
- * Local fallback: query attendance directly via Prisma (used during development
- * or when internal API is unavailable). Reuses the same attendance DB.
- */
-export async function fetchAttendanceLocal(
-  employeeId: string,
-  fromDate: Date,
-  toDate: Date
-): Promise<AggregatedAttendanceRecord[]> {
-  const records = await prisma.attendanceRecord.findMany({
-    where: {
-      employeeId,
-      checkInAt: { gte: fromDate, lte: toDate },
-    },
-    orderBy: { checkInAt: 'asc' },
-  })
-
-  return records.map((r) => {
-    const date = r.checkInAt ?? new Date()
-    return {
-      date,
-      status: r.status as AggregatedAttendanceRecord['status'],
-      totalWorkMinutes: r.totalMinutesWorked ?? 0,
-      overtimeMinutes: r.overtimeMinutes ?? 0,
-      lateMinutes: r.lateMinutes ?? 0,
-      isWeekend: date.getDay() === 0,
-    }
-  })
-}
-
-/** Load all active employees for the tenant. */
-export async function listActiveEmployees(tenantId: string): Promise<Array<{ id: string; baseSalary: Money; salaryType: 'monthly' | 'hourly' }>> {
-  const employees = await prisma.employee.findMany({
-    where: { tenantId, status: 'active', deletedAt: null },
-  })
-  return employees.map((e) => ({
-    id: e.id,
-    baseSalary: Money.fromVNĐ(e.baseSalary.toString()),
-    salaryType: e.salaryType as 'monthly' | 'hourly',
-  }))
-}
-
-// Re-export Money for callers
-export { Money }
-

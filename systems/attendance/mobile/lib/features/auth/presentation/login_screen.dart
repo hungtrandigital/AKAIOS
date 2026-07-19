@@ -4,19 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/auth_storage.dart';
 import '../../../core/http_client.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/auth_repository.dart';
-
-final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return AuthRepository(
-    http: HttpClient(authStorage: ref.read(authStorageProvider)),
-    storage: ref.read(authStorageProvider),
-  );
-});
-
-final authStorageProvider = Provider<AuthStorage>((ref) => AuthStorage());
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -54,7 +44,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
         await repo.loginWithOtp(phone: _phoneCtrl.text, otp: _otpCtrl.text);
       } else {
-        await repo.loginWithPassword(phone: _phoneCtrl.text, password: _passwordCtrl.text);
+        await repo.loginWithPassword(
+            phone: _phoneCtrl.text, password: _passwordCtrl.text);
       }
       if (!mounted) return;
       context.go('/today');
@@ -73,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await repo.requestOtp(phone: _phoneCtrl.text);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('OTP đã gửi (kiểm tra server log trong dev mode)')),
+        const SnackBar(content: Text('Nếu tài khoản hợp lệ, OTP đã được gửi')),
       );
       setState(() => _otpMode = true);
     } on ApiException catch (e) {
@@ -140,7 +131,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: _loading ? null : () => setState(() => _otpMode = false),
+                onPressed:
+                    _loading ? null : () => setState(() => _otpMode = false),
                 child: const Text('← Quay lại'),
               ),
             ],

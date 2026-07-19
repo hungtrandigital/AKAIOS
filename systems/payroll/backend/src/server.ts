@@ -6,6 +6,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
+import { ZodError } from 'zod'
 import { loadConfig } from './config.js'
 import { registerAuthPlugin } from './plugins/auth.js'
 import { healthRoutes } from './routes/health.js'
@@ -39,15 +40,47 @@ export async function buildServer() {
     timeWindow: '1 minute',
   })
 
-  await app.register(healthRoutes, { prefix: '/health' })
-  await registerAuthPlugin(app)
-  await app.register(payrollRoutes, { prefix: '/v1/payroll' })
-
+  // Register before route plugins so encapsulated routes inherit the handler.
   app.setErrorHandler(function (error, request, reply) {
     const e = error as Error & { statusCode?: number; code?: string }
+    const validationError = error as Error & {
+      issues?: unknown
+      errors?: unknown
+      aggregateErrors?: unknown
+    }
+    const isZodError = error instanceof ZodError
+      || error.name === 'ZodError'
+      || error.constructor?.name === 'ZodError'
+      || 'issues' in error
+    if (isZodError) {
+      const zodIssues = validationError.issues
+        ?? validationError.errors
+        ?? validationError.aggregateErrors
+      return reply.status(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request',
+          details: { issues: zodIssues },
+        },
+      })
+    }
     if (e.statusCode && e.statusCode < 500) {
       return reply.status(e.statusCode).send({
         error: { code: e.code ?? 'ERROR', message: e.message },
+      })
+    }
+    if (
+      (e.code === 'ATTENDANCE_API_ERROR' && e.statusCode === 502)
+      || (e.code === 'ATTENDANCE_API_UNAVAILABLE' && e.statusCode === 503)
+    ) {
+      request.log.warn({ code: e.code, statusCode: e.statusCode }, 'Attendance dependency error')
+      return reply.status(e.statusCode).send({
+        error: {
+          code: e.code,
+          message: e.code === 'ATTENDANCE_API_ERROR'
+            ? 'Attendance service returned an invalid response'
+            : 'Attendance service is unavailable',
+        },
       })
     }
     request.log.error({ err: error }, 'Unhandled error')
@@ -55,6 +88,10 @@ export async function buildServer() {
       error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
     })
   })
+
+  await app.register(healthRoutes, { prefix: '/health' })
+  await registerAuthPlugin(app)
+  await app.register(payrollRoutes, { prefix: '/v1/payroll' })
 
   return { app, config }
 }

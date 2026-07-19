@@ -33,12 +33,12 @@
     "test:e2e": {
       "dependsOn": ["^build"],
       "outputs": [],
-      "env": ["DATABASE_URL", "JWT_SECRET", "INTERNAL_API_KEY", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "E2E_BASE_URL", "E2E_NO_SERVER", "E2E_ADMIN_EMAIL", "E2E_ADMIN_PASSWORD"]
+      "env": ["DATABASE_URL", "JWT_SECRET", "INTERNAL_API_KEY", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "E2E_BASE_URL", "E2E_NO_SERVER", "E2E_ADMIN_EMAIL", "E2E_ADMIN_PASSWORD", "E2E_TOTP_SECRET"]
     },
     "test:integration": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "env": ["DATABASE_URL", "REDIS_URL", "MINIO_ENDPOINT", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "JWT_SECRET", "INTERNAL_API_KEY", "RUN_INTEGRATION"]
+      "env": ["DATABASE_URL", "REDIS_URL", "MINIO_ENDPOINT", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "JWT_SECRET", "INTERNAL_API_KEY", "ATTENDANCE_API_URL", "RUN_INTEGRATION"]
     },
     "db:seed": {
       "cache": false,
