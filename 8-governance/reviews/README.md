@@ -4,6 +4,10 @@ Canonical quality-gate reports for code, architecture, documentation, design, an
 
 ## Active Reviews
 
+- [PRD-EPIC-002 code re-review — 2026-07-19](prd-epic-002-code-re-review-2026-07-19.md) — **GO** for remediation commit `056a769`; all five CI jobs passed.
+
+## Historical Reviews
+
 - [PRD-EPIC-002 code review — 2026-07-17](prd-epic-002-code-review-2026-07-17.md) — **REJECTED**; 4 Critical, 14 High, 3 Medium findings.
 
 ## Navigation

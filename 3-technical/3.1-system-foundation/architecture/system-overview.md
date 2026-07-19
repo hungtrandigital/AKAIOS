@@ -65,9 +65,10 @@ terminates public TLS and reaches Caddy on local HTTP. The main hostname serves
 web plus the mobile `/api/attendance/v1/*` prefix; a separate storage hostname
 routes presigned MinIO requests.
 
-Local image/configuration validation is complete. The live server, tunnel policy,
-log rotation, backup schedule/restore drill, native iOS build, remote CI for an
-immutable commit, and pilot/scale-out are not yet accepted.
+Local image/configuration validation is complete, and remediation commit `056a769`
+passes all five remote CI jobs. The live server, tunnel policy, log rotation,
+backup schedule/restore drill, native iOS build, and pilot/scale-out are not yet
+accepted.
 
 ## Future Systems
 

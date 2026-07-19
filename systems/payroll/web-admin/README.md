@@ -3,8 +3,9 @@
 Next.js 14 internal dashboard for attendance operations, payroll, projects,
 employees, executive reporting, and RBAC administration.
 
-**Status:** Local production build and live Playwright gate pass as of 2026-07-18;
-immutable commit/remote CI and pilot evidence are pending.
+**Status:** Production build and live Playwright gate pass locally and in
+[GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275)
+for commit `056a769`; pilot evidence is pending.
 
 ## Quick Start
 

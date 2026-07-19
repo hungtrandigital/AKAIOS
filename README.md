@@ -97,8 +97,11 @@ coverage suites, fresh-service integration, live browser E2E, production builds
 and images, configuration validation, Flutter analysis/tests, and an Android
 debug APK. Independent attendance/auth/mobile and payroll reviews returned GO.
 
-The release is not final: immutable commit/push, matching GitHub Actions, native
-iOS compilation/signing, the 1–2 project pilot, remaining
+The remediation is preserved at commit `056a769` and all five jobs in
+[GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275)
+pass, including the Android APK artifact. The release is not final: SHA-pinned
+re-review is published with a GO verdict, but native iOS compilation/signing,
+the 1–2 project pilot, remaining
 MVP slice acceptance, and scale-out are still pending. See the canonical
 [progress report](3-technical/3.2-implementation/status/progress.md).
 

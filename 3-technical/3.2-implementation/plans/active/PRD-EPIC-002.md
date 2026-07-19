@@ -76,9 +76,9 @@ related_domain_docs:
 
 ### Remediation re-review — 2026-07-18
 
-- Independent attendance/auth/mobile and payroll reviewers returned **GO** on the current working tree with no blocking findings.
+- Independent attendance/auth/mobile and payroll reviewers returned **GO** on remediation commit `056a769` with no blocking findings.
 - All 21 findings are fixed and locally validated; Docs Guardian returned GO for `CODE-BUG-022` on 2026-07-19. The evidence includes 150 unit tests, 8 fresh-database integration tests, 7 live Playwright scenarios, coverage above 90%, production package/image builds, fresh migrations, Compose/Caddy validation, OpenAPI 3.1 parse/semantic validation, Flutter analysis/tests, and an Android APK build.
-- The release remains pending an immutable commit SHA and successful GitHub Actions run. A new SHA-pinned review report will be published after commit; the 2026-07-17 rejected report remains immutable historical evidence.
+- Remediation commit `056a769` is pushed, [GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) passes quality, build, integration, Playwright, and Flutter/APK jobs, and the [SHA-pinned re-review](../../../../8-governance/reviews/prd-epic-002-code-re-review-2026-07-19.md) records **GO**. The 2026-07-17 rejected report remains immutable historical evidence.
 - Immutable CI/review is necessary but not sufficient for pilot. The epic remains
   `in-progress`; unmet PRD-SLICE-003..005 acceptance items must be completed or
   explicitly deferred with product-owner approval before the 1–2 project pilot,
@@ -414,7 +414,7 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - Production Docker images, Compose, Caddy, and the five-migration fresh-database path now pass locally, closing the remaining `CODE-BUG-005` scope.
 - Auth, tenant/project authorization, attendance, reporting, payroll, mobile, and web-admin findings have adversarial regression coverage; the fresh live browser suite passes 7/7.
 - Turbo now passes the ephemeral TOTP secret into `test:e2e`, matching the GitHub Actions job and preventing authenticated scenarios from failing before execution.
-- Closure is recorded at working-tree level. Commit/push, immutable review metadata, and the remote Actions result are still required before pilot deployment.
+- Closure is preserved in commit `056a769`; all five jobs in [GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) pass, and the [SHA-pinned re-review](../../../../8-governance/reviews/prd-epic-002-code-re-review-2026-07-19.md) records GO. The non-code pilot gates remain required before pilot deployment.
 
 ## Related Documents
 

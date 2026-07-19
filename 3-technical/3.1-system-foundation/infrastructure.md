@@ -115,9 +115,10 @@ providers. Seed/demo credentials are forbidden on production and live pilot data
 
 Local evidence covers fresh migrations, real PostgreSQL/Redis/MinIO integration,
 7/7 live Playwright scenarios, package and production image builds, Compose/Caddy
-configuration, and Android build. Remote CI for an immutable commit, native iOS,
-production DNS/tunnel policy, backup/restore, capacity, and pilot behavior remain
-release gates.
+configuration, and Android build. Commit `056a769` passes all five jobs in
+[GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275),
+including APK build/upload. Native iOS, production DNS/tunnel policy,
+backup/restore, capacity, and pilot behavior remain release gates.
 
 ## Related Documents
 

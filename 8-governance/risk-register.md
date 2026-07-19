@@ -33,7 +33,7 @@ This register tracks systemic project risks. Individual implementation defects r
 
 The rejected review found authentication bypasses, missing authorization gates, raw-ID cross-tenant mutations, and over-broad employee responses that could expose or corrupt attendance, identity, salary, and bank data.
 
-**Mitigation:** `CODE-BUG-002`, `003`, `004`, `006`, `007`, `008`, and `012` are fixed with password verification, inactive-account enforcement, encrypted TOTP, Redis OTP abuse controls, refresh-token CAS rotation, explicit audited project membership, tenant-scoped queries, safe DTOs, and adversarial role/tenant tests. Before pilot, rotate any seed credentials and active tokens that reached a shared environment and require the immutable remote CI/review gate.
+**Mitigation:** `CODE-BUG-002`, `003`, `004`, `006`, `007`, `008`, and `012` are fixed with password verification, inactive-account enforcement, encrypted TOTP, Redis OTP abuse controls, refresh-token CAS rotation, explicit audited project membership, tenant-scoped queries, safe DTOs, and adversarial role/tenant tests. The immutable remote CI/re-review gate passed for `056a769`; before pilot, rotate any seed credentials and active tokens that reached a shared environment.
 
 **Contingency:** If exposure is suspected, disable external API access, revoke all sessions, preserve audit evidence, assess affected tenants and records, and follow the incident-response process before restoring service.
 
@@ -71,9 +71,9 @@ The rejected review found geofence bypass, time-zone errors, missing worked-time
 
 Broken Compose paths, incomplete production images, and unresolved application failures previously prevented a reproducible installation and trustworthy release decision.
 
-The 2026-07-19 remediation gate passes all five migrations on a fresh database, the aggregate and RBAC seeds, live-service integration, 7/7 browser E2E, production package builds, three production image builds, Compose, and Caddy. After generated Next.js/mobile outputs were excluded, the largest BuildKit application-context transfer was under 0.7 MB, down from roughly 962 MB. The residual risk is the absence of an immutable remediation commit and matching remote Actions run.
+The 2026-07-19 remediation gate passes all five migrations on a fresh database, the aggregate and RBAC seeds, live-service integration, 7/7 browser E2E, production package builds, three production image builds, Compose, and Caddy. After generated Next.js/mobile outputs were excluded, the largest BuildKit application-context transfer was under 0.7 MB, down from roughly 962 MB. Commit `056a769` preserves the remediation, [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) passes all five jobs, and the [SHA-pinned re-review](reviews/prd-epic-002-code-re-review-2026-07-19.md) records GO. Residual risk is limited to the operational/pilot gates below.
 
-**Mitigation:** `CODE-BUG-005`, `019`, and `021` are fixed. Preserve the locally validated tree in a commit, run every Actions job for that exact SHA, publish the SHA-pinned re-review, build with the committed lockfile, record resolved image IDs/digests, tag the exact release SHA, and use only committed migrations for deployment.
+**Mitigation:** `CODE-BUG-005`, `019`, and `021` are fixed. Commit `056a769`, Actions run `29670131275`, and the SHA-pinned re-review preserve the verified implementation gate. Build with the committed lockfile, record resolved image IDs/digests, tag the exact release SHA, and use only committed migrations for deployment.
 
 **Contingency:** Keep the pilot blocked and retain the last known-good environment. Do not perform manual schema or container workarounds that cannot be reproduced from the repository.
 
@@ -88,7 +88,6 @@ The 2026-07-19 remediation gate passes all five migrations on a fresh database, 
 
 ## Review Schedule
 
-- Reassess when the remediation commit and remote CI result are available.
 - Reassess before pilot, first payroll approval/payment, and production scale-out.
 - Close or downgrade only with linked verification evidence.
 

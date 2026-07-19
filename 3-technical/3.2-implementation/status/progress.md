@@ -2,15 +2,15 @@
 
 ## Current Status
 
-**Last Updated:** 2026-07-19 (remediation is locally validated and has independent working-tree review GO; immutable commit and remote CI are pending)
+**Last Updated:** 2026-07-19 (remediation commit `056a769` has independent review GO and all five GitHub Actions jobs pass)
 
 ## Remediation Gate — 2026-07-18
 
-- **Working-tree verdict:** GO from the independent attendance/auth/mobile and payroll reviewers; no blocking findings remain in the reviewed remediation tree.
+- **Remediation verdict:** GO from the independent attendance/auth/mobile and payroll reviewers; no blocking findings remain in commit `056a769`.
 - **Bug status:** All 21 review findings are fixed. The 20 implementation findings pass local verification, and Docs Guardian returned GO for `CODE-BUG-022` on 2026-07-19.
-- **Release status:** Pending an immutable commit SHA, push, and successful GitHub Actions run. The historical rejected report remains unchanged; a new SHA-pinned review artifact must be published after commit.
-- **Epic status:** `in-progress`. Remote CI/review is necessary but not sufficient
-  for pilot: unmet PRD-SLICE-003..005 acceptance items must be completed or
+- **Release status:** Commit `056a769` is pushed, [GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) passes all five jobs, and the [SHA-pinned re-review](../../../8-governance/reviews/prd-epic-002-code-re-review-2026-07-19.md) records GO. The historical rejected report remains unchanged; the non-code pilot gates remain pending.
+- **Epic status:** `in-progress`. The remote CI/re-review gate has passed but is
+  not sufficient for pilot: unmet PRD-SLICE-003..005 acceptance items must be completed or
   explicitly deferred and approved before the live 1–2 project pilot.
 
 ### Current verification evidence (refreshed 2026-07-19)
@@ -53,22 +53,19 @@
 
 | Slice / Surface | Implementation observed in reviewed range | Acceptance status |
 | --- | --- | --- |
-| Foundation / architecture | Architecture, shared package, Compose, Dockerfiles, CI, migrations, and seeds are present | **Local gate passed:** fresh migration, production images, configuration, and quality gates pass; remote CI pending |
+| Foundation / architecture | Architecture, shared package, Compose, Dockerfiles, CI, migrations, and seeds are present | **Immutable gate passed:** fresh migration, production images, configuration, and [all five remote CI jobs](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) pass for `056a769` |
 | Attendance backend | Auth, employee/project/shift, check-in/out, override, and report routes are present | **Working-tree review GO:** tenant/project scope, geofence, time, concurrency, audit, and auth invariants are covered |
 | Attendance mobile | Flutter app plus Android/iOS native scaffolds are present | **Android validated:** analyze/tests/APK pass; iOS compile awaits an Apple toolchain |
 | Payroll backend | Calculation, period state routes, overrides, rules, and Excel export are present | **Working-tree review GO:** authorization, month boundary, atomicity, decimal, override, OT, and MVP scope invariants pass |
 | Payroll web admin | Next.js 2FA authentication, attendance, and payroll views are present | **Local gate passed:** production build and 7/7 live Playwright scenarios pass |
 | Customer reports | PDF/CSV generation and report routes are present | **Working-tree review GO:** permission, safe DTO, and tenant-scoped object paths are enforced |
-| Pilot | No accepted live pilot evidence | **Pending:** requires immutable CI/review, operational gates, and completion or approved deferral of PRD-SLICE-003..005 acceptance gaps |
+| Pilot | No accepted live pilot evidence | **Pending:** requires operational gates and completion or approved deferral of PRD-SLICE-003..005 acceptance gaps |
 | Scale-out | No accepted rollout evidence | **Blocked by pilot completion** |
 
 ## Remaining Release Actions
 
-1. Commit the validated remediation tree and record its immutable head SHA.
-2. Push and require GitHub Actions quality, integration, E2E, build, and Flutter jobs to pass.
-3. Publish a new SHA-pinned re-review report; keep the 2026-07-17 rejected report immutable.
-4. Run the iOS build on a machine with full Xcode/CocoaPods/signing before distributing iOS artifacts.
-5. Complete or explicitly approve deferral of unmet PRD-SLICE-003..005 acceptance
+1. Run the iOS build on a machine with full Xcode/CocoaPods/signing before distributing iOS artifacts.
+2. Complete or explicitly approve deferral of unmet PRD-SLICE-003..005 acceptance
    items, reconcile legacy allowance overrides, and pass the operational gates
    before executing the 1–2 project pilot.
 
@@ -89,11 +86,8 @@ At that historical baseline, `CODE-BUG-019` was fixed by [GitHub Actions run 295
 
 ## Gate to Start Pilot
 
-1. Preserve the local green evidence in an immutable commit.
-2. Pass the complete GitHub Actions workflow for that exact commit.
-3. Publish the fresh review against immutable base/head SHAs.
-4. Complete the deployment runbook checks, mandatory RBAC seed, credential rotation where relevant, and legacy allowance-override reconciliation.
-5. Complete or explicitly defer with product-owner approval every unmet
+1. Complete the deployment runbook checks, mandatory RBAC seed, credential rotation where relevant, and legacy allowance-override reconciliation.
+2. Complete or explicitly defer with product-owner approval every unmet
    PRD-SLICE-003..005 acceptance item; current gaps include mobile history,
    required BO CRUD/scheduling UI, real-user/BO reconciliation evidence, and the
    15-template/<10-second report acceptance target.

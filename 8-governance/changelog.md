@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **PRD-EPIC-002 remediation (working-tree review GO; immutable CI pending):** Added explicit audited
+- **PRD-EPIC-002 remediation (`056a769`; immutable CI passed):** Added explicit audited
   `ProjectSupervisor` membership, Redis-backed employee OTP challenges with SpeedSMS delivery,
   encrypted admin TOTP enrollment, and native refresh-token support.
 - **PRD-EPIC-002 production bootstrap:** Added an idempotent production operator
@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
-- Reconciled the PRD-EPIC-002 backlog, active plan, progress, work-item registry, risk register, deployment guidance, API/domain contracts, and system READMEs with the 2026-07-18 remediation evidence. The historical rejected review remains unchanged; the new immutable review artifact awaits a commit SHA.
+- Reconciled the PRD-EPIC-002 backlog, active plan, progress, work-item registry, risk register, deployment guidance, API/domain contracts, and system READMEs with remediation commit `056a769`, successful [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275), and the [SHA-pinned GO re-review](reviews/prd-epic-002-code-re-review-2026-07-19.md). The historical rejected review remains unchanged.
 - Corrected PRD-EPIC-002 lifecycle metadata and synchronized the active epic, product backlog, work-item registry, progress status, governance risks, and review navigation with the rejected review gate.
 - Archived the superseded `docs/review/REVIEW_PLAN.md` content under `archives/2026-07-17-prd-epic-002-review-plan/` and retained a redirect to the canonical plan/result.
 - Reframed the core agents in `0-agents/agents/` as the reusable leader layer for multi-project work: each core agent now preserves existing process ownership while explicitly pairing `agency-agents` specialists with matching local skills.
@@ -74,10 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor modes:** Added missing `/refactor` command to Cursor to match `0-agents/mode/refactor.md`
 
 ### Security
-- **Working-tree review GO; immutable CI pending:** Password verification, inactive-account enforcement,
+- **Remediation review GO; immutable CI passed:** Password verification, inactive-account enforcement,
   mandatory admin TOTP, OTP abuse controls, refresh-token CAS rotation, and project membership
   grant/revoke audit boundaries now have fresh-database integration coverage.
-- **Historical review findings:** The 2026-07-17 review confirmed password authentication bypass, payroll/attendance cross-tenant mutation, sensitive employee data disclosure, and spoofable OTP rate limiting. Those findings are fixed in the 2026-07-18 remediation tree; remote CI and SHA-pinned review evidence remain pending.
+- **Historical review findings:** The 2026-07-17 review confirmed password authentication bypass, payroll/attendance cross-tenant mutation, sensitive employee data disclosure, and spoofable OTP rate limiting. Those findings are fixed in `056a769`; all five jobs in [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) pass, and SHA-pinned re-review evidence records the replacement GO verdict without altering the historical report.
 
 ## [2.0.0] - 2025-12-14 (Factory AI 2.0)
 

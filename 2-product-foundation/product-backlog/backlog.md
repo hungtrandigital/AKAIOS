@@ -115,11 +115,12 @@ Xây dựng 2 hệ thống: `attendance` (mobile app check-in/out theo ca tại 
 - [Work-Item Registry](../../3-technical/3.2-implementation/status/work-items-registry.md)
 - [Systems README](../../systems/README.md)
 - [Code Review — 2026-07-17](../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md)
+- [Code Re-review — 2026-07-19](../../8-governance/reviews/prd-epic-002-code-re-review-2026-07-19.md)
 
 **Review and remediation status:**
 - The historical 2026-07-17 verdict was **REJECTED** with 4 Critical, 14 High, and 3 Medium findings (`CODE-BUG-002..022`).
-- All 21 findings are fixed in the current remediation tree. Independent attendance/auth/mobile and payroll reviewers returned working-tree **GO**, Docs Guardian returned **GO** for `CODE-BUG-022`, and local unit, coverage, fresh-database integration, browser E2E, production image, configuration, and Android gates pass.
-- The epic remains `in-progress`: commit/push, remote CI, and a new immutable SHA-pinned review are required before the 1–2 project pilot; pilot acceptance is required before scale-out.
+- All 21 findings are fixed in `056a769`. The SHA-pinned re-review returned **GO**, Docs Guardian returned **GO** for `CODE-BUG-022`, and [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) passes quality, build, integration, browser E2E, and Flutter/APK jobs.
+- The epic remains `in-progress`: operational, native iOS, and remaining `PRD-SLICE-003..005` acceptance gates are required before the 1–2 project pilot; pilot acceptance is required before scale-out.
 
 
 ## Backlog Items (Unprioritized)
