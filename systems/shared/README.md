@@ -8,7 +8,7 @@
 Two things in this directory:
 
 1. **`@ak/shared` package** (`src/`) — shared TypeScript code between attendance-api and payroll-api
-2. **Shared deployment infrastructure** (`docker-compose.yml`, `docker-compose.dev.yml`, `Caddyfile`) — runs the APIs, web admin, data services, migration job, and reverse proxy on one server
+2. **Shared deployment infrastructure** (`docker-compose.yml`, platform overrides, `Caddyfile`) — runs the APIs, web admin, data services, migration job, and reverse proxy on one server
 
 ## Shared Infrastructure Files
 
@@ -16,7 +16,8 @@ Two things in this directory:
 | --- | --- |
 | `docker-compose.yml` | Eight-service production stack: attendance-api + payroll-api + web-admin + one-shot db-migrate + Postgres + Redis + MinIO + Caddy |
 | `docker-compose.dev.yml` | Dev-only infra: Postgres + Redis + MinIO (run backends locally via `pnpm dev`) |
-| `Caddyfile` | Reverse proxy config; Cloudflare terminates public TLS in the documented deployment |
+| `docker-compose.windows.yml` | Required thin override for Windows Docker Desktop local/UAT: stable named volumes and loopback-only host ports |
+| `Caddyfile` | HTTP origin proxy: default application route plus explicit `CADDY_STORAGE_HOST` → MinIO; Cloudflare terminates public TLS |
 
 Application Dockerfiles live with the code they build: the two backend Dockerfiles
 are under `systems/attendance/backend/` and `systems/payroll/backend/`, while the
@@ -60,6 +61,7 @@ shared/
 ├── tsconfig.json
 ├── docker-compose.yml              # Production stack
 ├── docker-compose.dev.yml          # Dev infra only
+├── docker-compose.windows.yml      # Windows local/UAT override
 ├── Caddyfile                       # Reverse proxy
 ├── src/
 │   ├── index.ts                    # Public exports
@@ -97,6 +99,11 @@ pnpm prisma:migrate:deploy
 
 The initial migration is the baseline for fresh databases. Do not edit an applied migration; add a new timestamped migration through `pnpm prisma:migrate` instead.
 
+Windows Docker Desktop must merge the base and Windows files; using the base file
+alone retains Linux `/data` bind mounts and is unsupported. The canonical
+PowerShell commands, seed-only reset boundary, and Cloudflare handoff are in the
+[Windows Docker deployment runbook](../../3-technical/3.3-devops/windows-docker-deployment.md).
+
 ## Conventions
 
 - New exports should be typed; remaining explicit-`any` warnings are tracked deviations
@@ -110,3 +117,5 @@ The initial migration is the baseline for fresh databases. Do not edit an applie
 - [Coding Standards](../../3-technical/3.1-system-foundation/design-standards/coding-standards.md)
 - [Docker Compose production stack](docker-compose.yml)
 - [Dev docker-compose](docker-compose.dev.yml)
+- [Windows Docker local/UAT override](docker-compose.windows.yml)
+- [Windows Docker deployment](../../3-technical/3.3-devops/windows-docker-deployment.md)

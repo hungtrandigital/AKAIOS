@@ -44,7 +44,7 @@
 | CODE-TASK-001 | Add leader-orchestration contract to all core agents | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/` |
 | CODE-TASK-002 | Align specialist-to-skill pairings with the real skill library | PRD-SLICE-001 | @docs-guardian | in-progress | 2026-04-13 | `0-agents/agents/skills/` |
 | CODE-TASK-004 | Scaffold `systems/attendance/` + `systems/payroll/` from TEMPLATE-SYSTEM | PRD-SLICE-002 | @fullstack-engineer | in-progress | 2026-07-16 | `systems/` |
-| CODE-TASK-006 | Docker Compose stack + Caddy reverse proxy config | PRD-SLICE-002 | @devops | in-progress | 2026-07-16 | `systems/shared/` |
+| CODE-TASK-006 | Docker Compose, Caddy, and guarded Windows Git-to-UAT deployment | PRD-SLICE-002 | @devops | in-progress | 2026-07-16 | `systems/shared/`, `3-technical/3.3-devops/` |
 
 ### Marketing Tasks
 

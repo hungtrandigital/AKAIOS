@@ -236,6 +236,8 @@ services:
     image: caddy:2-alpine
     container_name: ak-caddy
     restart: unless-stopped
+    environment:
+      - CADDY_STORAGE_HOST=${CADDY_STORAGE_HOST:?CADDY_STORAGE_HOST must be set}
     ports:
       - "80:80"
     volumes:

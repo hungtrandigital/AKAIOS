@@ -94,6 +94,77 @@ jobs:
       - name: Build all packages
         run: pnpm build
 
+  windows-deployment-config:
+    name: Windows deployment config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create non-secret validation environment
+        run: |
+          cp .env.example .env
+          sed -i 's/CHANGE_ME_RANDOM_32_BYTES/ci-validation-random-value/g' .env
+          sed -i 's/base64-encoded-32-byte-key/ci-validation-totp-key/g' .env
+          sed -i 's/CHANGE_ME_MIN_PASSWORD/ci-validation-minio-password/g' .env
+          sed -i 's/POSTGRES_PASSWORD="CHANGE_ME"/POSTGRES_PASSWORD="ci-validation-postgres-password"/' .env
+          sed -i 's/NODE_ENV="development"/NODE_ENV="production"/' .env
+          sed -i 's/SMS_MODE="mock"/SMS_MODE="speedsms"/' .env
+          sed -i 's/SPEEDSMS_ACCESS_TOKEN=""/SPEEDSMS_ACCESS_TOKEN="ci-validation-token"/' .env
+
+      - name: Validate merged Windows Compose profile
+        run: |
+          compose=(docker compose --env-file .env \
+            -f systems/shared/docker-compose.yml \
+            -f systems/shared/docker-compose.windows.yml)
+          "${compose[@]}" config --quiet
+          "${compose[@]}" config --format json > "$RUNNER_TEMP/windows-compose.json"
+          for service in attendance-api payroll-api postgres redis minio web-admin caddy; do
+            jq -e --arg service "$service" \
+              '.services[$service].ports | length > 0 and all(.host_ip == "127.0.0.1")' \
+              "$RUNNER_TEMP/windows-compose.json" >/dev/null
+          done
+          jq -e '
+            (.services.postgres.volumes | any(.type == "volume" and .source == "akaios-postgres-data" and .target == "/var/lib/postgresql/data")) and
+            (.services.redis.volumes | any(.type == "volume" and .source == "akaios-redis-data" and .target == "/data")) and
+            (.services.minio.volumes | any(.type == "volume" and .source == "akaios-minio-data" and .target == "/data"))
+          ' "$RUNNER_TEMP/windows-compose.json" >/dev/null
+          if jq -e '.. | strings | select(startswith("/data/"))' \
+            "$RUNNER_TEMP/windows-compose.json" >/dev/null; then
+            echo 'Windows Compose still contains a Linux /data bind mount.' >&2
+            exit 1
+          fi
+
+  windows-powershell-parse:
+    name: Windows PowerShell parse
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse guarded deployment script
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '3-technical/3.3-devops/windows-docker.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) > $null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.ToString() }
+            exit 1
+          }
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $findings = Invoke-ScriptAnalyzer `
+            -Path '3-technical/3.3-devops/windows-docker.ps1' `
+            -Severity Error
+          if ($findings.Count -gt 0) {
+            $findings | Format-Table -AutoSize
+            exit 1
+          }
+
   mobile:
     name: Flutter mobile
     runs-on: ubuntu-latest

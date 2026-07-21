@@ -54,6 +54,12 @@ The aggregate seed is development/demo-only. Production bootstrap, TOTP
 enrollment, migrations, and supervisor provisioning are covered by the
 [on-premise runbook](3-technical/3.3-devops/server-steps.md).
 
+For the existing Windows Docker Desktop seed/UAT host, do not reuse the Bash or
+`/data` instructions above. Use the guarded
+[Windows deployment runbook](3-technical/3.3-devops/windows-docker-deployment.md),
+which checks out an exact reviewed Git SHA and either preserves UAT state or
+rebuilds the disposable database from committed migrations and seed scripts.
+
 When `DEV_FIXED_ADMIN_2FA_CODE` is set locally, admin email/password, the opaque
 Redis challenge, attempt limits, and session issuance remain enforced; only the
 second-factor verifier is replaced. The configured value is intentionally absent
@@ -69,6 +75,7 @@ requests whose effective client address is not loopback.
   - [API Contracts](3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml) — OpenAPI 3.1
   - [Coding Standards](3-technical/3.1-system-foundation/design-standards/coding-standards.md) — TS/Flutter conventions
 - **Plan:** [`3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md`](3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md)
+- **Deployment:** [Ubuntu production/pilot](3-technical/3.3-devops/server-steps.md) · [Windows local/UAT](3-technical/3.3-devops/windows-docker-deployment.md)
 - **ADRs:** [`8-governance/decision-log/`](8-governance/decision-log/)
   - [ADR-001: Tech Stack](8-governance/decision-log/adr-001-tech-stack.md)
   - [ADR-002: On-Premise](8-governance/decision-log/adr-002-on-premise.md)
@@ -87,6 +94,7 @@ requests whose effective client address is not loopback.
 │   │   ├── src/              # Prisma schema, auth, types
 │   │   ├── docker-compose.yml
 │   │   ├── docker-compose.dev.yml
+│   │   ├── docker-compose.windows.yml
 │   │   └── Caddyfile
 │   ├── attendance/           # @ak/attendance — mobile + API
 │   │   ├── backend/          # @ak/attendance-api

@@ -2,7 +2,42 @@
 
 ## Current Status
 
-**Last Updated:** 2026-07-21 (Prismate startup/loading and camera-failure recovery refinement validated locally; staging still requires real TOTP)
+**Last Updated:** 2026-07-21 (Windows Git-to-UAT automation and seed-only rebuild validated locally; remote CI and Windows-host execution pending)
+
+## Windows Docker Git-to-UAT Deployment — 2026-07-21
+
+- Added a required Windows 10/11 Docker Desktop/WSL2 Compose override with
+  stable named volumes and loopback-only Caddy/API/data/web bindings. This is a
+  local/controlled-UAT profile; Ubuntu 22.04 remains the production/pilot host
+  baseline under ADR-002.
+- Added a guarded PowerShell entry point for validate/install/start/update,
+  seed-only database reset, status/logs/stop and smoke testing. Exact release
+  SHAs must be full reviewed commits in canonical remote `main`; mutating actions
+  use high-impact confirmation. Install refuses existing containers/volumes;
+  reset requires an explicit seed-only switch plus the committed tenant/admin
+  sentinel. The script never deletes volumes, prunes Docker, opens the
+  firewall/tunnel, exposes Docker remotely, or pushes Git.
+- The owner confirmed the current Windows data is disposable seed data. Git
+  therefore transports migrations and seed scripts rather than database files.
+  `ResetSeedUat` may rebuild PostgreSQL from all committed migrations plus
+  `db:seed:all`; preserving UAT uses a verified PostgreSQL/MinIO checkpoint and
+  `Update`. Neither path is allowed for production/pilot data.
+- Made the default payroll-rule seed idempotent so rerunning the dev/UAT seed
+  updates the first tenant/effective-date rule instead of adding another rule.
+- Caddy now owns both application ingress and the explicit storage hostname.
+  Start/update/reset stop Caddy and all application writers before checkpoint,
+  migration or reset while retaining stateful services; a failed schema/seed
+  transition leaves writers stopped instead of serving an inconsistent database.
+- Local gates pass: merged Compose config parses; every published port is
+  loopback; no Linux `/data/...` bind remains; PowerShell parser and
+  PSScriptAnalyzer Error gate pass; `Validate -WhatIf`, `Install -WhatIf`, and
+  seed-sentinel `ResetSeedUat -WhatIf` make no checkout change; Caddy validates;
+  Actionlint passes; shared
+  typecheck/lint pass with only two pre-existing attendance-seed warnings; and
+  an isolated six-migration PostgreSQL run seeded twice while retaining exactly
+  one default payroll rule. Independent code and documentation reviews returned
+  **GO** with no remaining findings. Actual Windows-host mutation, tunnel changes,
+  remote CI, real-TOTP UAT and restart persistence remain pending.
 
 ## Employee Mobile UX and Camera Failure — 2026-07-21
 

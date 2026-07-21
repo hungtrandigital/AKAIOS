@@ -360,12 +360,41 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - `systems/shared/` — shared auth/domain utilities, Prisma schema/migrations, Caddy, and Compose
 - `.github/workflows/ci.yml` — quality, live integration/E2E, production build, and Flutter gates
 - `3-technical/3.3-devops/server-steps.md` — on-premise deployment and upgrade runbook
+- `3-technical/3.3-devops/windows-docker-deployment.md` and `windows-docker.ps1` — Windows local/UAT exact-SHA deploy and seed-only rebuild
+- `systems/shared/docker-compose.windows.yml` — required Windows named-volume and loopback override
 
 ### Tracking
 - `3-technical/3.2-implementation/status/work-items-registry.md` (thêm PRD-EPIC-002 + slices + tasks)
 - `3-technical/3.2-implementation/plans/README.md` (active plans table)
 - `2-product-foundation/product-backlog/backlog.md` (Epic 2)
 - `8-governance/changelog.md` (mỗi phase close)
+
+## Active Delivery Batch — Windows Docker Git-to-UAT Deployment (2026-07-21)
+
+**Owner:** `CODE-TASK-006` under `PRD-SLICE-002`. Product validation: GO with conditions.
+
+**Context allowlist:**
+
+- `systems/shared/docker-compose.yml`
+- `systems/shared/docker-compose.windows.yml`
+- `systems/shared/src/db/seeds/`
+- `systems/shared/README.md`
+- `.github/workflows/ci.yml`
+- `3-technical/3.3-devops/`
+- `3-technical/3.1-system-foundation/infrastructure.md`
+- Root `README.md`, `INDEX.md`, active plan, work-item registry, progress, and changelog for navigation/traceability/evidence.
+
+**Acceptance scope:**
+
+1. Windows 10/11 Docker Desktop uses WSL2 Linux containers, a thin Compose override with stable named volumes, and loopback-only host ports. It remains local/controlled UAT and does not replace the Ubuntu 22.04 production/pilot architecture.
+2. A guarded PowerShell entry point supports read-only validation/status/logs/smoke tests plus confirmed fresh-only install/start/update/stop and an explicitly destructive seed-only UAT database reset. Reset requires both an explicit switch and a committed seed tenant/admin sentinel. It never removes volumes, prunes Docker, opens a firewall/tunnel, pushes Git, or prints Compose secrets.
+3. Install/update accepts only a clean canonical repository and a full reviewed SHA contained in remote `main`; migrations run before the full stack, followed by the RBAC seed or an explicit demo-seed option.
+4. Git transports source, migrations, and seed scripts, not Docker volumes or database files. The disposable Windows seed database may be rebuilt with `ResetSeedUat`; production/pilot data may not.
+5. CI parses the PowerShell script and validates the merged base/Windows Compose configuration. Local validation proves no `/data` bind remains in the merged profile and every published port binds to loopback.
+6. Caddy actively routes the explicit storage hostname to MinIO; cloudflared sends both application and storage hostnames to Caddy so one maintenance transition closes all ingress before checkpoint, migration, or seed reset.
+7. The Windows AI runbook states preflight, confirmation, maintenance downtime, TOTP, Cloudflare separation, migration failure, backup, health, evidence, and rollback boundaries without copying secrets into Git or chat.
+
+**Explicit exclusions:** automatic deployment on Git push, self-hosted runner, remote Docker daemon, WinRM/RDP/SSH setup, firewall/DNS/tunnel mutation, Windows production/pilot approval, database downgrade, volume deletion, real-host deployment from this Mac, and pilot acceptance.
 
 ## Active Delivery Batch — BO Shift Scheduling and Local Attendance UAT (2026-07-20)
 

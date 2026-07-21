@@ -156,6 +156,8 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 │   └── 3.3-devops/
 │       ├── README.md
 │       ├── server-steps.md
+│       ├── windows-docker-deployment.md
+│       ├── windows-docker.ps1
 │       └── local-config/
 │           └── README.md
 ├── systems/                    # Source code for all software systems
@@ -297,6 +299,7 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 - **[Implementation](3-technical/3.2-implementation/)** - Implementation plans and tracking
 - **[Work Items Registry](3-technical/3.2-implementation/status/work-items-registry.md)** - Master index of all work
 - **[DevOps](3-technical/3.3-devops/)** - Infrastructure and deployment
+- **[Windows Docker UAT](3-technical/3.3-devops/windows-docker-deployment.md)** - Exact-SHA PowerShell deployment and seed-only rebuild guide
 - **[Systems (Code)](systems/)** - All source code for software systems
 
 ### Marketing & Finance & Operations

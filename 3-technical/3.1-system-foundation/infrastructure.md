@@ -2,7 +2,7 @@
 
 **Status:** Implemented repository topology; production operations and pilot evidence pending
 
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-07-21
 
 **Owner:** @system-architecture + @devops
 
@@ -68,6 +68,25 @@ on the private Compose network and requires `X-Internal-API-Key` plus `tenantId`
 Capacity figures are planning assumptions. The repository has not been load-tested
 for 200 concurrent users or measured against a P95 latency/availability SLO.
 
+## Windows Local / Controlled-UAT Profile
+
+Windows 10/11 with Docker Desktop, WSL2, and Linux containers is a supported
+local or controlled-UAT host only. It does not replace the Ubuntu 22.04
+production/pilot baseline accepted in ADR-002.
+
+The Windows profile merges `docker-compose.windows.yml` after the base Compose
+file. The override replaces Linux `/data` binds with stable Docker named volumes
+and binds Caddy, APIs, PostgreSQL, Redis, MinIO, and web admin to `127.0.0.1`.
+The guarded PowerShell script deploys only an exact reviewed SHA from canonical
+GitHub `main`, applies committed migrations, and then runs either the mandatory
+RBAC seed or an explicitly selected UAT demo seed.
+
+Seed-only Windows state may be owner-approved for `ResetSeedUat`; Git transports
+the seed scripts, not database files. This exception does not apply to production
+or pilot data. Public tunnel/firewall configuration, backup scheduling, host
+monitoring, capacity acceptance, and production Windows operations remain outside
+this profile.
+
 ## Persistence and Backup
 
 Compose mounts production data at `/data/postgres`, `/data/redis`, `/data/minio`,
@@ -128,3 +147,4 @@ backup/restore, capacity, and pilot behavior remain release gates.
 - [OpenAPI Contract](architecture/api-contracts/openapi.yaml)
 - [Coding Standards](design-standards/coding-standards.md)
 - [On-Premise Runbook](../3.3-devops/server-steps.md)
+- [Windows Docker Local/UAT Runbook](../3.3-devops/windows-docker-deployment.md)

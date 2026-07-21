@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CODE-TASK-006 Windows Git-to-UAT deployment:** Added a Windows 10/11 Docker Desktop/WSL2 Compose override with durable named volumes and loopback-only ports, guarded exact-SHA fresh-install/update/seed-sentinel-reset/operations automation, an AI-executable Windows runbook, active Caddy storage-host routing, maintenance-mode writer shutdown, and Linux/Windows CI configuration gates. Ubuntu remains the production/pilot baseline; tunnel, firewall, remote Docker and automatic deployment stay outside the Windows profile.
 - **PRD-SLICE-003 Prismate loading:** Added optimized Prismate logo derivatives for legacy and Android 12+ native launch, iOS launch, and a reusable reduced-motion-aware Flutter opacity/scale loader for bootstrap and async employee actions, without artificial delay. Native light/dark startup backgrounds remain white to avoid a transition flash.
 - **PRD-SLICE-003 employee mobile UX and camera fallback:** Added a branded, auth-state-driven Flutter splash; senior-friendly Login/Today/check flow; explicit camera/location/network recovery; and an operator-only manual attendance event with structured audit and BO-visible exception provenance.
 - **PRD-SLICE-003 BO shift planning:** Added a dated BO/supervisor operations board for shift templates, scoped assignments, status coverage, filters, and audited cancellation, with OpenAPI/domain contracts and focused browser/integration coverage.
@@ -32,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
+- The controlled Windows UAT flow now treats its current records as reproducible seed-only data: Git carries migrations and seed scripts, `ResetSeedUat` rebuilds disposable PostgreSQL only after explicit confirmation, and data-preserving updates require a verified PostgreSQL/MinIO checkpoint. The default payroll-rule seed is idempotent across reruns.
 - Camera cancellation now stays on the normal retry path, while confirmed permission, hardware, or plugin failures promote supervisor assistance and Today reconciliation. Employee camera-assisted badges now require structured reason-code and actor provenance instead of treating every BO override as a camera failure.
 - Employee self check-in/out now requires fresh in-memory GPS plus a newly captured JPEG before submit; the backend fully decodes it with 5 MB/16 MP ceilings and a 320×240 minimum instead of trusting magic bytes. Startup routing reads secure storage once, honors reduced motion, avoids Login/Today flash, and preserves credentials when refresh fails only because the network is unavailable. Device attestation/liveness remains explicitly outside MVP.
 - Shift templates are now tenant-owned, daily BO rosters are paginated with

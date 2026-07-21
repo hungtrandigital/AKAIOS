@@ -3,6 +3,12 @@
 **Status:** Active runbook for PRD-EPIC-002
 **Audience:** DevOps / sysadmin deploying the AKAIUNSAN attendance + payroll stack to the on-premise server
 
+> **Host scope:** This is the canonical Ubuntu 22.04 production/pilot runbook.
+> For Windows 10/11 Docker Desktop local or controlled UAT, use the separate
+> [Windows Docker runbook](windows-docker-deployment.md). Do not translate the
+> `/data`, Bash, systemd, cron, or secret-permission steps here directly into
+> Windows commands.
+
 ## Overview
 
 AKAIUNSAN runs as a single-host Docker Compose stack. The stack includes:
@@ -227,37 +233,20 @@ curl http://localhost:3002/             # web admin
 
 ### Step 8: Configure the Caddy origin routes
 
-Replace the development block in `systems/shared/Caddyfile` with this production
-topology. The main hostname serves web admin and preserves the mobile
-`/api/attendance/v1/*` prefix; the separate storage hostname reaches only MinIO.
-Payroll stays behind web-admin same-origin rewrites and is not exposed on a third
-public hostname.
+The committed `systems/shared/Caddyfile` serves the application on the default
+HTTP origin and routes the explicit storage hostname only to MinIO. Payroll stays
+behind web-admin same-origin rewrites and is not exposed on a third public
+hostname. Set both values in `.env`; the hosts must match exactly:
 
-```caddy
-http://ak-tunnel.example.com {
-  encode zstd gzip
-
-  handle /api/attendance/v1/* {
-    uri strip_prefix /api/attendance
-    reverse_proxy attendance-api:3000
-  }
-
-  handle {
-    reverse_proxy web-admin:3002
-  }
-}
-
-http://storage.ak-tunnel.example.com {
-  encode zstd gzip
-  reverse_proxy minio:9000
-}
+```dotenv
+CADDY_STORAGE_HOST=storage.ak-tunnel.example.com
+MINIO_PUBLIC_ENDPOINT=https://storage.ak-tunnel.example.com
 ```
 
-Set `MINIO_PUBLIC_ENDPOINT=https://storage.ak-tunnel.example.com` in `.env`,
-then reload Caddy:
+Then recreate Caddy so it receives the environment value:
 
 ```bash
-docker compose --env-file .env -f systems/shared/docker-compose.yml restart caddy
+docker compose --env-file .env -f systems/shared/docker-compose.yml up -d --force-recreate caddy
 ```
 
 ### Step 9: Configure Cloudflare Tunnel

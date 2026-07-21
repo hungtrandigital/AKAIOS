@@ -9,6 +9,8 @@ Active DevOps documentation for AKAIUNSAN's on-premise deployment of attendance 
 ### Key Documents
 
 - **[server-steps.md](server-steps.md)** — On-premises deployment runbook (Ubuntu 22.04 + Docker Compose + Cloudflare Tunnel)
+- **[windows-docker-deployment.md](windows-docker-deployment.md)** — Windows 10/11 + Docker Desktop/WSL2 local or controlled-UAT deploy from an exact reviewed Git SHA
+- **[windows-docker.ps1](windows-docker.ps1)** — Guarded Windows validate/install/update/reseed/status/start/stop automation
 - **[local-config/](local-config/)** — Local development configuration (gitignored)
 
 ## Configuration
@@ -22,6 +24,16 @@ Active DevOps documentation for AKAIUNSAN's on-premise deployment of attendance 
 - Production server setup (single Ubuntu host, Docker Compose stack)
 - PostgreSQL + Redis + MinIO + 2 API services + web admin + Caddy
 - Cloudflare Tunnel for external access
+
+### Windows Local / UAT
+
+- The approved production/pilot baseline remains Ubuntu 22.04 under ADR-002.
+- Windows 10/11 is supported only as a local or controlled-UAT Docker Desktop
+  host using Linux containers and the required thin Compose override.
+- Git transports code, migrations, and seed scripts. Seed-only Windows data may
+  be owner-approved for a clean rebuild; production/pilot data may not.
+- The Windows automation does not configure the public tunnel, firewall, remote
+  Docker access, Git push, or volume cleanup.
 
 ## Deployment
 
@@ -37,6 +49,9 @@ Active DevOps documentation for AKAIUNSAN's on-premise deployment of attendance 
 9. Configure Caddy's HTTP origin hosts and Cloudflare Tunnel
 
 See **[server-steps.md](server-steps.md)** for step-by-step runbook.
+For the existing seed-only Windows UAT host, follow
+**[windows-docker-deployment.md](windows-docker-deployment.md)** instead of
+adapting Bash/Linux commands ad hoc.
 
 ### CI/CD Pipeline
 
@@ -48,6 +63,7 @@ See **[server-steps.md](server-steps.md)** for step-by-step runbook.
 - Integration tests (with services, requires Docker)
 - Browser E2E with fresh migrations, seeded TOTP admins, and live services
 - Flutter format, analysis, tests, and Android debug APK build
+- Windows Compose merge validation and PowerShell syntax validation
 
 ## Monitoring
 

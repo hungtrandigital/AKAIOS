@@ -1,4 +1,6 @@
-// Dev/pilot seed data — creates 1 tenant + 15 projects + ~30 admin users + 200 employees + shifts + sample payroll rules.
+// Development/controlled-UAT seed data — creates one tenant, demo operators,
+// 200 employees, 15 projects, shifts, assignments, and sample payroll rules.
+// Never run against production or pilot data.
 // Run: `pnpm db:seed` (from repo root, after migrations applied).
 
 import {
@@ -313,21 +315,34 @@ export async function seedDevData(): Promise<{
 
   // === Default Payroll Rules ===
   console.log('Creating default payroll rules...')
-  await prisma.payrollRule.create({
-    data: {
+  const payrollRuleData = {
+    tenantId: tenant.id,
+    effectiveFrom: new Date('2024-01-01'),
+    otWeekdayMultiplier: 1.5,
+    otWeekendMultiplier: 2.0,
+    otHolidayMultiplier: 3.0,
+    mealAllowancePerDay: 30000,
+    phoneAllowance: 200000,
+    roundingMinutes: 15,
+    workingHoursPerDay: 8,
+    standardWorkingDaysPerMonth: 26,
+    updatedBy: adminUser.id,
+  }
+  const existingPayrollRule = await prisma.payrollRule.findFirst({
+    where: {
       tenantId: tenant.id,
-      effectiveFrom: new Date('2024-01-01'),
-      otWeekdayMultiplier: 1.5,
-      otWeekendMultiplier: 2.0,
-      otHolidayMultiplier: 3.0,
-      mealAllowancePerDay: 30000,
-      phoneAllowance: 200000,
-      roundingMinutes: 15,
-      workingHoursPerDay: 8,
-      standardWorkingDaysPerMonth: 26,
-      updatedBy: adminUser.id,
+      effectiveFrom: payrollRuleData.effectiveFrom,
     },
+    orderBy: { createdAt: 'asc' },
   })
+  if (existingPayrollRule) {
+    await prisma.payrollRule.update({
+      where: { id: existingPayrollRule.id },
+      data: payrollRuleData,
+    })
+  } else {
+    await prisma.payrollRule.create({ data: payrollRuleData })
+  }
 
   console.log('✅ Seed complete!')
   console.log('')

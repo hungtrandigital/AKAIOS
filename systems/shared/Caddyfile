@@ -1,8 +1,14 @@
 # Caddy origin config for AKAIUNSAN. Cloudflare Tunnel terminates public TLS and
 # reaches this proxy on HTTP :80; the internal Attendance endpoint is never
-# exposed here. See the production host-matching example in the deploy runbook.
+# exposed here. The storage hostname is explicit so stopping Caddy closes both
+# application and object-storage ingress during a deployment maintenance window.
 
-# ===== DEVELOPMENT (HTTP only) =====
+http://{$CADDY_STORAGE_HOST:storage.localhost} {
+	encode zstd gzip
+	reverse_proxy minio:9000
+}
+
+# Application origin (HTTP only; Cloudflare owns public TLS).
 :80 {
 	# Mobile clients use /api/attendance/v1/* as a stable public prefix. Strip
 	# only /api/attendance so Fastify receives its canonical /v1/* route.
@@ -25,21 +31,3 @@
 		}
 	}
 }
-
-# ===== PRODUCTION (replace the development block when ready) =====
-# The explicit http:// scheme prevents Caddy auto-HTTPS because Cloudflare owns TLS.
-# http://ak-tunnel.example.com {
-#   encode zstd gzip
-#   handle /api/attendance/v1/* {
-#     uri strip_prefix /api/attendance
-#     reverse_proxy attendance-api:3000
-#   }
-#   handle {
-#     reverse_proxy web-admin:3002
-#   }
-# }
-#
-# http://storage.ak-tunnel.example.com {
-#   encode zstd gzip
-#   reverse_proxy minio:9000
-# }
