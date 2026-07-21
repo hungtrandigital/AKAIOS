@@ -14,7 +14,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "pnpm test:unit",
-    "test:unit": "turbo run test:unit --filter=@ak/attendance-api --filter=@ak/payroll-api",
+    "test:unit": "turbo run test:unit --filter=@ak/shared --filter=@ak/attendance-api --filter=@ak/payroll-api",
     "test:integration": "turbo run test:integration --filter=@ak/attendance-api --filter=@ak/payroll-api",
     "test:coverage": "turbo run test:coverage --filter=@ak/attendance-api --filter=@ak/payroll-api",
     "test:e2e": "turbo run test:e2e --filter=@ak/payroll-web-admin",

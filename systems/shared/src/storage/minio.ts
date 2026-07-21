@@ -21,6 +21,18 @@ const MINIO_BUCKETS = ['attendance-photos', 'reports'] as const
 let client: S3Client | undefined
 let publicClient: S3Client | undefined
 
+function isConcurrentBucketCreate(error: unknown): boolean {
+  const e = error as {
+    $metadata?: { httpStatusCode?: number }
+    name?: string
+    Code?: string
+    code?: string
+  }
+  const code = e?.name ?? e?.Code ?? e?.code
+  return e?.$metadata?.httpStatusCode === 409
+    && (code === 'BucketAlreadyOwnedByYou' || code === 'BucketAlreadyExists')
+}
+
 function minioEndpoint(rawEndpoint: string): string {
   if (rawEndpoint.startsWith('http://') || rawEndpoint.startsWith('https://')) return rawEndpoint
   const protocol = process.env.MINIO_USE_SSL === 'true' ? 'https' : 'http'
@@ -74,7 +86,15 @@ export async function ensureBuckets(): Promise<void> {
       if (e?.$metadata?.httpStatusCode === 404
         || e?.name === 'NotFound'
         || e?.name === 'NoSuchBucket') {
-        await c.send(new CreateBucketCommand({ Bucket: bucket }))
+        try {
+          await c.send(new CreateBucketCommand({ Bucket: bucket }))
+        } catch (createError: unknown) {
+          if (!isConcurrentBucketCreate(createError)) throw createError
+          // Another application instance may create the bucket between our
+          // HEAD and CREATE. Verify that this identity can now access it before
+          // treating the race as successful.
+          await c.send(new HeadBucketCommand({ Bucket: bucket }))
+        }
         continue
       }
       // Authentication, connectivity and server failures must fail startup rather

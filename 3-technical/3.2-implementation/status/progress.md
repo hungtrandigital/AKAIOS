@@ -38,6 +38,11 @@
   one default payroll rule. Independent code and documentation reviews returned
   **GO** with no remaining findings. Actual Windows-host mutation, tunnel changes,
   remote CI, real-TOTP UAT and restart persistence remain pending.
+- The first remote run exposed a parallel MinIO startup race: two integration
+  workers could both observe a missing bucket before one created it. Bucket
+  initialization now accepts only the two S3 already-created conflict codes,
+  rechecks access with `HeadBucket`, and still fails every unrelated storage
+  error. Shared regression tests cover both the safe race and fail-closed path.
 
 ## Employee Mobile UX and Camera Failure — 2026-07-21
 

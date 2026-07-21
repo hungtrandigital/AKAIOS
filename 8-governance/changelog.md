@@ -69,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
+- **Shared MinIO startup:** Made bucket provisioning safe under parallel API/test startup by rechecking access after the explicit S3 already-created conflicts, while preserving fail-closed behavior for unrelated storage errors; added shared regression coverage to the root unit gate.
 - **PRD-SLICE-003 attendance UAT:** Hardened assignment overlap/concurrency, active-resource and supervisor-membership enforcement, hid cancelled assignments from employee Today, and corrected mobile attendance timestamps from UTC to the device timezone. Local employee/BO/supervisor UAT passes; physical-device camera validation remains pending because iOS Simulator has no camera stream.
 - **PRD-EPIC-002 remediation (working-tree review GO):** Implemented tenant/project-scoped
   supervisor authorization, safe employee/report DTO boundaries, atomic attendance checkout
