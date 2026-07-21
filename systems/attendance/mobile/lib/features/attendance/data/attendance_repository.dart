@@ -23,6 +23,8 @@ class ShiftAssignment {
   final String? attendanceRecordId;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
+  final String? overrideById;
+  final String? overrideReason;
 
   ShiftAssignment({
     required this.id,
@@ -36,7 +38,20 @@ class ShiftAssignment {
     this.attendanceRecordId,
     this.checkInAt,
     this.checkOutAt,
+    this.overrideById,
+    this.overrideReason,
   });
+
+  bool get isSupervisorAssisted {
+    final actorId = overrideById?.trim();
+    final reason = overrideReason;
+    if (actorId == null || actorId.isEmpty || reason == null) return false;
+    return const {
+      'capture_unavailable',
+      'permission_blocked',
+      'device_failure',
+    }.any((code) => reason.startsWith('$code:'));
+  }
 
   factory ShiftAssignment.fromJson(Map<String, dynamic> j) {
     final shift = j['shift'] as Map<String, dynamic>?;
@@ -53,11 +68,13 @@ class ShiftAssignment {
       date: DateTime.parse(j['date'] as String),
       attendanceRecordId: record?['id'] as String?,
       checkInAt: record?['checkInAt'] != null
-          ? DateTime.parse(record!['checkInAt'] as String)
+          ? DateTime.parse(record!['checkInAt'] as String).toLocal()
           : null,
       checkOutAt: record?['checkOutAt'] != null
-          ? DateTime.parse(record!['checkOutAt'] as String)
+          ? DateTime.parse(record!['checkOutAt'] as String).toLocal()
           : null,
+      overrideById: record?['overrideById'] as String?,
+      overrideReason: record?['overrideReason'] as String?,
     );
   }
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { skipIntegration } from './scope-fixture.js'
 
@@ -6,6 +6,7 @@ describe.skipIf(skipIntegration)('Authentication flow (integration)', () => {
   it('enforces passwords, OTP/TOTP, atomic refresh rotation and logout', { timeout: 60_000 }, async () => {
     process.env.NODE_ENV = 'test'
     process.env.TOTP_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64')
+    delete process.env.DEV_FIXED_ADMIN_2FA_CODE
     const shared = await import('@ak/shared')
     const {
       createEmployeeOtpChallenge, createTotpChallenge, deleteEmployeeOtpChallenge,
@@ -30,6 +31,12 @@ describe.skipIf(skipIntegration)('Authentication flow (integration)', () => {
     const adminUser = await prisma.user.create({
       data: {
         tenantId: tenant.id, phone: phone('2'), email: `auth-${suffix}@ak.local`,
+        passwordHash: await hashPassword('admin-secret'), role: 'system_admin',
+      },
+    })
+    const unenrolledAdmin = await prisma.user.create({
+      data: {
+        tenantId: tenant.id, phone: phone('5'), email: `unenrolled-${suffix}@ak.local`,
         passwordHash: await hashPassword('admin-secret'), role: 'system_admin',
       },
     })
@@ -101,6 +108,11 @@ describe.skipIf(skipIntegration)('Authentication flow (integration)', () => {
       expect((await inject('/v1/auth/admin-login', {
         email: adminUser.email!, password: 'wrong-password',
       })).statusCode).toBe(401)
+      const unenrolledLogin = await inject('/v1/auth/admin-login', {
+        email: unenrolledAdmin.email!, password: 'admin-secret',
+      })
+      expect(unenrolledLogin.statusCode).toBe(401)
+      expect(unenrolledLogin.headers['set-cookie']).toBeUndefined()
       await prisma.user.update({ where: { id: adminUser.id }, data: { status: 'suspended' } })
       expect((await inject('/v1/auth/admin-login', {
         email: adminUser.email!, password: 'admin-secret',
@@ -129,11 +141,145 @@ describe.skipIf(skipIntegration)('Authentication flow (integration)', () => {
     } finally {
       await app.close()
       await deleteEmployeeOtpChallenge(employeeUser.phone)
-      await prisma.refreshToken.deleteMany({ where: { userId: { in: [employeeUser.id, adminUser.id] } } })
+      await prisma.refreshToken.deleteMany({
+        where: { userId: { in: [employeeUser.id, adminUser.id, unenrolledAdmin.id] } },
+      })
       await prisma.employee.deleteMany({ where: { userId: employeeUser.id } })
-      await prisma.user.deleteMany({ where: { id: { in: [employeeUser.id, adminUser.id] } } })
+      await prisma.user.deleteMany({
+        where: { id: { in: [employeeUser.id, adminUser.id, unenrolledAdmin.id] } },
+      })
       await prisma.tenant.delete({ where: { id: tenant.id } })
       delete process.env.TOTP_ENCRYPTION_KEY
+      delete process.env.DEV_FIXED_ADMIN_2FA_CODE
+      await prisma.$disconnect()
+    }
+  })
+
+  it('isolates the fixed four-digit verifier to explicit local/test mode', { timeout: 60_000 }, async () => {
+    process.env.NODE_ENV = 'test'
+    process.env.TOTP_ENCRYPTION_KEY = Buffer.alloc(32, 8).toString('base64')
+    process.env.DEV_FIXED_ADMIN_2FA_CODE = '1357'
+    vi.resetModules()
+    const shared = await import('@ak/shared')
+    const {
+      encryptTotpSecret, generateTotpCode, generateTotpSecret, hashPassword, prisma,
+    } = shared
+    const suffix = randomUUID().slice(0, 8)
+    const tenant = await prisma.tenant.create({ data: { name: `Fixed auth ${suffix}` } })
+    const passwordHash = await hashPassword('admin-secret')
+    const fixedAdmin = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        phone: phone('3'),
+        email: `fixed-auth-${suffix}@ak.local`,
+        passwordHash,
+        role: 'system_admin',
+      },
+    })
+    const enrolledAdmin = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        phone: phone('4'),
+        email: `fixed-enrolled-${suffix}@ak.local`,
+        passwordHash,
+        role: 'system_admin',
+      },
+    })
+    const employeeUser = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        phone: phone('6'),
+        email: `fixed-employee-${suffix}@ak.local`,
+        passwordHash,
+        role: 'employee',
+      },
+    })
+    const enrolledSecret = generateTotpSecret()
+    await prisma.totpCredential.create({
+      data: {
+        userId: enrolledAdmin.id,
+        ...encryptTotpSecret(enrolledSecret, `${tenant.id}:${enrolledAdmin.id}`),
+      },
+    })
+    const { buildServer } = await import('../../src/server.js')
+    const { app } = await buildServer()
+    const inject = (url: string, payload: object, headers?: Record<string, string>) => app.inject({
+      method: 'POST', url, payload, headers,
+    })
+    try {
+      const nonLoopbackLogin = await inject('/v1/auth/admin-login', {
+        email: fixedAdmin.email!, password: 'admin-secret',
+      }, { 'x-forwarded-for': '192.0.2.10' })
+      expect(nonLoopbackLogin.statusCode).toBe(401)
+      expect(nonLoopbackLogin.headers['set-cookie']).toBeUndefined()
+
+      const invalidPassword = await inject('/v1/auth/admin-login', {
+        email: fixedAdmin.email!, password: 'wrong-password',
+      })
+      expect(invalidPassword.statusCode).toBe(401)
+      expect(invalidPassword.headers['set-cookie']).toBeUndefined()
+
+      const employeeLogin = await inject('/v1/auth/admin-login', {
+        email: employeeUser.email!, password: 'admin-secret',
+      })
+      expect(employeeLogin.statusCode).toBe(401)
+      expect(employeeLogin.headers['set-cookie']).toBeUndefined()
+
+      await prisma.user.update({ where: { id: fixedAdmin.id }, data: { status: 'suspended' } })
+      expect((await inject('/v1/auth/admin-login', {
+        email: fixedAdmin.email!, password: 'admin-secret',
+      })).statusCode).toBe(401)
+      await prisma.user.update({ where: { id: fixedAdmin.id }, data: { status: 'active' } })
+
+      const cappedChallenge = await inject('/v1/auth/admin-login', {
+        email: fixedAdmin.email!, password: 'admin-secret',
+      })
+      expect(cappedChallenge.statusCode).toBe(200)
+      expect(cappedChallenge.json().accessToken).toBeUndefined()
+      const cappedCookie = cappedChallenge.headers['set-cookie']!.split(';', 1)[0]!
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        expect((await inject('/v1/auth/verify-2fa', { totpCode: '2222' }, {
+          cookie: cappedCookie,
+        })).statusCode).toBe(401)
+      }
+      expect((await inject('/v1/auth/verify-2fa', { totpCode: '1357' }, {
+        cookie: cappedCookie,
+      })).statusCode).toBe(401)
+
+      const challenge = await inject('/v1/auth/admin-login', {
+        email: fixedAdmin.email!, password: 'admin-secret',
+      })
+      const cookie = challenge.headers['set-cookie']!.split(';', 1)[0]!
+      const verified = await inject('/v1/auth/verify-2fa', { totpCode: '1357' }, { cookie })
+      expect(verified.statusCode).toBe(200)
+      expect(verified.json().accessToken).toEqual(expect.any(String))
+      expect(JSON.stringify(verified.json())).not.toContain('1357')
+      expect((await inject('/v1/auth/verify-2fa', { totpCode: '1357' }, { cookie })).statusCode)
+        .toBe(401)
+      expect((await inject('/v1/auth/verify-2fa', { totpCode: '1357' })).statusCode).toBe(401)
+
+      const enrolledChallenge = await inject('/v1/auth/admin-login', {
+        email: enrolledAdmin.email!, password: 'admin-secret',
+      })
+      const enrolledCookie = enrolledChallenge.headers['set-cookie']!.split(';', 1)[0]!
+      const realTotpCode = generateTotpCode(
+        enrolledSecret,
+        BigInt(Math.floor(Date.now() / 30_000)),
+      )
+      expect((await inject('/v1/auth/verify-2fa', { totpCode: realTotpCode }, {
+        cookie: enrolledCookie,
+      })).statusCode).toBe(400)
+    } finally {
+      await app.close()
+      await prisma.refreshToken.deleteMany({
+        where: { userId: { in: [fixedAdmin.id, enrolledAdmin.id, employeeUser.id] } },
+      })
+      await prisma.user.deleteMany({
+        where: { id: { in: [fixedAdmin.id, enrolledAdmin.id, employeeUser.id] } },
+      })
+      await prisma.tenant.delete({ where: { id: tenant.id } })
+      delete process.env.TOTP_ENCRYPTION_KEY
+      delete process.env.DEV_FIXED_ADMIN_2FA_CODE
       await prisma.$disconnect()
     }
   })

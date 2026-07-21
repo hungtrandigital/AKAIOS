@@ -11,11 +11,21 @@ Hệ thống chấm công cho nhân viên vệ sinh AKAIUNSAN tại 15 dự án.
 ### Target Users
 
 - **~200 nhân viên vệ sinh** (employees): dùng mobile app để check-in/out tại site
-- **~15 giám sát dự án** (supervisors): xem real-time, override khi cần
-- **~3-5 BO staff**: xem dự án/NV trên web và dùng API được phân quyền cho CRUD dự án, NV, ca và báo cáo khách hàng
+- **~15 giám sát dự án** (supervisors): xem real-time, override và ghi nhận ngoại lệ camera trong đúng project được giao
+- **~3-5 BO staff**: xem dự án/NV, tạo mẫu ca, phân/hủy lịch ca trên web, review ngoại lệ chấm công và dùng API được phân quyền cho các tác vụ vận hành, báo cáo khách hàng
 
-The current Projects and Employees web pages are read-only and no shift-management
-page is shipped; creation/update operations are API/operator workflows for now.
+The Projects and Employees web pages remain read-only. Tenant-scoped shift
+planning is available from the `Lịch ca` tab on the attendance operations board,
+with searchable employee selection, paginated rosters, and full-result status
+totals; project/employee mutation operations remain API/operator workflows for now.
+Employee self-attendance always requires geofence-valid GPS plus a new JPEG. The
+official mobile client exposes camera capture only; the API fully decodes the JPEG,
+enforces a 5 MB cap, a 16 MP decode ceiling, and a minimum 320×240 raster before
+storage. MVP does not include device attestation/liveness, so a direct API client
+cannot cryptographically prove camera origin or capture time.
+Camera failure is handled by retry/settings guidance and an operator-only audited
+manual-event path for an authorized project supervisor or system-admin break-glass;
+manual records are visibly marked for BO review and contain no synthetic photo/GPS.
 
 ### Out of Scope
 
@@ -58,6 +68,8 @@ pnpm docker:up:dev
 # generated JWT_SECRET, INTERNAL_API_KEY, and TOTP_ENCRYPTION_KEY values.
 # Generate them once with: openssl rand -hex 32 (twice) and
 # openssl rand -base64 32 (once). Do not regenerate them per terminal.
+# For temporary local UI testing only, DEV_FIXED_ADMIN_2FA_CODE may contain an
+# exact four-digit code. Never set it in shared development, staging, or production.
 
 # Root scripts do not auto-load .env. Load the same file before setup:
 set -a; source .env; set +a
@@ -75,8 +87,19 @@ pnpm --filter @ak/attendance-api dev   # http://localhost:3000
 cd systems/attendance/mobile
 flutter pub get
 flutter gen-l10n
+# Android emulator
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
+# iOS simulator; no tunnel is required for the loopback-only API
+flutter run --dart-define=API_BASE_URL=http://localhost:3000
 ```
+
+The fixed local verifier is enabled only when `NODE_ENV` is explicitly
+`development` or `test`. It replaces, rather than supplements, real TOTP for
+that process; password checks, active-admin checks, the Redis challenge, attempt
+limits, refresh rotation, and logout remain unchanged. Unset the variable to
+exercise the normal encrypted six-digit TOTP path used by CI and staging. While
+enabled, the API binds to loopback and fixed-mode admin auth rejects an effective
+client IP outside the loopback range.
 
 ## Directory Structure
 
@@ -130,4 +153,4 @@ attendance/
 
 ---
 
-*The review-remediation gate passes locally as of 2026-07-18. Mobile history and remaining slice/pilot acceptance, commit, remote CI, and live evidence remain.*
+*The remediation commit and remote CI gate pass. The 2026-07-20 local fixed-verifier exception remains an uncommitted working-tree change; mobile history and remaining slice/pilot acceptance still remain.*

@@ -29,7 +29,8 @@ import {
   NotFoundError,
 } from '@ak/shared'
 import { requireAuth } from '../plugins/auth.js'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
+import { isIP } from 'node:net'
 
 function isAccountActive(user: {
   status: string
@@ -60,11 +61,28 @@ const OtpLoginSchema = z.object({
   otp: z.string().regex(/^[0-9]{6}$/),
 })
 
-const VerifyTwoFactorSchema = z.object({
-  totpCode: z.string().regex(/^[0-9]{6}$/),
-})
+interface AuthRouteOptions {
+  devFixedAdmin2faCode?: string
+}
 
-export const authRoutes: FastifyPluginAsync = async (app) => {
+function matchesFixedAdmin2faCode(candidate: string, expected?: string): boolean {
+  if (!expected || candidate.length !== expected.length) return false
+  return timingSafeEqual(Buffer.from(candidate), Buffer.from(expected))
+}
+
+function isLoopbackAddress(address: string): boolean {
+  if (address === '::1') return true
+  const ipv4 = address.startsWith('::ffff:') ? address.slice('::ffff:'.length) : address
+  return isIP(ipv4) === 4 && ipv4.startsWith('127.')
+}
+
+export const authRoutes: FastifyPluginAsync<AuthRouteOptions> = async (app, options) => {
+  const fixedAdmin2faCode = options.devFixedAdmin2faCode
+  const VerifyTwoFactorSchema = z.object({
+    totpCode: fixedAdmin2faCode
+      ? z.string().regex(/^[0-9]{4}$/)
+      : z.string().regex(/^[0-9]{6}$/),
+  })
   app.post('/login', async (request, reply) => {
     const body = LoginSchema.parse(request.body)
     const user = await prisma.user.findUnique({
@@ -299,6 +317,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   // Admin login (email + password) — for web admin and admin users
   app.post('/admin-login', async (request, reply) => {
     const body = AdminLoginSchema.parse(request.body)
+    if (fixedAdmin2faCode && !isLoopbackAddress(request.ip)) {
+      throw new UnauthorizedError('Invalid credentials')
+    }
     const user = await prisma.user.findUnique({
       where: { email: body.email },
       include: { employee: true, totpCredential: true },
@@ -311,7 +332,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       throw new UnauthorizedError('Invalid credentials')
     }
 
-    if (!user.totpCredential) {
+    if (!user.totpCredential && !fixedAdmin2faCode) {
       throw new UnauthorizedError('Two-factor authentication enrollment required')
     }
 
@@ -331,6 +352,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/verify-2fa', async (request, reply) => {
     const body = VerifyTwoFactorSchema.parse(request.body)
+    if (fixedAdmin2faCode && !isLoopbackAddress(request.ip)) {
+      throw new UnauthorizedError('Invalid or expired 2FA challenge')
+    }
     const challenge = request.cookies.totpChallenge
     if (!challenge) throw new UnauthorizedError('Invalid or expired 2FA challenge')
     const userId = await consumeTotpChallengeAttempt(challenge)
@@ -343,31 +367,42 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       where: { id: userId },
       include: { employee: true, totpCredential: true },
     })
-    if (!user || user.role === 'employee' || !isAccountActive(user) || !user.totpCredential) {
+    if (!user || user.role === 'employee' || !isAccountActive(user)) {
       await deleteTotpChallenge(challenge)
       reply.clearCookie('totpChallenge', { path: '/' })
       throw new UnauthorizedError('Account not active')
     }
 
-    const secret = decryptTotpSecret(user.totpCredential, `${user.tenantId}:${user.id}`)
-    const acceptedCounter = verifyTotpCode({
-      code: body.totpCode,
-      secret,
-      lastUsedCounter: user.totpCredential.lastUsedCounter,
-    })
-    if (acceptedCounter === null) throw new UnauthorizedError('Invalid 2FA code')
+    if (fixedAdmin2faCode) {
+      if (!matchesFixedAdmin2faCode(body.totpCode, fixedAdmin2faCode)) {
+        throw new UnauthorizedError('Invalid 2FA code')
+      }
+    } else {
+      if (!user.totpCredential) {
+        await deleteTotpChallenge(challenge)
+        reply.clearCookie('totpChallenge', { path: '/' })
+        throw new UnauthorizedError('Two-factor authentication enrollment required')
+      }
+      const secret = decryptTotpSecret(user.totpCredential, `${user.tenantId}:${user.id}`)
+      const acceptedCounter = verifyTotpCode({
+        code: body.totpCode,
+        secret,
+        lastUsedCounter: user.totpCredential.lastUsedCounter,
+      })
+      if (acceptedCounter === null) throw new UnauthorizedError('Invalid 2FA code')
 
-    const replayGuard = await prisma.totpCredential.updateMany({
-      where: {
-        userId: user.id,
-        OR: [
-          { lastUsedCounter: null },
-          { lastUsedCounter: { lt: acceptedCounter } },
-        ],
-      },
-      data: { lastUsedCounter: acceptedCounter },
-    })
-    if (replayGuard.count !== 1) throw new UnauthorizedError('TOTP code already used')
+      const replayGuard = await prisma.totpCredential.updateMany({
+        where: {
+          userId: user.id,
+          OR: [
+            { lastUsedCounter: null },
+            { lastUsedCounter: { lt: acceptedCounter } },
+          ],
+        },
+        data: { lastUsedCounter: acceptedCounter },
+      })
+      if (replayGuard.count !== 1) throw new UnauthorizedError('TOTP code already used')
+    }
     await deleteTotpChallenge(challenge)
     reply.clearCookie('totpChallenge', { path: '/' })
 
@@ -394,7 +429,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       path: '/v1/auth',
     })
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
-    app.log.info({ userId: user.id, email: user.email }, 'Admin 2FA login')
+    app.log.info({
+      userId: user.id,
+      email: user.email,
+      authFactor: fixedAdmin2faCode ? 'dev-fixed' : 'totp',
+    }, 'Admin 2FA login')
 
     return {
       accessToken: token,

@@ -39,6 +39,10 @@ export async function buildServer() {
     bodyLimit: MAX_JSON_BODY_BYTES,
   })
 
+  if (config.devFixedAdmin2faCode) {
+    app.log.warn('Development fixed admin 2FA verifier enabled; never use with production data')
+  }
+
   await app.register(cors, {
     origin: config.nodeEnv === 'development' ? true : /\.example\.com$/,
     credentials: true,
@@ -94,7 +98,10 @@ export async function buildServer() {
     await closeAuthRedisClient()
   })
   await app.register(healthRoutes, { prefix: '/health' })
-  await app.register(authRoutes, { prefix: '/v1/auth' })
+  await app.register(authRoutes, {
+    prefix: '/v1/auth',
+    devFixedAdmin2faCode: config.devFixedAdmin2faCode,
+  })
   await app.register(attendanceRoutes, { prefix: '/v1/attendance' })
   await app.register(projectRoutes, { prefix: '/v1/projects' })
   await app.register(employeeRoutes, { prefix: '/v1/employees' })
@@ -111,8 +118,9 @@ if (isMain) {
   const { app, config } = await buildServer()
   try {
     await ensureBuckets()
-    await app.listen({ port: config.port, host: '0.0.0.0' })
-    app.log.info(`attendance-api listening on port ${config.port}`)
+    const host = config.devFixedAdmin2faCode ? '127.0.0.1' : '0.0.0.0'
+    await app.listen({ port: config.port, host })
+    app.log.info(`attendance-api listening on ${host}:${config.port}`)
   } catch (err) {
     app.log.error(err, 'Failed to start')
     process.exit(1)

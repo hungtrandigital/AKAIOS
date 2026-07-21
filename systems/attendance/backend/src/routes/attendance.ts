@@ -5,6 +5,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import {
   prisma,
+  Prisma,
   GPSCoordinate,
   NotFoundError,
   ConflictError,
@@ -51,6 +52,13 @@ const OverrideSchema = z.object({
   newStatus: z.enum(['present', 'late', 'early_leave', 'half_day', 'absent', 'on_leave', 'holiday']),
   checkInAt: z.string().datetime().nullable().optional(),
   checkOutAt: z.string().datetime().nullable().optional(),
+})
+
+const ManualEventSchema = z.object({
+  event: z.enum(['check_in', 'check_out']),
+  occurredAt: z.string().datetime({ offset: true }),
+  reasonCode: z.enum(['capture_unavailable', 'permission_blocked', 'device_failure']),
+  reason: z.string().trim().min(10).max(500),
 })
 
 const attendanceEmployeeSelect = {
@@ -100,6 +108,7 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
       where: {
         employeeId: employee.id,
         date: today,
+        status: { not: 'cancelled' },
         project: { tenantId: request.user.tenantId },
       },
       include: { project: true, shift: true, attendanceRecord: true },
@@ -304,6 +313,246 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
 
     return toPublicAttendanceRecord(updated)
   })
+
+  // ===== MANUAL EVENT (authorized supervisor/system-admin only) =====
+  app.post<{ Params: { id: string } }>(
+    '/assignments/:id/manual-event',
+    { preHandler: requireAuth },
+    async (request: any) => {
+      if (!request.user) throw new ForbiddenError()
+      await requirePermission('attendance.override')(request)
+      if (request.user.role !== 'supervisor' && request.user.role !== 'system_admin') {
+        throw new ForbiddenError('Only an authorized supervisor or system admin can record a manual event')
+      }
+
+      const assignmentId = (request.params as { id: string }).id
+      const body = ManualEventSchema.parse(request.body)
+      const occurredAt = new Date(body.occurredAt)
+      if (occurredAt.getTime() > Date.now()) {
+        throw new BusinessRuleViolationError('Manual attendance time cannot be in the future')
+      }
+
+      try {
+        const updated = await prisma.$transaction(async (tx) => {
+          const actor = await tx.user.findFirst({
+            where: {
+              id: request.user.userId,
+              tenantId: request.user.tenantId,
+              role: request.user.role,
+              status: 'active',
+            },
+            select: { id: true },
+          })
+          if (!actor) throw new ForbiddenError('Attendance operator account not active')
+
+          const assignment = await tx.shiftAssignment.findFirst({
+            where: {
+              id: assignmentId,
+              employee: {
+                tenantId: request.user.tenantId,
+                status: 'active',
+                deletedAt: null,
+                user: { status: 'active' },
+              },
+              shift: { tenantId: request.user.tenantId, isActive: true },
+              project: {
+                tenantId: request.user.tenantId,
+                deletedAt: null,
+                ...(request.user.role === 'supervisor'
+                  ? { supervisors: { some: { userId: request.user.userId } } }
+                  : {}),
+              },
+            },
+            include: {
+              employee: { include: { user: true } },
+              project: true,
+              shift: true,
+              attendanceRecord: true,
+            },
+          })
+          if (!assignment) throw new NotFoundError('ShiftAssignment', assignmentId)
+          if (assignment.employee.userId === request.user.userId) {
+            throw new ForbiddenError('A supervisor cannot manually record their own attendance')
+          }
+          assertNotTooFarInPast(assignment.date, 7)
+
+          const assignmentDateKey = assignment.date.toISOString().slice(0, 10)
+          const nextDate = new Date(assignment.date)
+          nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+          const allowedEventDates = new Set([
+            assignmentDateKey,
+            ...(body.event === 'check_out' && assignment.shift.isOvernight
+              ? [nextDate.toISOString().slice(0, 10)]
+              : []),
+          ])
+          if (!allowedEventDates.has(getVietnamDateKey(occurredAt))) {
+            throw new BusinessRuleViolationError(
+              'Manual attendance time must match the assignment business date',
+            )
+          }
+
+          const scheduledStart = buildShiftDateTime(
+            assignment.date,
+            assignment.shift.startTime,
+            false,
+          )
+          const scheduledEnd = buildShiftDateTime(
+            assignment.date,
+            assignment.shift.endTime,
+            assignment.shift.isOvernight,
+          )
+          // Operational grace allows early arrival and delayed supervisor entry,
+          // while bounding the event to this assignment instead of accepting an
+          // arbitrary instant that happens to share its calendar date.
+          const earliestManualEvent = new Date(scheduledStart.getTime() - 4 * 60 * 60_000)
+          const latestManualEvent = new Date(scheduledEnd.getTime() + 12 * 60 * 60_000)
+          if (occurredAt < earliestManualEvent || occurredAt > latestManualEvent) {
+            throw new BusinessRuleViolationError(
+              'Manual attendance time is outside the assignment support window',
+            )
+          }
+          const overrideReason = `${body.reasonCode}: ${body.reason}`
+          const overrideAt = new Date()
+          let persisted
+
+          if (body.event === 'check_in') {
+            if (!['scheduled', 'missed'].includes(assignment.status)) {
+              throw new ConflictError('Assignment cannot be manually checked in')
+            }
+            if (assignment.attendanceRecord?.checkInAt) {
+              throw new ConflictError('Already checked in')
+            }
+            const status = computeAttendanceStatus(
+              assignment.shift,
+              {
+                scheduledStart,
+                scheduledEnd,
+                checkInAt: occurredAt,
+                checkOutAt: null,
+              },
+            )
+            if (assignment.attendanceRecord) {
+              const claimed = await tx.attendanceRecord.updateMany({
+                where: { id: assignment.attendanceRecord.id, checkInAt: null },
+                data: {
+                  checkInAt: occurredAt,
+                  status: status.status,
+                  lateMinutes: status.lateMinutes,
+                  overrideReason,
+                  overrideById: request.user.userId,
+                  overrideAt,
+                },
+              })
+              if (claimed.count !== 1) throw new ConflictError('Already checked in')
+              persisted = await tx.attendanceRecord.findUniqueOrThrow({
+                where: { id: assignment.attendanceRecord.id },
+              })
+            } else {
+              persisted = await tx.attendanceRecord.create({
+                data: {
+                  shiftAssignmentId: assignment.id,
+                  employeeId: assignment.employeeId,
+                  projectId: assignment.projectId,
+                  checkInAt: occurredAt,
+                  status: status.status,
+                  lateMinutes: status.lateMinutes,
+                  overrideReason,
+                  overrideById: request.user.userId,
+                  overrideAt,
+                },
+              })
+            }
+            const assignmentClaimed = await tx.shiftAssignment.updateMany({
+              where: { id: assignment.id, status: { in: ['scheduled', 'missed'] } },
+              data: { status: 'checked_in' },
+            })
+            if (assignmentClaimed.count !== 1) {
+              throw new ConflictError('Assignment cannot be manually checked in')
+            }
+          } else {
+            const record = assignment.attendanceRecord
+            if (!record?.checkInAt) throw new ConflictError('Must check in before checking out')
+            if (record.checkOutAt) throw new ConflictError('Already checked out')
+            if (assignment.status !== 'checked_in') {
+              throw new ConflictError('Assignment cannot be manually checked out')
+            }
+            if (occurredAt <= record.checkInAt) {
+              throw new BusinessRuleViolationError('Check-out must be after check-in')
+            }
+            const status = computeAttendanceStatus(
+              assignment.shift,
+              {
+                scheduledStart,
+                scheduledEnd,
+                checkInAt: record.checkInAt,
+                checkOutAt: occurredAt,
+              },
+            )
+            const totalMinutesWorked = computeWorkedMinutes(
+              record.checkInAt,
+              occurredAt,
+              assignment.shift.breakMinutes,
+            )
+            const claimed = await tx.attendanceRecord.updateMany({
+              where: { id: record.id, checkInAt: { not: null }, checkOutAt: null },
+              data: {
+                checkOutAt: occurredAt,
+                status: status.status,
+                lateMinutes: status.lateMinutes,
+                overtimeMinutes: status.overtimeMinutes,
+                totalMinutesWorked,
+                overrideReason,
+                overrideById: request.user.userId,
+                overrideAt,
+              },
+            })
+            if (claimed.count !== 1) throw new ConflictError('Already checked out')
+            const assignmentClaimed = await tx.shiftAssignment.updateMany({
+              where: { id: assignment.id, status: 'checked_in' },
+              data: { status: 'checked_out' },
+            })
+            if (assignmentClaimed.count !== 1) {
+              throw new ConflictError('Assignment cannot be manually checked out')
+            }
+            persisted = await tx.attendanceRecord.findUniqueOrThrow({ where: { id: record.id } })
+          }
+
+          await tx.auditLog.create({
+            data: {
+              tenantId: request.user.tenantId,
+              actorId: request.user.userId,
+              actorRole: request.user.role,
+              action: 'override_attendance',
+              entityType: 'AttendanceRecord',
+              entityId: persisted.id,
+              previousValue: {
+                assignmentStatus: assignment.status,
+                checkInAt: assignment.attendanceRecord?.checkInAt?.toISOString() ?? null,
+                checkOutAt: assignment.attendanceRecord?.checkOutAt?.toISOString() ?? null,
+              },
+              newValue: {
+                provenance: 'manual',
+                event: body.event,
+                occurredAt: occurredAt.toISOString(),
+                reasonCode: body.reasonCode,
+                reason: body.reason,
+                assignmentStatus: body.event === 'check_in' ? 'checked_in' : 'checked_out',
+                checkInAt: persisted.checkInAt?.toISOString() ?? null,
+                checkOutAt: persisted.checkOutAt?.toISOString() ?? null,
+              },
+            },
+          })
+          return persisted
+        })
+        return toPublicAttendanceRecord(updated)
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          throw new ConflictError('Attendance event already recorded')
+        }
+        throw error
+      }
+    },
+  )
 
   // ===== RECORDS QUERY (admin/supervisor) =====
   app.get('/records', { preHandler: requireAuth }, async (request) => {

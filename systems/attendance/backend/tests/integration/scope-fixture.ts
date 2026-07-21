@@ -17,6 +17,9 @@ export async function createScopeFixture() {
   const admin = await prisma.user.create({
     data: { tenantId: tenantA.id, phone: phone('8'), role: 'system_admin' },
   })
+  const boAdmin = await prisma.user.create({
+    data: { tenantId: tenantA.id, phone: phone('7'), role: 'bo_admin' },
+  })
   const createUserEmployee = async (tenantId: string, role: 'employee' | 'supervisor', code: string) => {
     const user = await prisma.user.create({ data: { tenantId, phone: phone('9'), role } })
     const employee = await prisma.employee.create({
@@ -37,10 +40,12 @@ export async function createScopeFixture() {
   const supervisor = await createUserEmployee(tenantA.id, 'supervisor', 'SUP')
   const teamMember = await createUserEmployee(tenantA.id, 'employee', 'TEAM')
   const mobileMember = await createUserEmployee(tenantA.id, 'employee', 'MOBILE')
+  const raceMember = await createUserEmployee(tenantA.id, 'employee', 'RACE')
   const outsider = await createUserEmployee(tenantA.id, 'employee', 'OUT')
   const foreign = await createUserEmployee(tenantB.id, 'employee', 'FOREIGN')
   const shift = await prisma.shift.create({
     data: {
+      tenantId: tenantA.id,
       name: `Security Shift ${suffix}`,
       startTime: '00:00',
       endTime: '23:59',
@@ -48,6 +53,17 @@ export async function createScopeFixture() {
       lateThresholdMinutes: 1_440,
     },
   })
+  const foreignShift = await prisma.shift.create({
+    data: {
+      tenantId: tenantB.id,
+      name: `Security Shift ${suffix}`,
+      startTime: '00:00',
+      endTime: '23:59',
+      breakMinutes: 0,
+      lateThresholdMinutes: 1_440,
+    },
+  })
+  const shiftIds = [shift.id, foreignShift.id]
   const createProject = (tenantId: string, code: string) => prisma.project.create({
     data: {
       tenantId,
@@ -71,17 +87,16 @@ export async function createScopeFixture() {
     timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
   const assignmentDate = new Date(`${dateKey}T00:00:00.000Z`)
-  const createAssignment = (employeeId: string, projectId: string, assignedById: string) => (
+  const createAssignment = (employeeId: string, projectId: string, assignedById: string, shiftId = shift.id) => (
     prisma.shiftAssignment.create({
-      data: { employeeId, projectId, shiftId: shift.id, date: assignmentDate, assignedById },
+      data: { employeeId, projectId, shiftId, date: assignmentDate, assignedById },
     })
   )
-  await createAssignment(supervisor.employee.id, teamProject.id, supervisor.user.id)
-  await createAssignment(supervisor.employee.id, outsideProject.id, supervisor.user.id)
   const teamAssignment = await createAssignment(teamMember.employee.id, teamProject.id, supervisor.user.id)
   const mobileAssignment = await createAssignment(mobileMember.employee.id, teamProject.id, supervisor.user.id)
+  const raceAssignment = await createAssignment(raceMember.employee.id, teamProject.id, supervisor.user.id)
   const outsideAssignment = await createAssignment(outsider.employee.id, outsideProject.id, supervisor.user.id)
-  const foreignAssignment = await createAssignment(foreign.employee.id, foreignProject.id, foreign.user.id)
+  const foreignAssignment = await createAssignment(foreign.employee.id, foreignProject.id, foreign.user.id, foreignShift.id)
   const createRecord = (a: { id: string; employeeId: string; projectId: string }) => (
     prisma.attendanceRecord.create({
       data: {
@@ -97,17 +112,17 @@ export async function createScopeFixture() {
   const outsideRecord = await createRecord(outsideAssignment)
   const foreignRecord = await createRecord(foreignAssignment)
   await grantPermissions([
-    ['attendance.override', 'attendance', 'override', ['supervisor']],
+    ['attendance.override', 'attendance', 'override', ['supervisor', 'system_admin']],
     ['attendance.view_all', 'attendance', 'view', ['supervisor']],
-    ['employees.view', 'employees', 'view', ['supervisor']],
+    ['employees.view', 'employees', 'view', ['supervisor', 'bo_admin', 'system_admin']],
     ['employees.create', 'employees', 'create', ['system_admin']],
     ['employees.update', 'employees', 'update', ['system_admin']],
-    ['projects.view', 'projects', 'view', ['supervisor', 'system_admin']],
+    ['projects.view', 'projects', 'view', ['supervisor', 'bo_admin', 'system_admin']],
     ['projects.create', 'projects', 'create', ['system_admin']],
     ['projects.update', 'projects', 'update', ['system_admin']],
     ['reports.view', 'reports', 'view', ['supervisor']],
     ['reports.generate', 'reports', 'generate', ['supervisor']],
-    ['attendance.shifts.manage', 'attendance', 'manage', ['supervisor']],
+    ['attendance.shifts.manage', 'attendance', 'manage', ['supervisor', 'bo_admin', 'system_admin']],
     ['attendance.view_self', 'attendance', 'view', ['employee']],
   ])
   await ensureBuckets()
@@ -119,8 +134,14 @@ export async function createScopeFixture() {
   const adminToken = issueAccessToken({
     userId: admin.id, tenantId: tenantA.id, role: 'system_admin',
   }).token
+  const boAdminToken = issueAccessToken({
+    userId: boAdmin.id, tenantId: tenantA.id, role: 'bo_admin',
+  }).token
   const mobileToken = issueAccessToken({
     userId: mobileMember.user.id, tenantId: tenantA.id, role: 'employee',
+  }).token
+  const raceToken = issueAccessToken({
+    userId: raceMember.user.id, tenantId: tenantA.id, role: 'employee',
   }).token
   const photoKeys: string[] = []
   const reportKeys: string[] = []
@@ -135,16 +156,17 @@ export async function createScopeFixture() {
     await prisma.project.deleteMany({ where: { id: { in: projectIds() } } })
     await prisma.employee.deleteMany({ where: { tenantId: { in: [tenantA.id, tenantB.id] } } })
     await prisma.user.deleteMany({ where: { tenantId: { in: [tenantA.id, tenantB.id] } } })
-    await prisma.shift.delete({ where: { id: shift.id } })
+    await prisma.shift.deleteMany({ where: { id: { in: shiftIds } } })
     await prisma.tenant.deleteMany({ where: { id: { in: [tenantA.id, tenantB.id] } } })
     await prisma.$disconnect()
   }
   const projectIds = () => [teamProject.id, outsideProject.id, foreignProject.id]
   return {
-    app, tenantA, tenantB, admin, supervisor, teamMember, mobileMember, outsider,
-    shift, teamProject, outsideProject, foreignProject, assignmentDate, dateKey,
-    teamRecord, outsideRecord, foreignRecord, mobileAssignment,
-    supervisorToken, adminToken, mobileToken, photoKeys, reportKeys, cleanup,
+    app, tenantA, tenantB, admin, boAdmin, supervisor, teamMember, mobileMember, raceMember, outsider, foreign,
+    shift, foreignShift, shiftIds, teamProject, outsideProject, foreignProject, assignmentDate, dateKey,
+    teamRecord, outsideRecord, foreignRecord, mobileAssignment, raceAssignment,
+    outsideAssignment, foreignAssignment,
+    supervisorToken, adminToken, boAdminToken, mobileToken, raceToken, photoKeys, reportKeys, cleanup,
   }
 }
 

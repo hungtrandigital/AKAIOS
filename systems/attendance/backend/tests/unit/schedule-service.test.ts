@@ -25,21 +25,39 @@ describe('detectShiftConflict', () => {
   })
 
   it('returns false for the same employee on another date', () => {
-    const candidate = { ...existing, shiftId: 'shift-afternoon', date: new Date('2026-07-18T00:00:00.000Z') }
+    const candidate = { ...existing, date: new Date('2026-07-18T00:00:00.000Z') }
     expect(detectShiftConflict(candidate, [existing])).toBe(false)
   })
 
-  it('detects overlapping shifts and accepts adjacent shifts', () => {
+  it('rejects overlapping and adjacent second shifts on the same work date', () => {
     const overlapping = { ...existing, shiftId: 'shift-overlap', startTime: '13:00', endTime: '18:00' }
     const adjacent = { ...existing, shiftId: 'shift-adjacent', startTime: '14:00', endTime: '22:00' }
     expect(detectShiftConflict(overlapping, [existing])).toBe(true)
-    expect(detectShiftConflict(adjacent, [existing])).toBe(false)
+    expect(detectShiftConflict(adjacent, [existing])).toBe(true)
   })
 
   it('detects overlap between overnight shifts', () => {
     const overnight = { ...existing, shiftId: 'shift-night', startTime: '22:00', endTime: '06:00', isOvernight: true }
     const overlapping = { ...overnight, shiftId: 'shift-late', startTime: '23:00', endTime: '01:00' }
     expect(detectShiftConflict(overlapping, [overnight])).toBe(true)
+  })
+
+  it('detects an overnight shift overlapping the following calendar date', () => {
+    const overnight = {
+      ...existing,
+      shiftId: 'shift-night',
+      startTime: '22:00',
+      endTime: '06:00',
+      isOvernight: true,
+    }
+    const nextMorning = {
+      ...existing,
+      date: new Date('2026-07-18T00:00:00.000Z'),
+      shiftId: 'shift-next-morning',
+      startTime: '05:00',
+      endTime: '12:00',
+    }
+    expect(detectShiftConflict(nextMorning, [overnight])).toBe(true)
   })
 })
 

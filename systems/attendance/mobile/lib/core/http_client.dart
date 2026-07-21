@@ -4,6 +4,9 @@ import 'package:dio/dio.dart';
 import 'auth_storage.dart';
 import 'config.dart';
 
+bool isDefinitiveRefreshRejection(int? statusCode) =>
+    statusCode == 401 || statusCode == 403;
+
 class ApiException implements Exception {
   final String code;
   final String message;
@@ -113,8 +116,11 @@ class HttpClient {
         refreshToken: rotatedRefreshToken,
       );
       return true;
-    } on DioException {
-      await _authStorage.clear();
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (isDefinitiveRefreshRejection(status)) {
+        await _authStorage.clear();
+      }
       return false;
     }
   }

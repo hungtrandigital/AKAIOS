@@ -29,7 +29,7 @@ related_ids:
   - CODE-BUG-021
   - CODE-BUG-022
 created: 2026-07-16
-updated: 2026-07-19
+updated: 2026-07-21
 priority: high
 owner: "@fullstack-engineer"
 phases:
@@ -367,6 +367,101 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - `2-product-foundation/product-backlog/backlog.md` (Epic 2)
 - `8-governance/changelog.md` (mỗi phase close)
 
+## Active Delivery Batch — BO Shift Scheduling and Local Attendance UAT (2026-07-20)
+
+**Owner:** `PRD-SLICE-003` — Attendance. Product validation: GO with conditions.
+
+**Context allowlist:**
+
+- `systems/attendance/backend/src/routes/shifts.ts`
+- `systems/attendance/backend/src/routes/attendance.ts`
+- `systems/attendance/backend/src/services/schedule-service.ts`
+- `systems/attendance/backend/tests/integration/supervisor-data-scope.test.ts`
+- `systems/attendance/backend/tests/integration/scope-fixture.ts`
+- `systems/attendance/backend/tests/unit/schedule-service.test.ts`
+- `systems/shared/src/db/prisma/schema.prisma`
+- `systems/shared/src/db/prisma/migrations/`
+- `systems/shared/src/db/seeds/`
+- `systems/payroll/web-admin/app/attendance/page.tsx`
+- `systems/payroll/web-admin/app/globals.css`
+- `systems/payroll/web-admin/components/TopNav.tsx`
+- `systems/payroll/web-admin/next.config.js`
+- `systems/payroll/web-admin/e2e/auth.spec.ts`
+- `systems/attendance/mobile/lib/features/attendance/`
+- `systems/attendance/mobile/test/widget_test.dart`
+- `3-technical/3.1-system-foundation/architecture/domain-specs.md`
+- `3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml`
+- Existing attendance READMEs, progress status, and changelog for delivery evidence.
+
+**Acceptance scope:**
+
+1. BO/system admin can list/create active shift templates and list/filter/create/cancel dated assignments across their tenant.
+2. Supervisors can list/create/cancel only within explicit active project membership. Employees have no scheduling access.
+3. Shift templates are tenant-owned. Assignments require an active employee/user, active project, and active shift in the same tenant; the MVP permits exactly one non-cancelled assignment per employee/business date and also rejects adjacent-date overnight overlap.
+4. Cancellation requires a reason, is audited, and is rejected after check-in or any attendance record. Rescheduling is cancel then create; full template update/delete is deferred.
+5. BO UI exposes a dated scheduling form, project/employee/shift filters, operational status counts, clear empty/error states, and a roster with guarded cancellation.
+6. Local UAT proves BO assignment → employee mobile Today → GPS/photo check-in → BO visibility → GPS/photo check-out → checkout-complete (`checked_out`) state. Simulator evidence is development-only and does not replace physical-device or pilot acceptance.
+
+**Explicit exclusions:** recurring/bulk/drag-drop schedules, staffing optimization, leave workflow, notifications, multiple shifts per employee/day, offline behavior, payroll/report changes, production deploy/tunnel, real-site device reliability, signing, and pilot approval.
+
+**Local completion evidence (2026-07-20):**
+
+- BO operations board implements dated assignment, active project/employee/shift selection, status coverage, filtering, audited cancellation, and BO-only template creation; supervisor UI is membership-scoped and hides template creation.
+- Shift templates are tenant-scoped in Prisma, API reads/writes, seeds, and fixtures. The migration clones the former global catalog per tenant, repoints assignments by project tenant, verifies alignment, and adds a partial database unique index for one non-cancelled employee/date assignment.
+- Assignment/cancellation integration passes tenant/role/membership checks, foreign-shift and inactive-resource rejection, same-date/adjacent-date overlap, duplicate/concurrent create, concurrent cancel, audit, and no-cancel-after-attendance behavior. Assignment lists are paginated and return full-filter status summaries so BO totals do not truncate with the visible page.
+- Live local UAT used `PRJ001`: BO assigned the employee, the iOS Simulator showed the shift and geofence GPS, check-in/out with required JPEG evidence succeeded through the public API, and both BO and the explicitly assigned supervisor saw the record and final `checked_out` state.
+- The UAT exposed and fixed UTC clock rendering on mobile; Flutter now converts server instants to device local time and has a regression test.
+- iOS Simulator cannot provide a camera stream and reports `Camera not available`; the UI was verified to require a photo, while the photo upload path was completed at API level. A physical-device GPS/camera pass remains a release/pilot gate.
+- Database verification passes both a fresh six-migration deploy/seed and an explicit two-tenant backfill from the prior five-migration schema; cloned templates and assignments remain tenant-aligned, a second active same-day assignment is rejected, and cancelled history is retained. The existing legacy local demo database was not mutated because its repeated non-cancelled employee/date rows correctly trigger the migration preflight; those rows require audited reconciliation before that database can be upgraded.
+- A foreign-tenant seed sentinel remained untouched while the full attendance demo seed processed 13,800 AK assignments, confirming tenant-scoped demo writes. Independent final code re-review returned **GO** with no High/Medium findings.
+- Local gates pass: Attendance 47 unit tests and 9/9 full live integration tests, Payroll integration 1/1, Flutter 4 tests/analyze, web lint/typecheck/production build, focused BO Playwright schedule create/cancel E2E using the BO account, and OpenAPI YAML parse. No deployment, commit, push, or remote CI was performed in this batch.
+
+## Active Delivery Batch — Employee Mobile Ease-of-Use and Camera Failure (2026-07-20)
+
+**Owner:** `PRD-SLICE-003` — Attendance. Product validation: GO with conditions.
+
+**Context allowlist:**
+
+- `systems/attendance/mobile/pubspec.yaml`
+- `systems/attendance/mobile/assets/`
+- `shared/assets/Prismate Brand Assets/LOGO/Prismate_Black@5x.png`
+- `shared/assets/README.md`
+- `systems/attendance/mobile/android/app/src/main/res/`
+- `systems/attendance/mobile/ios/Runner/Base.lproj/LaunchScreen.storyboard`
+- `systems/attendance/mobile/ios/Runner/Assets.xcassets/LaunchImage.imageset/`
+- `systems/attendance/mobile/lib/main.dart`
+- `systems/attendance/mobile/lib/core/`
+- `systems/attendance/mobile/lib/features/auth/`
+- `systems/attendance/mobile/lib/features/attendance/`
+- `systems/attendance/mobile/lib/l10n/`
+- `systems/attendance/mobile/test/`
+- `systems/attendance/backend/src/routes/attendance.ts`
+- `systems/attendance/backend/tests/`
+- `systems/shared/src/db/prisma/schema.prisma`
+- `systems/shared/src/db/prisma/migrations/`
+- `systems/payroll/web-admin/app/attendance/page.tsx`
+- `systems/payroll/web-admin/e2e/auth.spec.ts`
+- Existing domain/API contracts, attendance/mobile READMEs, progress status, and changelog.
+
+**Acceptance scope:**
+
+1. Vietnamese-first employee flow from a static native Prismate launch mark into a reduced-motion-aware Flutter Prismate loading animation, then Today, check-in/out, completed, no-shift, and recoverable-error states; no indefinite spinner or artificial startup delay.
+2. One clear primary action per state, body text at least 16sp, touch targets at least 48dp, high contrast, text labels beside icons, reduced-motion support, and usable large-text wrapping.
+3. Today shows project, shift time, current attendance state, and recorded local timestamps. Camera/location requirements are explained before system permission prompts, with Retry and Settings recovery.
+4. Employee self check-in/out continues to require the assigned shift, geofence-valid GPS, and a newly captured photo in the official client. The backend fully decodes JPEG evidence and enforces 5 MB/16 MP ceilings plus a 320×240 minimum; camera failure must not issue a photo-less bypass.
+5. Cancelling capture stays a normal retry state. Confirmed permission, unavailable-hardware, or camera/plugin failures expose a prominent supervisor-help path and a re-check action. Employee self-attendance never accepts a missing/photo-library image. The operator-only `POST /v1/attendance/assignments/:id/manual-event` path accepts only `capture_unavailable`, `permission_blocked`, or `device_failure`, requires a note and assignment-bounded event time, records actor/time/provenance in the existing override fields plus immutable audit, blocks supervisor self-fallback, and remains visible to BO and the employee as an exception only when that structured camera-failure provenance exists.
+6. App bootstrap reads secure storage once, renders `/splash` until the auth state resolves, never flashes Login/Today, and exposes retry on storage timeout/error without clearing valid credentials because of network loss.
+
+**Local completion evidence (2026-07-21):**
+
+- The optimized 1200×464 Prismate derivative is bundled once for Flutter; density-specific legacy and Android 12+ masked launch resources plus original-rendering iOS launch images bridge native startup into the reusable opacity/scale loading mark. Light/dark startup backgrounds stay white, reduced-motion settings render a static mark, and bootstrap performs no fake wait.
+- Login, Today and check-in busy states reuse the same branded loader with task-specific Vietnamese status text. Cold-start visual QA passes on the iPhone 17 Pro Simulator after a fresh install.
+- Camera cancellation remains a quiet retry. Only permission denial, unavailable hardware, or camera/plugin failure highlights `Nhờ giám sát hỗ trợ`; the help sheet explains the three-step assisted flow and can re-fetch Today without enabling employee photo-less submission.
+- The employee manual-attendance badge now requires an authorized actor plus a structured camera-failure reason code, preventing unrelated BO overrides from being mislabeled.
+- Flutter analyze and 16/16 tests pass, including reduced-motion semantics and recovery-state coverage. The iOS debug Simulator build passes. The Android resources validate, but this Mac cannot rerun APK packaging because no Android SDK is installed; physical-device camera/GPS UAT remains a release gate. Independent targeted re-review returned **GO** with no High/Medium/Low findings.
+
+**Explicit exclusions:** offline queue, gallery-photo fallback, face recognition/liveness, device attestation, push notifications, full-app redesign outside boot/login/Today/check flow, automatic payroll approval of manual exceptions, production rollout, and claims of physical-device reliability before field UAT.
+
 ## Resolved Decisions and Remaining Pilot Inputs
 
 1. **Resolved — system split:** `systems/attendance` and `systems/payroll`, with shared infrastructure in `systems/shared`.
@@ -374,6 +469,23 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 3. **Resolved — SMS gateway:** SpeedSMS in production; mock mode is restricted to non-production environments.
 4. **Remaining — production endpoint:** supply the real domain/Cloudflare Tunnel configuration (or approve a different private-access topology).
 5. **Remaining — server capacity:** confirm the on-premise hardware/backup budget against the runbook sizing.
+
+### Temporary local authentication exception — 2026-07-20
+
+- Local UI testing may set `DEV_FIXED_ADMIN_2FA_CODE` to an exact four-digit
+  value. The value stays in ignored local environment files and is not a
+  committed default.
+- The exception replaces only TOTP verification. Password/active-admin checks,
+  Redis challenge TTL and attempt limits, challenge replay prevention, and
+  refresh-token rotation remain mandatory. The API also binds to loopback and
+  rejects fixed-mode admin auth from an effective non-loopback client address;
+  the web-admin development server binds to loopback as well.
+- Configuration fails closed if the flag is present without an explicit
+  `NODE_ENV=development|test`. Standard CI and E2E keep the flag unset and test
+  real encrypted six-digit TOTP.
+- This exception is not staging or pilot acceptance evidence. It must be unset,
+  and the real authenticator flow must be integrated and revalidated, before
+  any shared/staging/pilot deployment.
 
 ## Known Issues & Bugs
 

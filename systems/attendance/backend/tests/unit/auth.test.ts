@@ -14,6 +14,7 @@ beforeAll(() => {
   process.env.JWT_SECRET = 'test_secret_32_characters_minimum_for_pass'
   process.env.JWT_ACCESS_TTL_SECONDS = '900'
   process.env.INTERNAL_API_KEY = 'test_internal_api_key_32_chars_min'
+  delete process.env.DEV_FIXED_ADMIN_2FA_CODE
 })
 
 import { buildServer } from '../../src/server.js'
@@ -28,13 +29,53 @@ import {
 } from '@ak/shared'
 import { generateReportPdf } from '../../src/services/reports/customer-report.js'
 import { decodePhotoBase64, MAX_PHOTO_BYTES } from '../../src/services/photo-service.js'
+import sharp from 'sharp'
 
 afterEach(() => {
   delete process.env.TOTP_ENCRYPTION_KEY
   delete process.env.SPEEDSMS_ACCESS_TOKEN
   delete process.env.SPEEDSMS_SENDER
   delete process.env.SMS_MODE
+  delete process.env.DEV_FIXED_ADMIN_2FA_CODE
+  process.env.NODE_ENV = 'test'
   vi.unstubAllGlobals()
+})
+
+describe('development fixed admin 2FA config', () => {
+  it('accepts an exact four-digit code only with explicit development or test mode', async () => {
+    process.env.NODE_ENV = 'development'
+    process.env.DEV_FIXED_ADMIN_2FA_CODE = '1357'
+    vi.resetModules()
+    const { loadConfig } = await import('../../src/config.js')
+
+    expect(loadConfig().devFixedAdmin2faCode).toBe('1357')
+  })
+
+  it('rejects the fixed code in production or when NODE_ENV is missing', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DEV_FIXED_ADMIN_2FA_CODE = '1357'
+    vi.resetModules()
+    let configModule = await import('../../src/config.js')
+    expect(() => configModule.loadConfig()).toThrow('DEV_FIXED_ADMIN_2FA_CODE')
+
+    delete process.env.NODE_ENV
+    vi.resetModules()
+    configModule = await import('../../src/config.js')
+    expect(() => configModule.loadConfig()).toThrow('DEV_FIXED_ADMIN_2FA_CODE')
+  })
+
+  it('rejects malformed fixed codes and preserves authenticator mode when unset', async () => {
+    process.env.NODE_ENV = 'test'
+    process.env.DEV_FIXED_ADMIN_2FA_CODE = '12345'
+    vi.resetModules()
+    let configModule = await import('../../src/config.js')
+    expect(() => configModule.loadConfig()).toThrow('devFixedAdmin2faCode')
+
+    delete process.env.DEV_FIXED_ADMIN_2FA_CODE
+    vi.resetModules()
+    configModule = await import('../../src/config.js')
+    expect(configModule.loadConfig().devFixedAdmin2faCode).toBeUndefined()
+  })
 })
 
 describe('employee OTP delivery', () => {
@@ -122,12 +163,28 @@ describe('customer PDF privacy', () => {
 })
 
 describe('photo payload validation', () => {
-  it('uses typed client errors for empty, non-JPEG, and oversized payloads', () => {
-    expect(() => decodePhotoBase64('')).toThrow(ValidationError)
-    expect(() => decodePhotoBase64(Buffer.alloc(10).toString('base64')))
-      .toThrow(ValidationError)
-    expect(() => decodePhotoBase64(Buffer.alloc(MAX_PHOTO_BYTES + 1, 0xff).toString('base64')))
-      .toThrow(BusinessRuleViolationError)
+  it('fully decodes a sufficiently sized JPEG', async () => {
+    const jpeg = await sharp({
+      create: { width: 640, height: 480, channels: 3, background: '#0289f7' },
+    }).jpeg().toBuffer()
+
+    await expect(decodePhotoBase64(jpeg.toString('base64'))).resolves.toEqual(jpeg)
+  })
+
+  it('uses typed client errors for empty, fake, tiny, and oversized payloads', async () => {
+    const tinyJpeg = await sharp({
+      create: { width: 64, height: 64, channels: 3, background: '#0289f7' },
+    }).jpeg().toBuffer()
+
+    await expect(decodePhotoBase64('')).rejects.toBeInstanceOf(ValidationError)
+    await expect(decodePhotoBase64(
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 1, 2, 3, 0xff, 0xd9]).toString('base64'),
+    )).rejects.toBeInstanceOf(ValidationError)
+    await expect(decodePhotoBase64(tinyJpeg.toString('base64')))
+      .rejects.toBeInstanceOf(ValidationError)
+    await expect(decodePhotoBase64(
+      Buffer.alloc(MAX_PHOTO_BYTES + 1, 0xff).toString('base64'),
+    )).rejects.toBeInstanceOf(BusinessRuleViolationError)
   })
 })
 

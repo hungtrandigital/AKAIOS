@@ -19,19 +19,30 @@ pnpm --filter @ak/payroll-web-admin dev
 
 Open <http://localhost:3002>. API URLs are server-side rewrite destinations and
 must not include `/api`; browser calls use the web admin's same-origin `/api/*`
-routes.
+routes. The development script binds to `127.0.0.1` so the temporary local fixed
+verifier cannot be reached from another LAN device through this proxy. The
+production `start` command is unchanged.
 
 ## Authentication
 
 - Admin login verifies email/password and active-account status.
 - Successful password verification proceeds to `/login/2fa` for TOTP.
+- A development build also permits a four-digit input so a local Attendance API
+  configured with `DEV_FIXED_ADMIN_2FA_CODE` can be tested. The value is owned
+  by the API environment and is never embedded in the browser bundle.
 - Access tokens are stored in browser storage; refresh tokens use HTTP-only
   cookies with server-side rotation and revocation.
 - Logout revokes the refresh session and clears local access state.
 
+Staging and production builds remain six-digit TOTP-only. Do not set the fixed
+verifier flag outside an explicitly local/test API process.
+
 ## Implemented Surfaces
 
 - Realtime attendance view with audited manual override.
+- Daily tenant-scoped shift planning with searchable employee selection,
+  paginated assignment filters and full-result operational totals, guarded
+  cancellation, and BO/admin shift-template creation.
 - Payroll period open/calculate/approve/export flow.
 - Projects and employees views.
 - Executive dashboard and recent customer reports.
@@ -49,8 +60,8 @@ pnpm test:e2e
 ```
 
 The current E2E suite covers unauthenticated redirect, invalid password, five
-independent TOTP logins, attendance, payroll, projects, logout, and opening a
-payroll period.
+independent TOTP logins, attendance, shift assignment create/cancel behavior,
+payroll, projects, logout, and opening a payroll period.
 
 ## Production
 

@@ -135,4 +135,162 @@ describe.skipIf(skipIntegration)('Supervisor membership and overrides (integrati
         await f.cleanup()
       }
     })
+
+  it('records camera-failure attendance only through an audited scoped manual event',
+    { timeout: 60_000 }, async () => {
+      const f = await createScopeFixture()
+      const auth = (token: string) => ({ authorization: `Bearer ${token}` })
+      const post = (assignmentId: string, token: string, payload: object) => f.app.inject({
+        method: 'POST',
+        url: `/v1/attendance/assignments/${assignmentId}/manual-event`,
+        headers: auth(token),
+        payload,
+      })
+      const checkInAt = new Date(Date.now() - 2 * 60_000)
+      const checkOutAt = new Date(Date.now() - 60_000)
+      const reason = 'Camera điện thoại bị hỏng; giám sát đã xác nhận trực tiếp tại dự án'
+      try {
+        const checkInPayload = {
+          event: 'check_in',
+          occurredAt: checkInAt.toISOString(),
+          reasonCode: 'device_failure',
+          reason,
+        }
+        expect((await post(f.mobileAssignment.id, f.mobileToken, checkInPayload)).statusCode)
+          .toBe(403)
+        expect((await post(f.mobileAssignment.id, f.boAdminToken, checkInPayload)).statusCode)
+          .toBe(403)
+        expect((await post(f.outsideAssignment.id, f.supervisorToken, checkInPayload)).statusCode)
+          .toBe(404)
+        expect((await post(f.foreignAssignment.id, f.supervisorToken, checkInPayload)).statusCode)
+          .toBe(404)
+        expect((await post(f.mobileAssignment.id, f.supervisorToken, {
+          ...checkInPayload,
+          occurredAt: new Date(Date.now() + 60_000).toISOString(),
+        })).statusCode).toBe(422)
+        expect((await post(f.mobileAssignment.id, f.supervisorToken, {
+          ...checkInPayload,
+          occurredAt: new Date(checkInAt.getTime() - 24 * 60 * 60_000).toISOString(),
+        })).statusCode).toBe(422)
+        const narrowShift = await prisma.shift.create({
+          data: {
+            tenantId: f.tenantA.id,
+            name: 'Manual event support window',
+            startTime: '06:00',
+            endTime: '14:00',
+            breakMinutes: 0,
+            lateThresholdMinutes: 15,
+          },
+        })
+        f.shiftIds.push(narrowShift.id)
+        const previousDateForWindow = new Date(f.assignmentDate)
+        previousDateForWindow.setUTCDate(previousDateForWindow.getUTCDate() - 1)
+        const narrowAssignment = await prisma.shiftAssignment.create({
+          data: {
+            employeeId: f.outsider.employee.id,
+            projectId: f.teamProject.id,
+            shiftId: narrowShift.id,
+            date: previousDateForWindow,
+            assignedById: f.admin.id,
+          },
+        })
+        expect((await post(narrowAssignment.id, f.supervisorToken, {
+          ...checkInPayload,
+          occurredAt: new Date(
+            `${previousDateForWindow.toISOString().slice(0, 10)}T01:00:00.000+07:00`,
+          ).toISOString(),
+        })).statusCode).toBe(422)
+
+        const selfAssignment = await prisma.shiftAssignment.create({
+          data: {
+            employeeId: f.supervisor.employee.id,
+            projectId: f.teamProject.id,
+            shiftId: f.shift.id,
+            date: f.assignmentDate,
+            assignedById: f.admin.id,
+          },
+        })
+        expect((await post(selfAssignment.id, f.supervisorToken, checkInPayload)).statusCode)
+          .toBe(403)
+
+        const previousDate = new Date(f.assignmentDate)
+        previousDate.setUTCDate(previousDate.getUTCDate() - 1)
+        const adminAssignment = await prisma.shiftAssignment.create({
+          data: {
+            employeeId: f.raceMember.employee.id,
+            projectId: f.outsideProject.id,
+            shiftId: f.shift.id,
+            date: previousDate,
+            assignedById: f.admin.id,
+          },
+        })
+        const previousDateKey = previousDate.toISOString().slice(0, 10)
+        const adminManual = await post(adminAssignment.id, f.adminToken, {
+          ...checkInPayload,
+          occurredAt: new Date(`${previousDateKey}T08:00:00.000+07:00`).toISOString(),
+        })
+        expect(adminManual.statusCode).toBe(200)
+        expect(adminManual.json()).toMatchObject({
+          overrideById: f.admin.id,
+          checkInGps: null,
+          checkInPhotoUrl: null,
+        })
+
+        const manualCheckIn = await post(
+          f.mobileAssignment.id,
+          f.supervisorToken,
+          checkInPayload,
+        )
+        expect(manualCheckIn.statusCode).toBe(200)
+        expect(manualCheckIn.json()).toMatchObject({
+          shiftAssignmentId: f.mobileAssignment.id,
+          checkInAt: checkInAt.toISOString(),
+          checkInGps: null,
+          checkInPhotoUrl: null,
+          overrideById: f.supervisor.user.id,
+        })
+        expect(manualCheckIn.json().overrideReason).toContain('device_failure:')
+        expect((await post(
+          f.mobileAssignment.id,
+          f.supervisorToken,
+          checkInPayload,
+        )).statusCode).toBe(409)
+
+        const manualCheckOut = await post(f.mobileAssignment.id, f.supervisorToken, {
+          event: 'check_out',
+          occurredAt: checkOutAt.toISOString(),
+          reasonCode: 'device_failure',
+          reason,
+        })
+        expect(manualCheckOut.statusCode).toBe(200)
+        expect(manualCheckOut.json()).toMatchObject({
+          checkOutAt: checkOutAt.toISOString(),
+          checkOutGps: null,
+          checkOutPhotoUrl: null,
+          totalMinutesWorked: 1,
+          overrideById: f.supervisor.user.id,
+        })
+        expect(await prisma.shiftAssignment.findUnique({
+          where: { id: f.mobileAssignment.id },
+        })).toMatchObject({ status: 'checked_out' })
+
+        const audits = await prisma.auditLog.findMany({
+          where: {
+            tenantId: f.tenantA.id,
+            entityId: manualCheckIn.json().id,
+            action: 'override_attendance',
+          },
+          orderBy: { occurredAt: 'asc' },
+        })
+        expect(audits).toHaveLength(2)
+        expect(audits[0]?.newValue).toMatchObject({
+          provenance: 'manual', event: 'check_in', reasonCode: 'device_failure',
+        })
+        expect(audits[1]?.newValue).toMatchObject({
+          provenance: 'manual', event: 'check_out', reasonCode: 'device_failure',
+        })
+      } finally {
+        await f.cleanup()
+      }
+    })
 })

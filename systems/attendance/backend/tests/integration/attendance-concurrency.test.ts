@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { prisma } from '@ak/shared'
+import sharp from 'sharp'
 import { createScopeFixture, skipIntegration } from './scope-fixture.js'
+
+async function validAttendanceJpeg() {
+  return (await sharp({
+    create: { width: 640, height: 480, channels: 3, background: '#0289f7' },
+  }).jpeg({ quality: 80 }).toBuffer()).toString('base64')
+}
 
 describe.skipIf(skipIntegration)('Attendance concurrency (integration)', () => {
   it('rejects inactive check-in and allows only one concurrent checkout',
     { timeout: 60_000 }, async () => {
       const f = await createScopeFixture()
-      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 1, 2, 3, 0xff, 0xd9])
-        .toString('base64')
+      const jpeg = await validAttendanceJpeg()
       const headers = { authorization: `Bearer ${f.mobileToken}` }
       const payload = {
         shiftAssignmentId: f.mobileAssignment.id,
@@ -21,6 +27,18 @@ describe.skipIf(skipIntegration)('Attendance concurrency (integration)', () => {
         })
         expect(nonJpeg.statusCode).toBe(400)
         expect(nonJpeg.json().error.code).toBe('VALIDATION_ERROR')
+
+        const fakeJpeg = await f.app.inject({
+          method: 'POST', url: '/v1/attendance/check-in', headers,
+          payload: {
+            ...payload,
+            photoBase64: Buffer.from([
+              0xff, 0xd8, 0xff, 0xe0, 0, 1, 2, 3, 0xff, 0xd9,
+            ]).toString('base64'),
+          },
+        })
+        expect(fakeJpeg.statusCode).toBe(400)
+        expect(fakeJpeg.json().error.code).toBe('VALIDATION_ERROR')
 
         const oversized = await f.app.inject({
           method: 'POST', url: '/v1/attendance/check-in', headers,
@@ -111,6 +129,50 @@ describe.skipIf(skipIntegration)('Attendance concurrency (integration)', () => {
         })
         expect(await prisma.shiftAssignment.findUnique({ where: { id: f.mobileAssignment.id } }))
           .toMatchObject({ status: 'checked_out' })
+      } finally {
+        await f.cleanup()
+      }
+    })
+
+  it('allows exactly one winner between mobile and manual check-in',
+    { timeout: 60_000 }, async () => {
+      const f = await createScopeFixture()
+      const jpeg = await validAttendanceJpeg()
+      const mobileRequest = () => f.app.inject({
+        method: 'POST',
+        url: '/v1/attendance/check-in',
+        headers: { authorization: `Bearer ${f.raceToken}` },
+        payload: {
+          shiftAssignmentId: f.raceAssignment.id,
+          gps: { latitude: 10.7720, longitude: 106.7009, accuracy: 100 },
+          photoBase64: jpeg,
+        },
+      })
+      const manualRequest = () => f.app.inject({
+        method: 'POST',
+        url: `/v1/attendance/assignments/${f.raceAssignment.id}/manual-event`,
+        headers: { authorization: `Bearer ${f.supervisorToken}` },
+        payload: {
+          event: 'check_in',
+          occurredAt: new Date(Date.now() - 60_000).toISOString(),
+          reasonCode: 'device_failure',
+          reason: 'Camera thiết bị không hoạt động; giám sát xác nhận trực tiếp',
+        },
+      })
+      try {
+        const responses = await Promise.all([mobileRequest(), manualRequest()])
+        expect(responses.filter((response) => response.statusCode === 200)).toHaveLength(1)
+        expect(responses.filter((response) => response.statusCode === 409)).toHaveLength(1)
+        expect(await prisma.attendanceRecord.count({
+          where: { shiftAssignmentId: f.raceAssignment.id },
+        })).toBe(1)
+        const record = await prisma.attendanceRecord.findUniqueOrThrow({
+          where: { shiftAssignmentId: f.raceAssignment.id },
+        })
+        if (record.checkInPhotoKey) f.photoKeys.push(record.checkInPhotoKey)
+        expect(await prisma.shiftAssignment.findUnique({
+          where: { id: f.raceAssignment.id },
+        })).toMatchObject({ status: 'checked_in' })
       } finally {
         await f.cleanup()
       }

@@ -209,28 +209,22 @@ async function createDemoAccounts() {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const morningShift = await prisma.shift.findFirst({
-          where: { name: 'Ca sáng' },
+          where: { tenantId: AK_TENANT_ID, name: 'Ca sáng' },
         })
         if (morningShift) {
-          await prisma.shiftAssignment.upsert({
-            where: {
-              employeeId_projectId_shiftId_date: {
-                employeeId: employee.id,
-                projectId: project.id,
-                shiftId: morningShift.id,
-                date: today,
-              },
-            },
-            update: {},
-            create: {
+          const existingAssignment = await prisma.shiftAssignment.findFirst({
+            where: { employeeId: employee.id, date: today, status: { not: 'cancelled' } },
+          })
+          if (!existingAssignment) {
+            await prisma.shiftAssignment.create({ data: {
               employeeId: employee.id,
               projectId: project.id,
               shiftId: morningShift.id,
               date: today,
               assignedById: membershipAdmin.id,
               status: 'scheduled',
-            },
-          })
+            } })
+          }
         }
       }
     }

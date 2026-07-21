@@ -443,6 +443,9 @@ paths:
           name: projectId
           schema: { type: string, format: uuid }
         - in: query
+          name: status
+          schema: { type: string, enum: [scheduled, checked_in, checked_out, completed, missed, cancelled] }
+        - in: query
           name: from
           description: Inclusive shift-assignment work date.
           schema: { type: string, format: date }
@@ -450,6 +453,12 @@ paths:
           name: to
           description: Inclusive shift-assignment work date.
           schema: { type: string, format: date }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
       responses:
         '200':
           description: OK
@@ -457,10 +466,13 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data, pagination, summary]
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/ShiftAssignment' }
+                    items: { $ref: '#/components/schemas/ShiftAssignmentRoster' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+                  summary: { $ref: '#/components/schemas/ShiftAssignmentSummary' }
     post:
       tags: [shifts]
       summary: Assign shift to employee
@@ -475,6 +487,42 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ShiftAssignment' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /v1/shifts/assignments/{id}/cancel:
+    post:
+      tags: [shifts]
+      summary: Cancel a scheduled shift assignment
+      description: |
+        BO/admin may cancel tenant assignments; supervisors are limited to projects where they have active membership.
+        Only an assignment still in `scheduled` state and without attendance can be cancelled. The reason and actor are audited.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShiftAssignmentCancel' }
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShiftAssignmentRoster' }
+        '400':
+          description: Invalid or too-short cancellation reason
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/BusinessRuleViolation' }
 
   # ===== ATTENDANCE =====
@@ -498,6 +546,9 @@ paths:
       summary: Employee check-in (GPS + photo)
       description: |
         Enforces BR-ATT-001 (GPS in geofence), BR-ATT-002 (late), BR-ATT-004 (no double), BR-ATT-005 (photo required).
+        JPEG data is fully decoded, limited to 5 MB and 16 MP, and must be at least 320x240.
+        The official app offers camera-only capture, but MVP has no device attestation/liveness;
+        direct API camera origin and capture time are therefore not cryptographically proven.
       requestBody:
         required: true
         content:
@@ -536,6 +587,39 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /v1/attendance/assignments/{id}/manual-event:
+    post:
+      tags: [attendance]
+      summary: Record an audited manual check-in/out after capture failure
+      description: |
+        Requires `attendance.override` and an active supervisor with explicit project membership,
+        or a system-admin break-glass account. Employees and BO reviewers cannot call this path.
+        A supervisor cannot record their own attendance. The event stores no synthetic GPS/photo;
+        it is durably marked through override provenance and an atomic `override_attendance` audit.
+        Event time must match the assignment business date (or next date for overnight checkout)
+        and its support window from four hours before shift start to twelve hours after shift end.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Shift-assignment ID.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualAttendanceEvent' }
+      responses:
+        '200':
+          description: Manual event recorded and audited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceRecord' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/BusinessRuleViolation' }
 
   /v1/attendance/records:
@@ -1279,16 +1363,20 @@ components:
     # ===== Shift =====
     Shift:
       type: object
-      required: [id, name, startTime, endTime, breakMinutes, lateThresholdMinutes, isOvernight]
+      required: [id, tenantId, name, startTime, endTime, breakMinutes, lateThresholdMinutes, isOvernight, isActive, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
         name: { type: string, example: 'Ca sáng' }
         startTime: { type: string, example: '06:00' }
         endTime: { type: string, example: '14:00' }
         breakMinutes: { type: integer, default: 60 }
         lateThresholdMinutes: { type: integer, default: 15 }
         isOvernight: { type: boolean, default: false }
-        color: { type: string, example: '#FF5733' }
+        color: { type: [string, 'null'], example: '#FF5733' }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
 
     ShiftCreate:
       type: object
@@ -1304,14 +1392,22 @@ components:
 
     ShiftAssignment:
       type: object
-      required: [id, employeeId, projectId, shiftId, date, status]
+      required: [id, employeeId, projectId, shiftId, date, status, assignedById, assignedAt, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         employeeId: { type: string, format: uuid }
         projectId: { type: string, format: uuid }
         shiftId: { type: string, format: uuid }
-        date: { type: string, format: date }
+        date:
+          type: string
+          format: date-time
+          description: Prisma `DATE` serialized as an ISO date-time at UTC midnight.
         status: { type: string, enum: [scheduled, checked_in, checked_out, completed, missed, cancelled] }
+        assignedById: { type: string, format: uuid }
+        assignedAt: { type: string, format: date-time }
+        notes: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
 
     ShiftAssignmentCreate:
       type: object
@@ -1322,6 +1418,44 @@ components:
         shiftId: { type: string, format: uuid }
         date: { type: string, format: date }
         notes: { type: string }
+
+    ShiftAssignmentCancel:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 500 }
+
+    ShiftAssignmentEmployee:
+      type: object
+      required: [id, userId, employeeCode, fullName, status]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        employeeCode: { type: string }
+        fullName: { type: string }
+        status: { type: string, enum: [active, inactive, suspended] }
+
+    ShiftAssignmentRoster:
+      allOf:
+        - $ref: '#/components/schemas/ShiftAssignment'
+        - type: object
+          required: [employee, project, shift, attendanceRecord]
+          properties:
+            employee: { $ref: '#/components/schemas/ShiftAssignmentEmployee' }
+            project: { $ref: '#/components/schemas/Project' }
+            shift: { $ref: '#/components/schemas/Shift' }
+            attendanceRecord: { anyOf: [{ $ref: '#/components/schemas/AttendanceRecord' }, { type: 'null' }] }
+
+    ShiftAssignmentSummary:
+      type: object
+      required: [scheduled, checked_in, checked_out, completed, missed, cancelled]
+      properties:
+        scheduled: { type: integer, minimum: 0 }
+        checked_in: { type: integer, minimum: 0 }
+        checked_out: { type: integer, minimum: 0 }
+        completed: { type: integer, minimum: 0 }
+        missed: { type: integer, minimum: 0 }
+        cancelled: { type: integer, minimum: 0 }
 
     ShiftAssignmentWithAttendance:
       allOf:
@@ -1403,7 +1537,7 @@ components:
         gps: { $ref: '#/components/schemas/GPSCoordinate' }
         photoBase64:
           type: string
-          description: JPEG base64-encoded, max 5 MB
+          description: Decodable JPEG base64, max 5 MB and 16 MP, minimum raster 320x240
 
     CheckOutRequest:
       type: object
@@ -1411,7 +1545,9 @@ components:
       properties:
         shiftAssignmentId: { type: string, format: uuid }
         gps: { $ref: '#/components/schemas/GPSCoordinate' }
-        photoBase64: { type: string }
+        photoBase64:
+          type: string
+          description: Decodable JPEG base64, max 5 MB and 16 MP, minimum raster 320x240
 
     AttendanceOverride:
       type: object
@@ -1421,6 +1557,21 @@ components:
         newStatus: { type: string, enum: [present, late, early_leave, half_day, absent, on_leave, holiday] }
         checkInAt: { type: [string, 'null'], format: date-time }
         checkOutAt: { type: [string, 'null'], format: date-time }
+
+    ManualAttendanceEvent:
+      type: object
+      additionalProperties: false
+      required: [event, occurredAt, reasonCode, reason]
+      properties:
+        event: { type: string, enum: [check_in, check_out] }
+        occurredAt:
+          type: string
+          format: date-time
+          description: Confirmed real event time; future values are rejected.
+        reasonCode:
+          type: string
+          enum: [capture_unavailable, permission_blocked, device_failure]
+        reason: { type: string, minLength: 10, maxLength: 500 }
 
     CustomerReportRequest:
       type: object

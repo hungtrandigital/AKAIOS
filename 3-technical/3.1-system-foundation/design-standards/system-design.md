@@ -1,8 +1,8 @@
 # System Design — AKAIUNSAN Attendance + Payroll
 
-**Status:** Reconciled with the 2026-07-18 implementation tree
+**Status:** Reconciled with the 2026-07-21 implementation tree
 
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-07-21
 
 **Owner:** @system-architecture + @fullstack-engineer
 
@@ -85,11 +85,21 @@ claim that every aggregate is implemented as a class with the same methods.
 
 ### Employee check-in/out
 
-1. Mobile authenticates and stores native access/refresh tokens in secure storage.
-2. Mobile sends assignment ID, GPS evidence, and bounded JPEG data.
-3. Attendance verifies employee/assignment/project scope and Haversine distance.
+1. A static native Prismate launch mark (legacy Android launch background, Android 12+ system splash, and iOS launch storyboard) bridges into the Flutter `/splash` route on a consistent white background. The reusable Flutter mark animates only while real work is pending, becomes static under reduced motion, and introduces no artificial delay. The route reads secure storage once and resolves synchronous router state without flashing Login/Today; network loss alone never clears a stored session.
+2. Mobile sends assignment ID, GPS evidence, and bounded JPEG data captured by the official camera-only UI.
+3. Attendance verifies employee/assignment/project scope, Haversine distance, full JPEG decode, 5 MB/16 MP ceilings, and a minimum 320×240 raster. Device attestation/liveness remains outside MVP, so direct-API camera origin is not claimed.
 4. A conditional transaction creates/updates one coherent attendance record.
 5. The private MinIO key is persisted; authorized reads receive a short-lived URL.
+
+If the employee cancels capture, the app stays in the normal retry path. Confirmed
+permission denial, unavailable hardware, or camera/plugin failure keeps employee
+submission disabled and promotes the supervisor-assisted recovery plus a Today
+re-check action. An authorized supervisor (or system-admin break-glass) can record
+a scoped manual event without synthetic GPS/photo; the event is bounded to the
+assignment business date/support window, record/assignment state and
+`override_attendance` audit commit atomically. BO and employee surfaces classify
+it as a camera-assisted exception only when actor and structured camera-failure
+reason provenance are both present.
 
 ### Payroll calculation
 
@@ -106,6 +116,17 @@ claim that every aggregate is implemented as a class with the same methods.
 2. The challenge is stored/attempt-limited in Redis and delivered by an HTTP-only cookie.
 3. Successful TOTP verification issues access and rotating refresh credentials.
 4. Refresh replay revokes the complete token family.
+
+For temporary local/test verification, an explicitly configured four-digit
+`DEV_FIXED_ADMIN_2FA_CODE` replaces the TOTP verifier only. The API still
+requires password and active-admin checks, the opaque Redis challenge, its TTL
+and attempt budget, and normal credential issuance/rotation. The flag fails
+configuration startup unless `NODE_ENV` is explicitly `development` or `test`;
+it must be absent from shared development, staging, production, Compose, and CI.
+While enabled, the API binds to loopback and rejects fixed-mode admin auth whose
+effective client address is outside the loopback range. The web-admin development
+server also binds to loopback, closing its same-origin rewrite as a LAN path into
+the fixed verifier.
 
 ## Shipped Patterns and Deferred Patterns
 

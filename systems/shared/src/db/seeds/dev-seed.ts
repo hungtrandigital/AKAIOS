@@ -140,6 +140,14 @@ export async function seedDevData(): Promise<{
       role: UserRole.bo_admin,
     },
   })
+  if (e2eTotpSecret) {
+    const envelope = encryptTotpSecret(e2eTotpSecret, `${boUser.tenantId}:${boUser.id}`)
+    await prisma.totpCredential.upsert({
+      where: { userId: boUser.id },
+      update: { ...envelope, lastUsedCounter: null, rotatedAt: new Date() },
+      create: { userId: boUser.id, ...envelope },
+    })
+  }
 
   const supervisors = []
   for (let i = 0; i < 5; i++) {
@@ -160,12 +168,13 @@ export async function seedDevData(): Promise<{
   // === Shifts ===
   const shiftRecords: { id: string; name: string }[] = []
   for (const s of SHIFTS) {
-    const existing = await prisma.shift.findFirst({ where: { name: s.name } })
+    const existing = await prisma.shift.findFirst({ where: { tenantId: tenant.id, name: s.name } })
     if (existing) {
       shiftRecords.push({ id: existing.id, name: existing.name })
     } else {
       const created = await prisma.shift.create({
         data: {
+          tenantId: tenant.id,
           name: s.name,
           startTime: s.startTime,
           endTime: s.endTime,
@@ -284,25 +293,19 @@ export async function seedDevData(): Promise<{
       const project = projects[(empIdx + dayOffset) % projects.length]!
       const shift = shiftRecords[empIdx % 2]!
 
-      await prisma.shiftAssignment.upsert({
-        where: {
-          employeeId_projectId_shiftId_date: {
-            employeeId: employee.id,
-            projectId: project.id,
-            shiftId: shift.id,
-            date,
-          },
-        },
-        update: {},
-        create: {
+      const existingAssignment = await prisma.shiftAssignment.findFirst({
+        where: { employeeId: employee.id, date, status: { not: 'cancelled' } },
+      })
+      if (!existingAssignment) {
+        await prisma.shiftAssignment.create({ data: {
           employeeId: employee.id,
           projectId: project.id,
           shiftId: shift.id,
           date,
           status: ShiftAssignmentStatus.scheduled,
           assignedById: boUser.id,
-        },
-      })
+        } })
+      }
       assignmentCount++
     }
   }

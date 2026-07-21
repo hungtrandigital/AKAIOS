@@ -40,7 +40,12 @@ async function main() {
 
   // Load all shift assignments in window
   let assignments = await prisma.shiftAssignment.findMany({
-    where: { date: { gte: startDate, lte: today } },
+    where: {
+      date: { gte: startDate, lte: today },
+      employee: { tenantId: AK_TENANT_ID },
+      project: { tenantId: AK_TENANT_ID },
+      shift: { tenantId: AK_TENANT_ID },
+    },
     include: { shift: true, project: true },
   })
 
@@ -67,8 +72,8 @@ async function main() {
       where: { tenantId: AK_TENANT_ID, role: UserRole.system_admin },
       select: { id: true },
     })
-    const morningShift = await prisma.shift.findFirst({ where: { name: 'Ca sáng' } })
-    const afternoonShift = await prisma.shift.findFirst({ where: { name: 'Ca chiều' } })
+    const morningShift = await prisma.shift.findFirst({ where: { tenantId: AK_TENANT_ID, name: 'Ca sáng' } })
+    const afternoonShift = await prisma.shift.findFirst({ where: { tenantId: AK_TENANT_ID, name: 'Ca chiều' } })
     if (!assignmentOwner) throw new Error('Missing system admin — run dev-seed first')
     if (!morningShift || !afternoonShift) throw new Error('Missing default shifts — run dev-seed first')
 
@@ -94,7 +99,12 @@ async function main() {
     console.log(`    → Created ${newAssignments.length} shift_assignments`)
     // Re-load once so existing assignments are not processed twice.
     assignments = await prisma.shiftAssignment.findMany({
-      where: { date: { gte: startDate, lte: today } },
+      where: {
+        date: { gte: startDate, lte: today },
+        employee: { tenantId: AK_TENANT_ID },
+        project: { tenantId: AK_TENANT_ID },
+        shift: { tenantId: AK_TENANT_ID },
+      },
       include: { shift: true, project: true },
     })
   }

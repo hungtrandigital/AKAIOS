@@ -31,7 +31,7 @@ describe.skipIf(skipIntegration)('Payroll flow (PostgreSQL integration)', () => 
       },
     })
     const shift = await prisma.shift.create({
-      data: { name: `Payroll ${suffix}`, startTime: '08:00', endTime: '17:00' },
+      data: { tenantId: tenant.id, name: `Payroll ${suffix}`, startTime: '08:00', endTime: '17:00' },
     })
     let closeApp: (() => Promise<void>) | undefined
     let closeAttendanceApp: (() => Promise<void>) | undefined
@@ -199,8 +199,8 @@ describe.skipIf(skipIntegration)('Payroll flow (PostgreSQL integration)', () => 
       await prisma.payrollRule.deleteMany({ where: { tenantId: tenant.id } })
       await prisma.project.delete({ where: { id: project.id } })
       await prisma.user.deleteMany({ where: { tenantId: tenant.id } })
-      await prisma.tenant.delete({ where: { id: tenant.id } })
       await prisma.shift.delete({ where: { id: shift.id } })
+      await prisma.tenant.delete({ where: { id: tenant.id } })
       await prisma.$disconnect()
     }
   })

@@ -26,6 +26,9 @@ cp .env.example .env
 # Generate and paste independent JWT_SECRET and INTERNAL_API_KEY values with
 # `openssl rand -hex 32`, plus TOTP_ENCRYPTION_KEY with `openssl rand -base64 32`.
 # Do not regenerate these values in each terminal.
+# Optional local-only admin test mode: set DEV_FIXED_ADMIN_2FA_CODE to exactly
+# four digits. Leave it unset for real TOTP and every shared,
+# staging, or production environment; the API refuses this flag outside dev/test.
 
 # Start development PostgreSQL, Redis, and MinIO.
 pnpm docker:up:dev
@@ -43,9 +46,19 @@ pnpm --filter @ak/payroll-api dev        # http://localhost:3001
 pnpm --filter @ak/payroll-web-admin dev  # http://localhost:3002
 ```
 
+The web-admin development server binds to loopback by default. This prevents a
+LAN client from reaching the local fixed-verifier path through the Next.js proxy;
+the production start command and deployment topology are unchanged.
+
 The aggregate seed is development/demo-only. Production bootstrap, TOTP
 enrollment, migrations, and supervisor provisioning are covered by the
 [on-premise runbook](3-technical/3.3-devops/server-steps.md).
+
+When `DEV_FIXED_ADMIN_2FA_CODE` is set locally, admin email/password, the opaque
+Redis challenge, attempt limits, and session issuance remain enforced; only the
+second-factor verifier is replaced. The configured value is intentionally absent
+from committed files. The API binds to loopback and rejects fixed-mode admin auth
+requests whose effective client address is not loopback.
 
 ## Documentation
 

@@ -20,6 +20,7 @@ const nextConfig = {
       { source: '/api/attendance/employees/:path*', destination: `${attendanceBase}/v1/employees/:path*` },
       { source: '/api/attendance/projects/:path*', destination: `${attendanceBase}/v1/projects/:path*` },
       { source: '/api/attendance/reports/:path*', destination: `${attendanceBase}/v1/reports/:path*` },
+      { source: '/api/attendance/shifts/:path*', destination: `${attendanceBase}/v1/shifts/:path*` },
 
       // Catch-all for remaining /api/attendance/* (records, check-in, check-out, etc.)
       { source: '/api/attendance/:path*', destination: `${attendanceBase}/v1/attendance/:path*` },

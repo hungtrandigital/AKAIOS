@@ -123,6 +123,7 @@ model Tenant {
   users       User[]
   employees   Employee[]
   projects    Project[]
+  shifts      Shift[]
   payrollRules PayrollRule[]
   payrollPeriods PayrollPeriod[]
 
@@ -279,6 +280,7 @@ model ProjectSupervisor {
 
 model Shift {
   id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @db.Uuid
   name                 String
   startTime            String   // "HH:mm" format
   endTime              String   // "HH:mm"
@@ -290,9 +292,11 @@ model Shift {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
   shiftAssignments ShiftAssignment[]
 
-  @@index([isActive])
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
   @@map("shifts")
 }
 
@@ -315,7 +319,6 @@ model ShiftAssignment {
   assignedBy         User                 @relation("AssignedBy", fields: [assignedById], references: [id])
   attendanceRecord   AttendanceRecord?
 
-  @@unique([employeeId, projectId, shiftId, date])
   @@index([employeeId, date])
   @@index([projectId, date])
   @@index([status])

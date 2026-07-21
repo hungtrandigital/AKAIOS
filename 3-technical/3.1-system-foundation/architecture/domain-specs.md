@@ -151,6 +151,7 @@ AttendanceRecord:
 ```yaml
 Shift:
   id: UUID (PK)
+  tenantId: UUID (FK to Tenant)
   name: String  # "Ca sáng", "Ca chiều", "Ca tối", or custom
   startTime: Time  # "06:00"
   endTime: Time  # "14:00"
@@ -161,6 +162,8 @@ Shift:
   isActive: Boolean
   createdAt: DateTime
   updatedAt: DateTime
+
+Constraint: UNIQUE(tenantId, name)
 ```
 
 **Project**
@@ -284,6 +287,8 @@ AttendanceOverridden:
   attendanceRecordId: UUID
   overriddenBy: UUID
   reason: String
+  reasonCode: enum(capture_unavailable | permission_blocked | device_failure) (optional)
+  provenance: enum(correction | manual)
   previousStatus: AttendanceStatus
   newStatus: AttendanceStatus
   occurredAt: DateTime
@@ -304,12 +309,15 @@ CustomerReportGenerated:
 2. **Late detection (BR-ATT-002):** Check-in sau `Shift.startTime + lateThresholdMinutes` (default 15 phút) → status = `late`. Trước đó → `present`.
 3. **Missing check-out (BR-ATT-003):** Nếu NV check-in nhưng quên check-out, cuối ngày supervisor có thể manual add check-out time. Hệ thống không tự động set check-out = endOfDay.
 4. **Double check-in prevention (BR-ATT-004):** Nếu `AttendanceRecord.checkInAt` đã có cho assignment này, API reject check-in lần 2. Tương tự cho check-out.
-5. **Photo required (BR-ATT-005):** Cả check-in và check-out đều yêu cầu ảnh (JPEG, max 5 MB). Không có ảnh → reject.
-6. **Schedule conflict (BR-ATT-006):** Khi gán shift cho NV, nếu NV đã có shift khác cùng ngày và hai khoảng thời gian overlap, API reject với business-rule violation. Ca liền kề không overlap vẫn được phép.
+5. **Photo required (BR-ATT-005):** Employee self check-in/out luôn yêu cầu ảnh JPEG mới chụp trong official client, tối đa 5 MB; không có ảnh, ảnh thư viện hoặc placeholder → reject. Server phải giải mã đầy đủ JPEG, giới hạn tối đa 16 MP và tối thiểu 320×240, không chỉ tin magic bytes. Camera lỗi không làm yếu GPS/photo policy của employee endpoint. MVP chưa có device attestation/liveness, nên freshness/camera origin là client control chứ không phải bằng chứng mật mã cho direct API caller.
+6. **Schedule conflict (BR-ATT-006):** MVP chỉ cho phép một assignment không-cancelled cho mỗi nhân viên trong một business date vì mobile Today xử lý một ca. API reject ca thứ hai cùng ngày kể cả liền kề; đồng thời kiểm tra ngày trước/sau để chặn overlap qua đêm.
 7. **Project geofence required (BR-ATT-007):** Project phải có latitude/longitude + radius trước khi cho check-in.
-8. **Past date check-in (BR-ATT-008):** NV không được check-in cho assignment quá 7 ngày trước ngày Việt Nam hiện tại. MVP không có endpoint tạo attendance backfill; supervisor chỉ có thể override một record đã tồn tại và phải nhập lý do.
+8. **Past date check-in (BR-ATT-008):** NV không được check-in cho assignment quá 7 ngày trước ngày Việt Nam hiện tại. Operator manual event cũng tuân theo cửa sổ này và không nhận thời điểm tương lai.
 9. **Holiday override (BR-ATT-009):** Nếu assignment date là ngày lễ VN và status = `present` → tính lương OT holiday (3x).
 10. **GPS accuracy telemetry (BR-ATT-010):** Client gửi `accuracy` không âm để lưu làm bằng chứng/telemetry. MVP không áp ngưỡng accuracy riêng; server luôn kiểm tra khoảng cách Haversine với bán kính dự án và accuracy không được mở rộng/bỏ qua geofence.
+11. **Shift cancellation audit (BR-ATT-011):** BO/admin chỉ được hủy assignment còn ở trạng thái `scheduled` và chưa có attendance; supervisor chỉ được hủy trong dự án có membership đang hiệu lực. Lý do hủy từ 10–500 ký tự, actor và trạng thái trước/sau phải được ghi audit atomically. Đổi lịch được thực hiện theo chuỗi hủy lịch cũ rồi tạo lịch mới.
+12. **Tenant-owned shift catalog (BR-ATT-012):** Mỗi `Shift` thuộc đúng một tenant; list/create template và assignment lookup luôn predicate tenant. Tên ca unique trong tenant nhưng có thể trùng giữa các tenant.
+13. **Camera-failure manual event (BR-ATT-013):** Khi không thể chụp ảnh, employee không được bypass. Chỉ supervisor active có membership đúng project hoặc system admin break-glass, với `attendance.override`, mới tạo `check_in|check_out` thủ công cho assignment còn hợp lệ. Supervisor không được tự ghi cho chính mình. Reason code chỉ nhận `capture_unavailable|permission_blocked|device_failure`; note tối thiểu 10 ký tự. Event time phải thuộc business date của assignment (checkout ca qua đêm có thể ở ngày kế tiếp) và nằm trong support window từ 4 giờ trước scheduled start đến 12 giờ sau scheduled end. Event không giả lập GPS/photo, lưu actor/reason/time trong override provenance, đổi record + assignment bằng compare-and-set và ghi `override_attendance` audit trong cùng transaction. BO chỉ review ngoại lệ, không tạo event.
 
 ### 3. Payroll Bounded Context
 

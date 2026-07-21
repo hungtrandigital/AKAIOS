@@ -33,7 +33,7 @@
     "test:e2e": {
       "dependsOn": ["^build"],
       "outputs": [],
-      "env": ["DATABASE_URL", "JWT_SECRET", "INTERNAL_API_KEY", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "E2E_BASE_URL", "E2E_NO_SERVER", "E2E_ADMIN_EMAIL", "E2E_ADMIN_PASSWORD", "E2E_TOTP_SECRET"]
+      "env": ["DATABASE_URL", "JWT_SECRET", "INTERNAL_API_KEY", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "E2E_BASE_URL", "E2E_NO_SERVER", "E2E_ADMIN_EMAIL", "E2E_ADMIN_PASSWORD", "E2E_TOTP_SECRET", "E2E_FIXED_TOTP_CODE"]
     },
     "test:integration": {
       "dependsOn": ["^build"],

@@ -13,7 +13,8 @@ export interface ExistingAssignment {
 }
 
 /**
- * BR-ATT-006: Detect if new shift assignment overlaps with employee's existing assignments on the same date.
+ * BR-ATT-006: Detect whether a new shift overlaps the employee's assignments,
+ * including an overnight shift that crosses an adjacent calendar date.
  * Returns true if conflict found.
  */
 export function detectShiftConflict(
@@ -22,30 +23,33 @@ export function detectShiftConflict(
 ): boolean {
   return existing.some((e) => {
     if (e.employeeId !== newAssignment.employeeId) return false
-    if (e.shiftId === newAssignment.shiftId) return true // exact duplicate
-    // Date match
-    const sameDate =
-      e.date.getUTCFullYear() === newAssignment.date.getUTCFullYear() &&
-      e.date.getUTCMonth() === newAssignment.date.getUTCMonth() &&
-      e.date.getUTCDate() === newAssignment.date.getUTCDate()
-    if (!sameDate) return false
-    // Time overlap (simple: any time range overlap)
-    return timeRangesOverlap(
-      { start: e.startTime, end: e.endTime, isOvernight: e.isOvernight },
-      { start: newAssignment.startTime, end: newAssignment.endTime, isOvernight: newAssignment.isOvernight }
-    )
+    if (sameBusinessDate(e.date, newAssignment.date)) return true
+    const existingRange = toAbsoluteRange(e)
+    const newRange = toAbsoluteRange(newAssignment)
+    return existingRange.start < newRange.end && newRange.start < existingRange.end
   })
 }
 
-function timeRangesOverlap(
-  a: { start: string; end: string; isOvernight: boolean },
-  b: { start: string; end: string; isOvernight: boolean }
-): boolean {
-  const aStart = toMinutes(a.start)
-  const aEnd = toMinutes(a.end) + (a.isOvernight ? 24 * 60 : 0)
-  const bStart = toMinutes(b.start)
-  const bEnd = toMinutes(b.end) + (b.isOvernight ? 24 * 60 : 0)
-  return aStart < bEnd && bStart < aEnd
+function sameBusinessDate(left: Date, right: Date): boolean {
+  return left.toISOString().slice(0, 10) === right.toISOString().slice(0, 10)
+}
+
+function toAbsoluteRange(assignment: {
+  date: Date
+  startTime: string
+  endTime: string
+  isOvernight: boolean
+}): { start: number; end: number } {
+  const dayStartMinutes = Date.UTC(
+    assignment.date.getUTCFullYear(),
+    assignment.date.getUTCMonth(),
+    assignment.date.getUTCDate(),
+  ) / 60_000
+  const start = dayStartMinutes + toMinutes(assignment.startTime)
+  const end = dayStartMinutes
+    + toMinutes(assignment.endTime)
+    + (assignment.isOvernight ? 24 * 60 : 0)
+  return { start, end }
 }
 
 function toMinutes(hhmm: string): number {

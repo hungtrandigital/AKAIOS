@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **PRD-SLICE-003 Prismate loading:** Added optimized Prismate logo derivatives for legacy and Android 12+ native launch, iOS launch, and a reusable reduced-motion-aware Flutter opacity/scale loader for bootstrap and async employee actions, without artificial delay. Native light/dark startup backgrounds remain white to avoid a transition flash.
+- **PRD-SLICE-003 employee mobile UX and camera fallback:** Added a branded, auth-state-driven Flutter splash; senior-friendly Login/Today/check flow; explicit camera/location/network recovery; and an operator-only manual attendance event with structured audit and BO-visible exception provenance.
+- **PRD-SLICE-003 BO shift planning:** Added a dated BO/supervisor operations board for shift templates, scoped assignments, status coverage, filters, and audited cancellation, with OpenAPI/domain contracts and focused browser/integration coverage.
 - **PRD-EPIC-002 remediation (`056a769`; immutable CI passed):** Added explicit audited
   `ProjectSupervisor` membership, Redis-backed employee OTP challenges with SpeedSMS delivery,
   encrypted admin TOTP enrollment, and native refresh-token support.
@@ -17,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provisioning command that creates the first system admin without running demo seeds and
   hands off to the existing encrypted TOTP enrollment flow.
 - **PRD-EPIC-002 mobile delivery:** Added Android/iOS Flutter platform projects, secure refresh-token storage and single-flight refresh, required camera/location permissions, generated localization sources, CI analysis/tests, and Android APK artifact generation pinned to Flutter 3.24.5.
+- **PRD-EPIC-002 iOS local validation:** Added the CocoaPods integration files and lockfile, built and launched the Flutter client on an iOS 26.5 iPhone 17 Pro Simulator with Xcode 26.6, and verified employee password login through the loopback Attendance API. Release signing and physical-device validation remain pending.
 - **PRD-EPIC-002 code review:** Published the canonical 2026-07-17 review report with the frozen commit range, verification evidence, verdict, and `CODE-BUG-002..022` remediation backlog.
 - Operations domain structure: templates (hiring plan, onboarding, JD), tracking registry (OPS-TASK-XXX), metrics glossary, strategy, and changelog
 - Role-specific JD copies: Senior Backend Engineer, Product Manager with OPS linkage and parent epics
@@ -28,6 +32,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
+- Camera cancellation now stays on the normal retry path, while confirmed permission, hardware, or plugin failures promote supervisor assistance and Today reconciliation. Employee camera-assisted badges now require structured reason-code and actor provenance instead of treating every BO override as a camera failure.
+- Employee self check-in/out now requires fresh in-memory GPS plus a newly captured JPEG before submit; the backend fully decodes it with 5 MB/16 MP ceilings and a 320×240 minimum instead of trusting magic bytes. Startup routing reads secure storage once, honors reduced motion, avoids Login/Today flash, and preserves credentials when refresh fails only because the network is unavailable. Device attestation/liveness remains explicitly outside MVP.
+- Shift templates are now tenant-owned, daily BO rosters are paginated with
+  full-filter status summaries, and employee selection is searchable. The
+  database migration expands the former global catalog per tenant and enforces
+  one non-cancelled assignment per employee/business date while preserving
+  cancelled history. Tenant-scoped demo seed verification and independent final
+  code re-review both pass.
+- Added an opt-in, local/test-only four-digit admin second-factor verifier for
+  temporary UI testing. It is disabled by default, refuses non-development/test
+  environments, and leaves password, Redis challenge, attempt, session, and
+  refresh-token controls intact; staging and CI continue to require real TOTP.
 - Reconciled the PRD-EPIC-002 backlog, active plan, progress, work-item registry, risk register, deployment guidance, API/domain contracts, and system READMEs with remediation commit `056a769`, successful [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275), and the [SHA-pinned GO re-review](reviews/prd-epic-002-code-re-review-2026-07-19.md). The historical rejected review remains unchanged.
 - Corrected PRD-EPIC-002 lifecycle metadata and synchronized the active epic, product backlog, work-item registry, progress status, governance risks, and review navigation with the rejected review gate.
 - Archived the superseded `docs/review/REVIEW_PLAN.md` content under `archives/2026-07-17-prd-epic-002-review-plan/` and retained a redirect to the canonical plan/result.
@@ -51,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
+- **PRD-SLICE-003 attendance UAT:** Hardened assignment overlap/concurrency, active-resource and supervisor-membership enforcement, hid cancelled assignments from employee Today, and corrected mobile attendance timestamps from UTC to the device timezone. Local employee/BO/supervisor UAT passes; physical-device camera validation remains pending because iOS Simulator has no camera stream.
 - **PRD-EPIC-002 remediation (working-tree review GO):** Implemented tenant/project-scoped
   supervisor authorization, safe employee/report DTO boundaries, atomic attendance checkout
   and override total recomputation, Vietnam calendar handling, geofence enforcement, and
@@ -74,6 +91,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor modes:** Added missing `/refactor` command to Cursor to match `0-agents/mode/refactor.md`
 
 ### Security
+- Manual camera-failure attendance is restricted to active, explicitly scoped supervisors or system-admin break-glass with `attendance.override`; employees and BO cannot create it, supervisors cannot self-record, cross-tenant/project, wrong-date, future, and out-of-shift-support-window events fail closed, and compare-and-set record/assignment changes share a transaction with immutable audit. No synthetic photo/GPS is written.
+- The fixed local admin verifier is fail-closed outside explicit
+  `development|test`, never committed with a value, and mutually exclusive with
+  the real TOTP verifier to keep environment behavior deterministic. While it is
+  enabled, the API binds to loopback and rejects fixed-mode admin auth from an
+  effective non-loopback client address; the development web proxy also binds to
+  loopback so it cannot expose that path to the LAN.
 - **Remediation review GO; immutable CI passed:** Password verification, inactive-account enforcement,
   mandatory admin TOTP, OTP abuse controls, refresh-token CAS rotation, and project membership
   grant/revoke audit boundaries now have fresh-database integration coverage.

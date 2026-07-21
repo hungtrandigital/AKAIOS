@@ -26,7 +26,13 @@ describe.skipIf(skipIntegration)('Internal attendance projection (integration)',
       },
     })
     const shift = await prisma.shift.create({
-      data: { name: `Internal ${suffix}`, startTime: '22:00', endTime: '06:00', isOvernight: true },
+      data: {
+        tenantId: tenantA.id,
+        name: `Internal ${suffix}`,
+        startTime: '22:00',
+        endTime: '06:00',
+        isOvernight: true,
+      },
     })
     const assignments = await Promise.all(['2026-07-12', '2026-07-31'].map((date) => (
       prisma.shiftAssignment.create({
