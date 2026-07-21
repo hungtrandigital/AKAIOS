@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Last Updated:** 2026-07-21 (Windows Git-to-UAT automation and seed-only rebuild validated locally; remote CI and Windows-host execution pending)
+**Last Updated:** 2026-07-21 (Windows Git-to-UAT automation, seed-only rebuild, and remote CI validated; Windows-host execution pending)
 
 ## Windows Docker Git-to-UAT Deployment — 2026-07-21
 
@@ -37,12 +37,16 @@
   an isolated six-migration PostgreSQL run seeded twice while retaining exactly
   one default payroll rule. Independent code and documentation reviews returned
   **GO** with no remaining findings. Actual Windows-host mutation, tunnel changes,
-  remote CI, real-TOTP UAT and restart persistence remain pending.
+  real-TOTP UAT and restart persistence remain pending.
 - The first remote run exposed a parallel MinIO startup race: two integration
   workers could both observe a missing bucket before one created it. Bucket
   initialization now accepts only the two S3 already-created conflict codes,
   rechecks access with `HeadBucket`, and still fails every unrelated storage
   error. Shared regression tests cover both the safe race and fail-closed path.
+  Commit `7c8edd1` passes all seven jobs in
+  [GitHub Actions run 29801416748](https://github.com/hungtrandigital/AKAIOS/actions/runs/29801416748),
+  including the repaired parallel integration gate and both Windows deployment
+  configuration gates.
 
 ## Employee Mobile UX and Camera Failure — 2026-07-21
 
