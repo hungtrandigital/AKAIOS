@@ -37,7 +37,7 @@ pnpm docker:up:dev
 set -a; source .env; set +a
 pnpm prisma:generate
 pnpm prisma:migrate:deploy
-pnpm --filter @ak/shared db:seed:all
+ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:all
 
 # These commands block. Run each in a separate terminal after loading the same
 # .env with `set -a; source .env; set +a`.

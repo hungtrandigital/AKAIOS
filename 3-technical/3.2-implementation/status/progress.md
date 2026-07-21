@@ -24,6 +24,20 @@
   `Update`. Neither path is allowed for production/pilot data.
 - Made the default payroll-rule seed idempotent so rerunning the dev/UAT seed
   updates the first tenant/effective-date rule instead of adding another rule.
+- Added a deterministic employee UAT window: `NV-DEMO-01..05` each receive one
+  active assignment on the current Vietnam date and 13 following Mon–Sat work
+  dates, while generated historical attendance ends yesterday. Fresh aggregate
+  seed and a second rerun both retain `5` demo employees, `5` open assignments
+  today, `0` prefilled attendance records today, and `70` current/future
+  assignments total. Demo writes now require a process-local
+  `ALLOW_DEMO_SEED=true` sentinel, fail before writes on reserved-identity
+  collisions, preserve existing attendance records on historical reruns, and
+  construct seeded shift instants from Vietnam wall time (`+07:00`).
+- Final isolated safety checks retained a manually edited historical attendance
+  record and its `completed` assignment byte-for-byte after another seed, rendered
+  a `06:00` shift at `06:03` Vietnam time with deterministic jitter, and rejected
+  a reserved demo phone owned by a foreign tenant before creating any demo
+  identity. Running a demo seed without the opt-in also fails before DB access.
 - Caddy now owns both application ingress and the explicit storage hostname.
   Start/update/reset stop Caddy and all application writers before checkpoint,
   migration or reset while retaining stateful services; a failed schema/seed
@@ -33,7 +47,7 @@
   PSScriptAnalyzer Error gate pass; `Validate -WhatIf`, `Install -WhatIf`, and
   seed-sentinel `ResetSeedUat -WhatIf` make no checkout change; Caddy validates;
   Actionlint passes; shared
-  typecheck/lint pass with only two pre-existing attendance-seed warnings; and
+  typecheck/lint pass without shared-package warnings; and
   an isolated six-migration PostgreSQL run seeded twice while retaining exactly
   one default payroll rule. Independent code and documentation reviews returned
   **GO** with no remaining findings. Actual Windows-host mutation, tunnel changes,
@@ -47,6 +61,10 @@
   [GitHub Actions run 29801416748](https://github.com/hungtrandigital/AKAIOS/actions/runs/29801416748),
   including the repaired parallel integration gate and both Windows deployment
   configuration gates.
+- A fresh isolated API walkthrough for `NV-DEMO-01` passes employee password
+  login, Today assignment lookup with no attendance record, project-GPS plus
+  decoded JPEG/MinIO check-in, check-out, and final `checked_out` state. This is
+  seed/API evidence only; the user-owned physical-device UAT remains pending.
 
 ## Employee Mobile UX and Camera Failure — 2026-07-21
 

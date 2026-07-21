@@ -245,6 +245,34 @@ It does not copy database files through Git and does not delete the old `/data`
 bind directory. An operator may remove obsolete data only in a separate,
 explicitly approved cleanup after the new UAT passes.
 
+### Seeded employee UAT window
+
+`db:seed:all` gives each fixed demo employee one open assignment on the current
+Vietnam date and the next 13 Mon–Sat dates. Historical attendance ends at
+yesterday, so the seed does not prefill check-in or check-out for today.
+Rerunning the seed retains the unique active employee/date assignment and leaves
+all existing UAT attendance records untouched, even after a tested date becomes
+historical. Historical timestamps use Vietnam wall-clock shift times (`+07:00`).
+
+The seed scripts refuse to run unless their process receives
+`ALLOW_DEMO_SEED=true`. The guarded PowerShell `-SeedDemoData` and
+`ResetSeedUat` paths inject this opt-in only into the one-off seed container; do
+not persist the flag in `.env` and never use it for production or pilot data.
+
+| Employee | Login | Password | Project / shift |
+| --- | --- | --- | --- |
+| `NV-DEMO-01` | `+84900000101` | `Demo@2026` | `PRJ001` / Ca sáng |
+| `NV-DEMO-02` | `+84900000102` | `Demo@2026` | `PRJ004` / Ca chiều |
+| `NV-DEMO-03` | `+84900000103` | `Demo@2026` | `PRJ007` / Ca hành chính |
+| `NV-DEMO-04` | `+84900000104` | `Demo@2026` | `PRJ001` / Ca tối |
+| `NV-DEMO-05` | `+84900000105` | `Demo@2026` | `PRJ004` / Ca sáng |
+
+Start the employee walkthrough with `NV-DEMO-01`. Password login does not need
+admin TOTP. GPS still must be inside the assigned project geofence and photos
+must come from the live camera; use an onsite device or an explicitly controlled
+simulator location matching the project. Do not weaken geofence or camera checks
+to make UAT pass.
+
 ## 6C. Update While Keeping UAT Data
 
 Only use this when the UAT database must survive:

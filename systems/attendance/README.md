@@ -77,7 +77,7 @@ pnpm prisma:generate
 pnpm prisma:migrate:deploy
 # Local/demo only: creates the development tenant, users, employees, shifts,
 # attendance samples, and the idempotent RBAC catalog. Never run on pilot/prod.
-pnpm --filter @ak/shared db:seed:all
+ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:all
 
 # Terminal 1 (blocks): load that same .env, then start the API.
 set -a; source .env; set +a

@@ -42,7 +42,7 @@ Demo@2026
 | `+84900000104` | Nguyễn Văn Nam (Demo NV #4) | High-seniority demo |
 | `+84900000105` | Hoàng Thị Oanh (Demo NV #5) | New hire demo |
 
-**Mobile login flow:** Phone + OTP (check server log for OTP in dev/mock mode) OR set temporary password via backend.
+**Mobile login flow:** Use the employee phone number with password `Demo@2026`.
 
 ## 🔧 Setup
 
@@ -50,29 +50,32 @@ Demo@2026
 
 ```bash
 # 1. Base data: 1 tenant + 15 projects + 200 random employees
-pnpm db:seed
+ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed
 
 # 2. Layer named demo accounts on top
-pnpm db:seed:demo
+ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:demo
 
-# Or both at once
-pnpm db:seed:all
+# Or build the complete development/UAT dataset, including attendance + RBAC
+ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:all
 ```
 
 (From `/Users/hungtran/Projects/AKAIUNSAN` after `pnpm install && pnpm prisma:generate`.)
 
-### Production-mode accounts (separate)
+### Generated development accounts
 
-Production accounts have different passwords (auto-generated per seed).
-
-The original `dev-seed.ts` creates these:
+The base `dev-seed.ts` also creates these local development identities:
 - `admin@ak.local` / `admin123!` — system_admin
 - `bo@ak.local` / `admin123!` — bo_admin
 - `supervisor0@ak.local`..4 / `super123!` — 5 supervisors
 - `NV0001`..`NV0200` (phone `+84931000000`..`+849310000199`) / `nv123456!` — 200 employees
 
-These should be rotated before any pilot deployment.
+These identities and their generated dataset must not be promoted to pilot or
+production. Provision real pilot operators and employee data separately through
+the deployment runbook; rotating these passwords is not sufficient.
 
 ## 🛡️ Security Note
 
-These accounts are for **demo + showcase + pilot validation only**. Never deploy to production with these credentials. Rotate all passwords, force password reset on first login, and enable real SMS gateway before pilot.
+These accounts are for **local development, demo, showcase, and controlled UAT
+only**. Never use the accounts or dataset for pilot or production. Pilot setup
+must provision real identities, rotate owner-managed credentials, enforce real
+TOTP/SMS policy, and load approved pilot data through the deployment runbook.

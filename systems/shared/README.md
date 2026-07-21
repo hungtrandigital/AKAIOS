@@ -99,6 +99,23 @@ pnpm prisma:migrate:deploy
 
 The initial migration is the baseline for fresh databases. Do not edit an applied migration; add a new timestamped migration through `pnpm prisma:migrate` instead.
 
+### Controlled-UAT seed behavior
+
+Run the aggregate dataset only with an explicit controlled-UAT opt-in:
+
+```bash
+ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:all
+```
+
+Without that process-local flag, the development, demo-account, and attendance
+seed scripts refuse to write. The aggregate seed creates five fixed demo
+employees and gives each one an open assignment on the current Vietnam date plus
+13 following Mon–Sat dates. Historical attendance generation stops at yesterday,
+so the day under test stays open. Rerunning the seed keeps active employee/date
+assignments unique and preserves every existing UAT attendance record, including
+records that have since moved into the historical window. This dataset is
+forbidden for production or pilot data.
+
 Windows Docker Desktop must merge the base and Windows files; using the base file
 alone retains Linux `/data` bind mounts and is unsupported. The canonical
 PowerShell commands, seed-only reset boundary, and Cloudflare handoff are in the

@@ -1,7 +1,7 @@
 // Development/controlled-UAT seed data — creates one tenant, demo operators,
 // 200 employees, 15 projects, shifts, assignments, and sample payroll rules.
 // Never run against production or pilot data.
-// Run: `pnpm db:seed` (from repo root, after migrations applied).
+// Run: `ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed` (after migrations).
 
 import {
   PrismaClient,
@@ -57,12 +57,19 @@ const NUM_EMPLOYEES = 200
 // Fixed UUID for AKAIUNSAN tenant — used across seeds and tests
 export const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 
+function assertDemoSeedAllowed(): void {
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error('Refusing demo seed: set ALLOW_DEMO_SEED=true only for disposable development or controlled-UAT data')
+  }
+}
+
 export async function seedDevData(): Promise<{
   tenantId: string
   adminUserId: string
   projectCount: number
   employeeCount: number
 }> {
+  assertDemoSeedAllowed()
   console.log('Seeding tenant AKAIUNSAN...')
 
   // === Tenant ===

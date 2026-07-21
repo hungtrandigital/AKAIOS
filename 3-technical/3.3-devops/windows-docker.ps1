@@ -302,8 +302,15 @@ function Start-Stack {
     Stop-ApplicationWriters
     Invoke-Compose -Arguments @('up', '-d', 'postgres', 'redis', 'minio')
     Invoke-Compose -Arguments @('run', '--rm', 'db-migrate')
-    $seedCommand = if ($IncludeDemoSeed) { 'db:seed:all' } else { 'db:seed:rbac' }
-    Invoke-Compose -Arguments @('run', '--rm', 'db-migrate', 'pnpm', '--filter', '@ak/shared', $seedCommand)
+    if ($IncludeDemoSeed) {
+        Invoke-Compose -Arguments @(
+            'run', '--rm', '--env', 'ALLOW_DEMO_SEED=true', 'db-migrate',
+            'pnpm', '--filter', '@ak/shared', 'db:seed:all'
+        )
+    }
+    else {
+        Invoke-Compose -Arguments @('run', '--rm', 'db-migrate', 'pnpm', '--filter', '@ak/shared', 'db:seed:rbac')
+    }
     Invoke-Compose -Arguments @('up', '-d', '--no-build')
 }
 
@@ -315,7 +322,10 @@ function Reset-SeedDatabase {
         './systems/shared/node_modules/.bin/prisma', 'migrate', 'reset', '--force', '--skip-seed',
         '--schema=systems/shared/src/db/prisma/schema.prisma'
     )
-    Invoke-Compose -Arguments @('run', '--rm', 'db-migrate', 'pnpm', '--filter', '@ak/shared', 'db:seed:all')
+    Invoke-Compose -Arguments @(
+        'run', '--rm', '--env', 'ALLOW_DEMO_SEED=true', 'db-migrate',
+        'pnpm', '--filter', '@ak/shared', 'db:seed:all'
+    )
     Invoke-Compose -Arguments @('up', '-d', '--no-build')
 }
 
