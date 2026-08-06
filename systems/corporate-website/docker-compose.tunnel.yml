@@ -1,0 +1,13 @@
+services:
+  corporate-website:
+    environment:
+      ADMIN_PREVIEW_PASSWORD: ${ADMIN_PREVIEW_PASSWORD}
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: akaiunsan-corporate-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      corporate-website:
+        condition: service_healthy

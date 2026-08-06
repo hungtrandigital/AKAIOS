@@ -488,6 +488,50 @@ PayrollLineOverridden:
 
 ## Cross-Context Relationships
 
+### Corporate Content and Lead Intake (PRD-EPIC-003)
+
+The public website is an independent bounded context and does not read employee, attendance, payroll, or customer-report data.
+
+```yaml
+ContentItem:
+  id: UUID/String
+  type: service | solution | article | faq
+  slug: String
+  title: String
+  summary: String
+  body: Text
+  meta: JSON
+  status: draft | published
+  seoTitle: String
+  seoDescription: String
+
+MediaAsset:
+  id: UUID/String
+  objectKey: String (nullable for bundled seed assets)
+  publicPath: String (nullable for R2 assets)
+  sourceType: original | stock | ai-generated
+  sourceReference: String
+  isPlaceholder: Boolean
+
+Lead:
+  id: UUID
+  leadType: apartment | project
+  name: String
+  phone: String
+  propertyType: String
+  area: String
+  frequency: String
+  status: new | contacted | surveying | quoted | won | closed
+```
+
+Business rules:
+
+1. Bootstrap seed uses insert-if-missing semantics and never overwrites editor changes.
+2. Demo seed is local/staging-only.
+3. AI/stock media must remain tagged as placeholder and cannot be represented as completed AKAIUNSAN projects.
+4. Production content mutations require authenticated and allowlisted admin identity.
+5. Public lead creation validates required contact fields and includes a honeypot spam check.
+
 ```
 Identity (Shared Kernel)
   ↓ provides Users, Employees, Projects

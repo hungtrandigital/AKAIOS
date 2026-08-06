@@ -298,9 +298,11 @@ Use `[project-root]/` below as a placeholder label for the repository root. It i
 - **[Work Items Registry](3-technical/3.2-implementation/status/work-items-registry.md)** - Master index of all work
 - **[DevOps](3-technical/3.3-devops/)** - Infrastructure and deployment
 - **[Systems (Code)](systems/)** - All source code for software systems
+- **[Corporate Website](systems/corporate-website/)** - Canonical web design/function specification, public website, Content Studio, media library, lead intake, seeds, and service-recovery model
 
 ### Marketing & Finance & Operations
 - **[Marketing](4-marketing/)** - Go-to-market strategy, personas, performance, and campaign briefs
+- **[Corporate Brand Guide](4-marketing/brand-guidelines.md)** - Public AKAIUNSAN logo, color, typography, photography, voice, and digital rules
 - **[Financing](5-financing/)** - Financial planning, projections, pitches
 - **[Operations](6-operations/)** - Team structure, legal, HR, vendors
 - **[Operations & Monitoring](7-operations-monitoring/)** - System monitoring and analytics

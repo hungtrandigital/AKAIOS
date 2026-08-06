@@ -1,9 +1,9 @@
 # System Overview — AKAIUNSAN
 
 **Status:** Active
-**Last Updated:** 2026-07-16
+**Last Updated:** 2026-08-05
 **Owner:** @system-architecture
-**Related:** PRD-EPIC-002
+**Related:** PRD-EPIC-002, PRD-EPIC-003
 
 ## Purpose
 
@@ -24,6 +24,10 @@ graph LR
     PayrollAPI --> Redis
     AttendanceAPI --> MinIO[(MinIO<br/>Photos, PDFs)]
     PayrollAPI -.Internal API.-> AttendanceAPI
+    Visitor[🌐 Public Visitor] --> Corporate[Corporate Website<br/>Vinext + Sites]
+    Editor[✍️ Content Editor] --> Corporate
+    Corporate --> D1[(Cloudflare D1<br/>Content + Leads)]
+    Corporate --> R2[(Cloudflare R2<br/>Media)]
 ```
 
 ### Systems List
@@ -44,6 +48,14 @@ graph LR
 - **Domain Context:** Payroll bounded context + Identity shared kernel
 - **Reads attendance data via:** `GET /internal/attendance` endpoint on attendance API (X-Internal-API-Key auth)
 
+#### `corporate-website` (PRD-EPIC-003)
+
+- **Purpose:** Public company website, service/solution knowledge pages, apartment booking, project survey leads, and editorial Content Studio.
+- **Location:** [`systems/corporate-website/`](../../../systems/corporate-website/README.md)
+- **Tech Stack:** Vinext/React, Cloudflare-compatible D1/R2 bindings, Docker, Cloudflare Tunnel, password-protected review Admin.
+- **Domain Context:** Corporate Content + Lead Intake.
+- **Deployment:** Dedicated Docker Compose project published at `akaiunsan.prismate.vn` through its own Cloudflare Tunnel.
+
 ## Cross-Cutting
 
 | Concern | Owner | Location |
@@ -52,6 +64,8 @@ graph LR
 | Auth (JWT issuance, refresh tokens) | Identity | `systems/shared/auth/` |
 | Common error types, logging | Cross-cutting | `systems/shared/` |
 | Deployment (Docker Compose stack) | @devops | `systems/attendance/docker-compose.yml` (single stack hosts both systems) |
+| Public brand and content policy | @marketing | `4-marketing/brand-guidelines.md` |
+| Corporate content, leads, media | Corporate Website | D1 + R2 through `systems/corporate-website/` |
 
 ## Deployment Topology
 
@@ -69,6 +83,8 @@ On-Premise Server (Ubuntu 22.04, 16GB RAM)
 ```
 
 External access via Cloudflare Tunnel → Caddy → backend containers.
+
+The public corporate website is deployed independently through a dedicated Docker Compose project and Cloudflare Tunnel. It does not expose or directly connect to the attendance/payroll database.
 
 See [Infrastructure](../infrastructure.md) for full hosting details.
 

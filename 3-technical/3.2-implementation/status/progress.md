@@ -2,12 +2,29 @@
 
 ## Current Status
 
-**Last Updated:** 2026-07-16 (PRD-EPIC-002 — Attendance + Payroll systems, Phase 0+1+2 backend + mobile scaffold complete; typecheck + tests passing)
+**Last Updated:** 2026-08-05 (PRD-EPIC-003 corporate website and CMS delivered; public deployment live)
 
 ## Overall Progress
 
+- **PRD-EPIC-003:** ✅ Complete — public corporate website, CMS, D1/R2-compatible persistence, generated imagery, and Docker/Cloudflare Tunnel review deployment.
+
 - **Completion:** PRD-EPIC-002 Phase 0+1+2 backend + mobile: ✅ 95%
 - **Current Sprint:** Phase 2 (attendance mobile + admin pending) and Phase 3 (payroll engine)
+
+## PRD-EPIC-003 — Corporate Website and CMS ✅ Complete (2026-08-05)
+
+- Corporate Brand Guide V1 locked for the green/red public identity.
+- Multi-route Vietnamese website prioritized for building/condominium, factory/industrial-zone, then apartment cleaning leads.
+- D1-backed content, settings, revisions, and lead workflow.
+- R2-backed Media Library with source/license/placeholder metadata.
+- Safe bootstrap seed plus local/staging-only demo seed.
+- Authenticated Content Studio with production email allowlist.
+- Three distinct lead paths and a content-managed service-recovery/incident-handling narrative.
+- Bilingual Vietnamese/English public routes, CMS translation groups, lead source locale, language switching, and SEO alternates.
+- Canonical design/style and functional-processing contracts recorded in the Brand Guide and corporate website README.
+- Three generated category images and a dedicated social preview card.
+- Public review deployment: https://akaiunsan.prismate.vn
+- Verification: TypeScript, production build, automated tests, public HTTP, protected admin redirect, media upload/serve, and lead persistence passed.
 
 ## PRD-EPIC-002 — Attendance + Payroll Systems (AKAIUNSAN)
 

@@ -2,7 +2,7 @@
 
 **Purpose:** Centralized, real-time index of all work items across the organization (epics, slices, tasks, bugs, experiments, research). Use this to navigate, track progress, and understand cross-domain dependencies.
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-08-05
 **Scope:** Active + recently completed work items
 
 ---
@@ -53,6 +53,7 @@
 | ID | Title | Parent Epic | Owner | Status | Created | Folder |
 |----|-------|-------------|-------|--------|---------|--------|
 | MKT-TASK-001 | [Task] | PRD-EPIC-001 | @marketing | planned | YYYY-MM-DD | `4-marketing/` |
+| MKT-TASK-002 | Lock AKAIUNSAN corporate brand guide and web messaging | PRD-EPIC-003 | @marketing | completed | 2026-08-05 | `4-marketing/brand-guidelines.md` |
 
 ### Finance Tasks
 
@@ -116,6 +117,7 @@ PRD-EPIC-001: Factory Agent Leadership Orchestration (in-progress)
 | ID | Title | Epic | Completed | Status |
 |----|-------|------|-----------|--------|
 | PRD-SLICE-001 | [Slice Name] | PRD-EPIC-001 | YYYY-MM-DD | completed |
+| PRD-SLICE-008 | AKAIUNSAN Corporate Website and CMS V1 | PRD-EPIC-003 | 2026-08-05 | completed |
 
 ### Completed Tasks
 
@@ -123,6 +125,10 @@ PRD-EPIC-001: Factory Agent Leadership Orchestration (in-progress)
 |----|-------|--------|-----------|
 | CODE-TASK-001 | [Task] | code | YYYY-MM-DD |
 | CODE-TASK-002 | [Task] | code | YYYY-MM-DD |
+| CODE-TASK-024 | Corporate CMS content model, migrations, and seeds | code | 2026-08-05 |
+| CODE-TASK-025 | Public corporate website | code | 2026-08-05 |
+| CODE-TASK-026 | Authenticated admin, media, and leads | code | 2026-08-05 |
+| CODE-TASK-027 | Validation and Docker/Cloudflare Tunnel review deployment | code | 2026-08-05 |
 
 ### Completed Bugs
 

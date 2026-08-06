@@ -77,6 +77,12 @@ systems/
   - Documentation: `systems/payroll/README.md`
   - Related Docs: Same shared docs as attendance
 
+- **`corporate-website`** — Public corporate website, editorial CMS, media library, and lead intake.
+  - Location: `systems/corporate-website/`
+  - Tech Stack: Vinext/React, Cloudflare-compatible D1/R2 bindings, Docker, Cloudflare Tunnel
+  - Documentation: `systems/corporate-website/README.md`
+  - Related Docs: `4-marketing/brand-guidelines.md`, `3-technical/3.2-implementation/plans/completed/2026-08/corporate-website.md`
+
 **Shared between attendance + payroll:** Postgres database, Redis, MinIO, Docker Compose stack, Caddy reverse proxy, Cloudflare Tunnel.
 
 **Shared code:** `systems/shared/` — common TypeScript types, repositories, error classes, logging utilities.

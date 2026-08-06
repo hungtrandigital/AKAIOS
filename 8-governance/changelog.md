@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bilingual corporate website delivery with English routes under `/en`, locale-aware D1 content and leads, VI/EN translation groups in Content Studio, English seed content, language switching, SEO alternates, and bilingual sitemap coverage.
+- Canonical corporate website documentation covering the approved premium design direction, olive-lime style system, typography and motion rules, information architecture, CMS/content model, SEO strategy, three-path lead workflow, seed lifecycle, media governance, and service-incident handling model.
+- AKAIUNSAN corporate website initiative (`PRD-EPIC-003` / `PRD-SLICE-008`) with public brand guide, scalable content model, CMS, safe seed contract, media management, lead intake, and dedicated Docker/Cloudflare Tunnel delivery.
+- New `systems/corporate-website/` application surface for the external corporate channel.
+- Public review website deployed at https://akaiunsan.prismate.vn with D1/R2-compatible local persistence, password-protected Content Studio, generated category imagery, and SEO metadata.
 - Operations domain structure: templates (hiring plan, onboarding, JD), tracking registry (OPS-TASK-XXX), metrics glossary, strategy, and changelog
 - Role-specific JD copies: Senior Backend Engineer, Product Manager with OPS linkage and parent epics
 - Hiring plans seeded and linked from registry (dates, owners, pipeline, metrics)
@@ -20,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
+- Extended the premium motion system across all bilingual public routes with route-aware reveals, media reveals, staggered content, hover depth, scroll progress, and reduced-motion support.
+- Consolidated stakeholder website decisions into the Corporate Brand Guide and `systems/corporate-website/README.md`; fixed the strategic audience order at building/condominium, factory/industrial zone, then apartment.
+- Redesigned the corporate website public experience with a premium image-led hero, modular solution layout, modern Vietnamese-capable `Bricolage Grotesque` display typography, and an ESG operating-direction section covering environment, people, and governance.
+- Refreshed the corporate social preview and removed prominent public placeholder disclaimers from the internal review build while retaining source metadata in the CMS.
 - Reframed the core agents in `0-agents/agents/` as the reusable leader layer for multi-project work: each core agent now preserves existing process ownership while explicitly pairing `agency-agents` specialists with matching local skills.
 - Registered the factory optimization initiative as `PRD-EPIC-001` / `PRD-SLICE-001` and added the active plan `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md` plus matching registry/index updates.
 - Updated `0-agents/README.md` and `INDEX.md` so the stack description now reflects leader orchestration rather than only specialist routing.
@@ -40,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
+- Replaced the font-built mobile wordmark with the approved full AKAIUNSAN logo lockup, using the olive brand color and consistent responsive proportions across the header and footer.
+- Fixed the bilingual mobile navigation so selecting any link closes the menu, with a route-change fallback for browser navigation.
 - Cleared remaining references to legacy numbered product foundation paths (plan/boost scaffolds) and added a redirect notice in the old backlog file to point to `product-backlog/backlog.md`.
 - **Structure:** Fixed `financial-modeling` skill to follow Agent Skills Spec (moved from `skills/financial-modeling.md` to `skills/financial-modeling/SKILL.md` with proper YAML frontmatter)
 - **Finance-director agent:** Enhanced to explicitly activate `financial-modeling` skill during all projection work (steps 3, 4, 5) and added mandatory skill usage pattern

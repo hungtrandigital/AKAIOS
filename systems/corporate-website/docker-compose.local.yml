@@ -1,0 +1,21 @@
+name: akaiunsan-corporate-local
+
+services:
+  corporate-website:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: akaiunsan/corporate-website:local
+    container_name: akaiunsan-corporate-local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3010:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    volumes:
+      - corporate-website-state:/app/.wrangler
+
+volumes:
+  corporate-website-state:
+    name: akaiunsan-corporate-local-state
