@@ -6,23 +6,9 @@
 
 # ===== DEVELOPMENT (HTTP only) =====
 :80 {
-	# Web admin (Next.js) at root path /, /attendance, /payroll, etc.
+	# Next.js serves the UI and owns all /api/* rewrites in next.config.js.
+	# Keeping one proxy path avoids Caddy and Next applying conflicting rewrites.
 	reverse_proxy web-admin:3002 {
-		header_up X-Real-IP {remote_host}
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
-	}
-
-	# Attendance API at /api/attendance/* and /internal/*
-	reverse_proxy /api/attendance/* attendance-api:3000 {
-		header_up X-Real-IP {remote_host}
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
-	}
-	reverse_proxy /internal/* attendance-api:3000
-
-	# Payroll API at /api/payroll/*
-	reverse_proxy /api/payroll/* payroll-api:3001 {
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Forwarded-Proto {scheme}

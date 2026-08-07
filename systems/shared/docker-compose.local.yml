@@ -1,0 +1,93 @@
+# Local full-stack overrides. Use together with docker-compose.yml.
+# Keeps data in Docker named volumes and avoids ports commonly used by other stacks.
+
+services:
+  db-init:
+    build:
+      context: ../..
+      dockerfile: systems/attendance/backend/Dockerfile
+      target: deps
+    working_dir: /repo
+    env_file:
+      - ../../.env
+    command:
+      - sh
+      - -c
+      - >-
+        pnpm --filter @ak/shared exec prisma db push --schema=src/db/prisma/schema.prisma &&
+        pnpm --filter @ak/shared db:seed &&
+        pnpm --filter @ak/shared db:seed:demo &&
+        pnpm --filter @ak/shared db:seed:rbac
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ak-net
+    restart: "no"
+
+  minio-init:
+    image: minio/minio:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing local/attendance-photos &&
+        mc mb --ignore-existing local/reports
+    env_file:
+      - ../../.env
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - ak-net
+    restart: "no"
+
+  attendance-api:
+    environment:
+      - NODE_ENV=development
+      - ATTENDANCE_API_PORT=3000
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+
+  payroll-api:
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+  postgres:
+    ports: !override
+      - "127.0.0.1:5433:5432"
+    volumes: !override
+      - postgres_local:/var/lib/postgresql/data
+
+  redis:
+    ports: !override
+      - "127.0.0.1:6380:6379"
+    volumes: !override
+      - redis_local:/data
+
+  minio:
+    image: minio/minio:latest
+    ports: !override
+      - "127.0.0.1:9100:9000"
+      - "127.0.0.1:9101:9001"
+    volumes: !override
+      - minio_local:/data
+
+  caddy:
+    ports: !override
+      - "8080:80"
+    volumes: !override
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data_local:/data
+      - caddy_config_local:/config
+
+volumes:
+  postgres_local:
+  redis_local:
+  minio_local:
+  caddy_data_local:
+  caddy_config_local:

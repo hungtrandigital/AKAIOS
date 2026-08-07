@@ -1,0 +1,15 @@
+# Connect the AKAIOS reverse proxy to the shared Cloudflare Tunnel edge.
+# The tunnel itself remains managed by the corporate website compose project.
+
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:8081:80"
+    networks:
+      - ak-net
+      - prismate-edge
+
+networks:
+  prismate-edge:
+    external: true
+    name: prismate-edge

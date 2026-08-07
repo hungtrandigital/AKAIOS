@@ -2,12 +2,14 @@
 
 FROM node:20-alpine AS deps
 RUN apk add --no-cache openssl
-ENV PNPM_HOME="/pnpm" PATH="$PNPM_HOME:$PATH"
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /repo
 
 # Copy manifests only (cache layer)
-COPY package.json pnpm-workspace.yaml turbo.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY systems/shared/package.json ./systems/shared/
 COPY systems/payroll/web-admin/package.json ./systems/payroll/web-admin/
 
 # Install with cache mount
@@ -16,22 +18,30 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 # Build
 FROM deps AS build
+WORKDIR /repo
+ARG ATTENDANCE_API_URL=http://localhost:3000
+ARG PAYROLL_API_URL=http://localhost:3001
+ENV ATTENDANCE_API_URL=$ATTENDANCE_API_URL
+ENV PAYROLL_API_URL=$PAYROLL_API_URL
+COPY systems/shared ./systems/shared
+COPY systems/payroll/web-admin ./systems/payroll/web-admin
+RUN pnpm --filter @ak/shared prisma:generate
+RUN pnpm --filter @ak/shared build
 WORKDIR /repo/systems/payroll/web-admin
-COPY systems/payroll/web-admin ./
-COPY systems/shared ./../../shared
 RUN pnpm build
 
 # Production runtime
 FROM node:20-alpine AS runtime
-WORKDIR /app
+WORKDIR /repo/systems/payroll/web-admin
 ENV NODE_ENV=production
 
-# Copy standalone output + shared
+# Preserve the pnpm workspace layout so the Next.js symlink resolves correctly.
+COPY --from=build /repo/node_modules /repo/node_modules
+COPY --from=build /repo/systems/payroll/web-admin/node_modules ./node_modules
 COPY --from=build /repo/systems/payroll/web-admin/.next ./.next
 COPY --from=build /repo/systems/payroll/web-admin/public ./public
 COPY --from=build /repo/systems/payroll/web-admin/package.json ./
 COPY --from=build /repo/systems/payroll/web-admin/next.config.js ./
-COPY --from=build /repo/node_modules ./node_modules
 
 RUN apk add --no-cache wget
 EXPOSE 3002

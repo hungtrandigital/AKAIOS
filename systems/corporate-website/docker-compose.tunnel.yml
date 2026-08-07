@@ -8,6 +8,14 @@ services:
     container_name: akaiunsan-corporate-tunnel
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - default
+      - prismate-edge
     depends_on:
       corporate-website:
         condition: service_healthy
+
+networks:
+  prismate-edge:
+    external: true
+    name: prismate-edge
