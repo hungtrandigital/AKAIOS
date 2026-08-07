@@ -1,7 +1,5 @@
 packages:
-  - "systems/*"
   - "systems/shared"
   - "systems/attendance/backend"
-  - "systems/attendance/web-admin"
   - "systems/payroll/backend"
   - "systems/payroll/web-admin"

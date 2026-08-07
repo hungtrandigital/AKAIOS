@@ -16,9 +16,9 @@
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
     "clean": "turbo run clean && rm -rf node_modules",
-    "prisma:migrate": "pnpm --filter @ak/shared exec prisma migrate dev",
-    "prisma:generate": "pnpm --filter @ak/shared exec prisma generate",
-    "prisma:studio": "pnpm --filter @ak/shared exec prisma studio",
+    "prisma:migrate": "pnpm --filter @ak/shared run prisma:migrate",
+    "prisma:generate": "pnpm --filter @ak/shared run prisma:generate",
+    "prisma:studio": "pnpm --filter @ak/shared run prisma:studio",
     "docker:up": "docker compose -f systems/shared/docker-compose.yml up -d",
     "docker:up:dev": "docker compose -f systems/shared/docker-compose.dev.yml up -d",
     "docker:down": "docker compose -f systems/shared/docker-compose.yml down",
@@ -26,7 +26,10 @@
     "docker:logs": "docker compose -f systems/shared/docker-compose.yml logs -f"
   },
   "devDependencies": {
+    "@typescript-eslint/parser": "^8.64.0",
     "@types/node": "^20.14.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.15",
     "turbo": "^2.1.0",
     "typescript": "^5.5.0"
   }

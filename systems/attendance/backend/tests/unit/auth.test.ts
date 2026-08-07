@@ -1,6 +1,20 @@
 // Basic health check test — verifies server starts and /health/live responds.
 
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, vi } from 'vitest'
+
+vi.mock('@ak/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ak/shared')>()
+  const healthy = { ok: true, latencyMs: 0 }
+  return {
+    ...actual,
+    runAllHealthChecks: vi.fn(async (service: string) => ({
+      ok: true,
+      service,
+      checks: { database: healthy, redis: healthy, minio: healthy },
+      timestamp: new Date().toISOString(),
+    })),
+  }
+})
 
 // Set required env vars BEFORE any imports of src code
 beforeAll(() => {

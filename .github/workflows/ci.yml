@@ -57,6 +57,34 @@ jobs:
         run: pnpm build
 
   # =====================================================
+  # Corporate website (independent npm + Node 22 project)
+  # =====================================================
+  corporate-website:
+    name: Corporate Website
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: systems/corporate-website
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: 'npm'
+          cache-dependency-path: systems/corporate-website/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test and build
+        run: npm test
+
+  # =====================================================
   # Integration tests (with Postgres + Redis containers)
   # =====================================================
   integration:
