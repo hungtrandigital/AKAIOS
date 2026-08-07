@@ -33,6 +33,7 @@
     "clean": "rm -rf dist .turbo coverage",
     "prisma:generate": "prisma generate --schema=src/db/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema=src/db/prisma/schema.prisma",
+    "prisma:push": "prisma db push --schema=src/db/prisma/schema.prisma --skip-generate",
     "prisma:studio": "prisma studio --schema=src/db/prisma/schema.prisma",
     "db:seed": "tsx src/db/seeds/dev-seed.ts",
     "db:seed:demo": "tsx src/db/seeds/demo-accounts.ts",

@@ -17,6 +17,7 @@
     "test:e2e": "turbo run test:e2e",
     "clean": "turbo run clean && rm -rf node_modules",
     "prisma:migrate": "pnpm --filter @ak/shared run prisma:migrate",
+    "prisma:push": "pnpm --filter @ak/shared run prisma:push",
     "prisma:generate": "pnpm --filter @ak/shared run prisma:generate",
     "prisma:studio": "pnpm --filter @ak/shared run prisma:studio",
     "docker:up": "docker compose -f systems/shared/docker-compose.yml up -d",

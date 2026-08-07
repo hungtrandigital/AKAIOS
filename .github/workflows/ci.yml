@@ -139,7 +139,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
-      - run: pnpm prisma migrate deploy
+      - name: Apply Prisma schema
+        run: pnpm prisma:push
       - run: pnpm test
 
       - name: Upload coverage
