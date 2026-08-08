@@ -58,7 +58,7 @@ plans/
 
 | Plan Name | Type | Completed | Epic | System | Link |
 |-----------|------|-----------|------|--------|------|
-| *[No completed plans yet]* | - | - | - | - | - |
+| [AKAIUNSAN Corporate Website and CMS](completed/2026-08/corporate-website.md) | slice | 2026-08-05 | PRD-EPIC-003 | `systems/corporate-website/` | [Public review site](https://akaiunsan.prismate.vn) |
 
 ## Plan Management Rules
 

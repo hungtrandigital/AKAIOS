@@ -59,23 +59,6 @@ const DEFAULT_RULES: PayrollRuleSnapshot = {
   taxMode: 'none',
 }
 
-function makeAttendance(
-  date: Date,
-  status: AttendanceRecord['status'],
-  totalWorkMinutes: number,
-  overtimeMinutes = 0,
-  lateMinutes = 0
-): AttendanceRecord {
-  return {
-    date,
-    status,
-    totalWorkMinutes,
-    overtimeMinutes,
-    lateMinutes,
-    isWeekend: isWeekend(date),
-  }
-}
-
 describe('Payroll Engine — BR-PAY rules', () => {
   describe('Working days utilities', () => {
     it('countWorkingDaysInMonth: June 2026 = 26 days', () => {

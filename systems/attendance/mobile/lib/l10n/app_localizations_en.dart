@@ -37,7 +37,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logout => 'Logout';
 
   @override
-  String get todayTitle => 'Today';
+  String get todayTitle => 'Daily attendance';
 
   @override
   String get noAssignmentToday => 'No shift today';

@@ -37,7 +37,7 @@ class AppLocalizationsVi extends AppLocalizations {
   String get logout => 'Đăng xuất';
 
   @override
-  String get todayTitle => 'Hôm nay';
+  String get todayTitle => 'Chấm công hằng ngày';
 
   @override
   String get noAssignmentToday => 'Không có ca hôm nay';

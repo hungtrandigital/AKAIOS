@@ -9,6 +9,7 @@ This section contains **comprehensive/final** marketing strategies, execution pl
 ### Key Documents
 
 - **[go-to-market.md](go-to-market.md)** - Comprehensive go-to-market strategy
+- **[brand-guidelines.md](brand-guidelines.md)** - Corporate public brand, website design direction, styles, voice, photography, motion, and SEO rules
 - **[personas.md](personas.md)** - Target user personas
 - **[performance/](performance/)** - KPIs, analytics, and monitoring metrics
 - **[templates/campaign-brief-template.md](templates/campaign-brief-template.md)** - Reusable campaign planning brief
@@ -26,6 +27,7 @@ This section contains **comprehensive/final** marketing strategies, execution pl
 
 ## Quick Links
 - Strategy: `go-to-market.md` ([changelog](history/gtm-changelog.md))
+- Corporate Brand Guide: `brand-guidelines.md`
 - Marketing Workflow: `../0-agents/workflows/marketing.md`
 - Campaign Brief Template: `templates/campaign-brief-template.md`
 - Performance: `performance/weekly-dashboard.md` ([metrics glossary](performance/metrics-glossary.md))

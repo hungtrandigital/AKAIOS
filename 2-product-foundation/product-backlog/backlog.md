@@ -123,6 +123,43 @@ Xây dựng 2 hệ thống: `attendance` (mobile app check-in/out theo ca tại 
 - The epic remains `in-progress`: operational, native iOS, and remaining `PRD-SLICE-003..005` acceptance gates are required before the 1–2 project pilot; pilot acceptance is required before scale-out.
 
 
+### Epic 3: AKAIUNSAN Corporate Website and CMS
+
+**Work-Item Metadata:**
+```yaml
+id: PRD-EPIC-003
+title: "AKAIUNSAN Corporate Website and CMS"
+type: epic
+domain: product
+status: completed
+created: 2026-08-05
+updated: 2026-08-05
+priority: high
+owner: @fullstack-engineer
+phases: [ideas, plan, execution, code, review, completed]
+related_domain_tasks: [PRD-SLICE-008, MKT-TASK-002]
+```
+
+**Description:**
+Create the external AKAIUNSAN corporate website for apartment, condominium, factory, and industrial-zone cleaning leads, with a structured editorial CMS, safe seed workflow, replaceable media, and SEO foundations.
+
+**Success Metrics:**
+- Public multi-route website is deployed and responsive.
+- Apartment and project/factory leads persist and are manageable in admin.
+- Editors can update published content and media without a code deployment.
+- Production content is never overwritten by demo seed execution.
+- Public presentation follows the approved corporate brand guide.
+
+**User Stories:**
+- [x] `PRD-SLICE-008`: Corporate website and CMS V1.
+
+**Related Documents:**
+- [Corporate Brand Guide](../../4-marketing/brand-guidelines.md)
+- [Completed implementation plan](../../3-technical/3.2-implementation/plans/completed/2026-08/corporate-website.md)
+- [Corporate website source](../../systems/corporate-website/README.md)
+
+---
+
 ## Backlog Items (Unprioritized)
 
 ### Feature Requests

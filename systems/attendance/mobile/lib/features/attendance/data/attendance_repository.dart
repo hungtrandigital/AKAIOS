@@ -15,6 +15,10 @@ class ShiftAssignment {
   final String id;
   final String projectId;
   final String projectName;
+  final String projectAddress;
+  final double? projectLatitude;
+  final double? projectLongitude;
+  final int geofenceRadiusMeters;
   final String shiftId;
   final String shiftName;
   final String startTime;
@@ -30,6 +34,10 @@ class ShiftAssignment {
     required this.id,
     required this.projectId,
     required this.projectName,
+    this.projectAddress = '',
+    this.projectLatitude,
+    this.projectLongitude,
+    this.geofenceRadiusMeters = 100,
     required this.shiftId,
     required this.shiftName,
     required this.startTime,
@@ -61,6 +69,11 @@ class ShiftAssignment {
       id: j['id'] as String,
       projectId: (project?['id'] ?? j['projectId']) as String,
       projectName: (project?['name'] ?? '') as String,
+      projectAddress: (project?['address'] ?? '') as String,
+      projectLatitude: _toDouble(project?['latitude']),
+      projectLongitude: _toDouble(project?['longitude']),
+      geofenceRadiusMeters:
+          (project?['geofenceRadiusMeters'] as num?)?.toInt() ?? 100,
       shiftId: (shift?['id'] ?? j['shiftId']) as String,
       shiftName: (shift?['name'] ?? '') as String,
       startTime: (shift?['startTime'] ?? '') as String,
@@ -77,6 +90,11 @@ class ShiftAssignment {
       overrideReason: record?['overrideReason'] as String?,
     );
   }
+}
+
+double? _toDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return value is String ? double.tryParse(value) : null;
 }
 
 class AttendanceRepository {
