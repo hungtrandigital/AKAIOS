@@ -16,7 +16,7 @@ Mobile app scaffold for 200 employees to check-in/out at project sites. Implemen
 | `lib/core/auth_storage.dart` | JWT storage via `flutter_secure_storage` |
 | `lib/core/http_client.dart` | Dio + auth interceptor + error mapping |
 | `lib/features/auth/` | Login with phone+password OR phone+OTP |
-| `lib/features/attendance/` | Today's shift screen + check-in/out flow |
+| `lib/features/attendance/` | Daily mobile attendance layout + live GPS/photo check-in/out flow |
 | `lib/l10n/app_vi.arb` | Vietnamese translations (default) |
 | `lib/l10n/app_en.arb` | English translations |
 
@@ -96,7 +96,7 @@ flutter build ipa --release --dart-define=API_BASE_URL=https://ak-tunnel.example
 flutter test
 ```
 
-Widget tests included in Phase 2.5 (not yet added).
+Widget tests cover project/geofence parsing and the 390x844 daily attendance layout.
 
 ## Related Documents
 

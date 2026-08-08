@@ -1,12 +1,11 @@
 // App entry point — sets up Riverpod, GoRouter, Localization.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/auth_storage.dart';
-import 'l10n/app_localizations.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/attendance/presentation/today_screen.dart';
@@ -30,13 +29,15 @@ class _AKAppState extends ConsumerState<AKApp> {
   @override
   void initState() {
     super.initState();
-    _authStorage = AuthStorage();
+    _authStorage = ref.read(authStorageProvider);
     _router = GoRouter(
       initialLocation: '/login',
       redirect: (context, state) async {
         final loggedIn = await _authStorage.getAccessToken();
-        if (loggedIn == null && state.matchedLocation != '/login') return '/login';
-        if (loggedIn != null && state.matchedLocation == '/login') return '/today';
+        if (loggedIn == null && state.matchedLocation != '/login')
+          return '/login';
+        if (loggedIn != null && state.matchedLocation == '/login')
+          return '/today';
         return null;
       },
       routes: [
@@ -64,28 +65,24 @@ class _AKAppState extends ConsumerState<AKApp> {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'AKAIUNSAN',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2878E3),
+        ).copyWith(
+          primary: const Color(0xFF2878E3),
+          surface: Colors.white,
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+        dividerColor: const Color(0xFFE9ECF1),
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Color(0xFF152238)),
+        ),
+      ),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: _router,
       debugShowCheckedModeBanner: false,
-    );
-  }
-}
-
-// Override the AuthStorage provider with the singleton initialized in _AKAppState.
-final authStorageProvider = Provider<AuthStorage>((ref) => throw UnimplementedError(
-  'Override in ProviderScope',
-));
-
-class Overrides extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ProviderScope(
-      overrides: [
-        authStorageProvider.overrideWithValue(AuthStorage()),
-      ],
-      child: const AKApp(),
     );
   }
 }

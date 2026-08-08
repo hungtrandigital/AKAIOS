@@ -2,13 +2,15 @@
 
 import 'package:dio/dio.dart';
 import 'auth_storage.dart';
+import 'config.dart';
 
 class ApiException implements Exception {
   final String code;
   final String message;
   final int statusCode;
 
-  ApiException({required this.code, required this.message, required this.statusCode});
+  ApiException(
+      {required this.code, required this.message, required this.statusCode});
 
   @override
   String toString() => '$code: $message';
@@ -19,12 +21,13 @@ class HttpClient {
   final AuthStorage _authStorage;
 
   HttpClient({required AuthStorage authStorage})
-    : _authStorage = authStorage,
-      _dio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {'Content-Type': 'application/json'},
-      )) {
+      : _authStorage = authStorage,
+        _dio = Dio(BaseOptions(
+          baseUrl: AppConfig.apiBaseUrl,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 30),
+          headers: {'Content-Type': 'application/json'},
+        )) {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await _authStorage.getAccessToken();
@@ -55,7 +58,8 @@ class HttpClient {
     ));
   }
 
-  Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query}) async {
+  Future<Map<String, dynamic>> get(String path,
+      {Map<String, dynamic>? query}) async {
     return _wrap(() => _dio.get(path, queryParameters: query));
   }
 
@@ -63,7 +67,8 @@ class HttpClient {
     return _wrap(() => _dio.post(path, data: data));
   }
 
-  Future<Map<String, dynamic>> _wrap(Future<Response<dynamic>> Function() fn) async {
+  Future<Map<String, dynamic>> _wrap(
+      Future<Response<dynamic>> Function() fn) async {
     try {
       final res = await fn();
       final data = res.data;

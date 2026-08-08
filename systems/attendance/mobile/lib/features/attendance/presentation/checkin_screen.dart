@@ -1,17 +1,18 @@
-// Check-in/out screen — GPS + camera + submit.
+// Check-in/out screen — reference layout with live GPS, camera and submit.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/http_client.dart';
-import '../../../l10n/app_localizations.dart';
 import '../data/attendance_repository.dart';
+import 'attendance_widgets.dart';
 import 'today_screen.dart';
 
 class CheckScreen extends ConsumerStatefulWidget {
@@ -29,76 +30,142 @@ class CheckScreen extends ConsumerStatefulWidget {
 }
 
 class _CheckScreenState extends ConsumerState<CheckScreen> {
+  late Future<ShiftAssignment?> _assignmentFuture;
+  late DateTime _now;
+  Timer? _clock;
   Position? _position;
   XFile? _photo;
-  bool _loading = false;
-  String? _errorMsg;
+  bool _locating = false;
+  bool _submitting = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _assignmentFuture = ref.read(attendanceRepositoryProvider).getMyToday();
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _getGps());
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
 
   Future<void> _getGps() async {
+    if (_locating || _submitting) return;
     setState(() {
-      _loading = true;
-      _errorMsg = null;
+      _locating = true;
+      _errorMessage = null;
     });
+
     try {
-      // Permission check
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Location permission denied');
-        }
       }
-      // Service check
-      var serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('GPS service disabled');
+      if (permission == LocationPermission.denied) {
+        throw Exception('Cần quyền truy cập vị trí để chấm công.');
       }
-      _position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+          'Quyền vị trí đã bị tắt. Vui lòng bật lại trong Cài đặt.',
+        );
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception('GPS đang tắt. Vui lòng bật dịch vụ vị trí.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
       );
-    } catch (e) {
-      setState(() => _errorMsg = e.toString());
+      if (!mounted) return;
+      setState(() => _position = position);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _errorMessage = _cleanError(error));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _locating = false);
     }
   }
 
   Future<void> _takePhoto() async {
+    if (_submitting) return;
     try {
-      final picker = ImagePicker();
-      _photo = await picker.pickImage(
+      final photo = await ImagePicker().pickImage(
         source: ImageSource.camera,
         imageQuality: 85,
         maxWidth: 1280,
       );
-      setState(() {});
-    } catch (e) {
-      setState(() => _errorMsg = 'Camera error: $e');
+      if (!mounted || photo == null) return;
+      setState(() {
+        _photo = photo;
+        _errorMessage = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Không thể mở camera: ${_cleanError(error)}';
+      });
     }
   }
 
-  Future<void> _submit() async {
+  double? _distanceToProject(ShiftAssignment assignment) {
+    final latitude = assignment.projectLatitude;
+    final longitude = assignment.projectLongitude;
+    final position = _position;
+    if (latitude == null || longitude == null || position == null) return null;
+    return Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      latitude,
+      longitude,
+    );
+  }
+
+  bool? _isInsideProject(ShiftAssignment assignment) {
+    final distance = _distanceToProject(assignment);
+    if (distance == null) return null;
+    return distance <= assignment.geofenceRadiusMeters;
+  }
+
+  Future<void> _submit(ShiftAssignment assignment) async {
     if (_position == null) {
-      setState(() => _errorMsg = 'Vui lòng lấy vị trí trước');
+      setState(() => _errorMessage = 'Vui lòng xác định vị trí trước.');
+      await _getGps();
+      return;
+    }
+    if (_isInsideProject(assignment) == false) {
+      setState(() {
+        _errorMessage =
+            'Bạn đang ở ngoài khu vực làm việc. Vui lòng di chuyển đến '
+            'công trình để chấm công.';
+      });
       return;
     }
     if (_photo == null) {
-      setState(() => _errorMsg = 'Vui lòng chụp ảnh');
+      setState(() => _errorMessage = 'Vui lòng chụp ảnh xác minh trước.');
       return;
     }
 
     setState(() {
-      _loading = true;
-      _errorMsg = null;
+      _submitting = true;
+      _errorMessage = null;
     });
     try {
       final bytes = await File(_photo!.path).readAsBytes();
       final photoBase64 = base64Encode(bytes);
+      final repository = ref.read(attendanceRepositoryProvider);
 
-      final repo = ref.read(attendanceRepositoryProvider);
       if (widget.isCheckOut) {
-        await repo.checkOut(
+        await repository.checkOut(
           shiftAssignmentId: widget.shiftAssignmentId,
           latitude: _position!.latitude,
           longitude: _position!.longitude,
@@ -106,7 +173,7 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
           photoBase64: photoBase64,
         );
       } else {
-        await repo.checkIn(
+        await repository.checkIn(
           shiftAssignmentId: widget.shiftAssignmentId,
           latitude: _position!.latitude,
           longitude: _position!.longitude,
@@ -117,119 +184,165 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isCheckOut ? 'Check-out thành công' : 'Check-in thành công')),
+        SnackBar(
+          content: Text(
+            widget.isCheckOut ? 'Check-out thành công' : 'Check-in thành công',
+          ),
+          backgroundColor: attendanceGreen,
+        ),
       );
       context.go('/today');
-    } on ApiException catch (e) {
-      setState(() => _errorMsg = e.message);
-    } catch (e) {
-      setState(() => _errorMsg = e.toString());
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _errorMessage = error.message);
+    } catch (error) {
+      if (mounted) setState(() => _errorMessage = _cleanError(error));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  String _cleanError(Object error) {
+    return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  void _showComingSoon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Tính năng này sẽ được cập nhật sớm.')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final action = widget.isCheckOut ? l.checkOut : l.checkIn;
     return Scaffold(
-      appBar: AppBar(title: Text(action)),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // GPS section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on),
-                        const SizedBox(width: 8),
-                        Text('Vị trí', style: Theme.of(context).textTheme.titleMedium),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (_position != null)
-                      Text('Lat: ${_position!.latitude.toStringAsFixed(6)}')
-                    else
-                      const Text('Chưa lấy vị trí'),
-                    Text('Lng: ${_position!.longitude.toStringAsFixed(6)}'),
-                    Text('Accuracy: ${_position?.accuracy.toStringAsFixed(1) ?? '-'} m'),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _loading ? null : _getGps,
-                      icon: const Icon(Icons.my_location),
-                      label: Text(_position == null ? 'Lấy vị trí' : 'Lấy lại'),
-                    ),
-                  ],
+            DailyAttendanceHeader(
+              now: _now,
+              leadingIcon: Icons.arrow_back_rounded,
+              onLeading: () => context.go('/today'),
+              onNotifications: _showComingSoon,
+            ),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: FutureBuilder<ShiftAssignment?>(
+                    future: _assignmentFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: attendanceBlue,
+                          ),
+                        );
+                      }
+                      final assignment = snapshot.data;
+                      if (snapshot.hasError || assignment == null) {
+                        return ListView(
+                          padding: const EdgeInsets.all(20),
+                          children: [
+                            AttendanceMessageCard(
+                              icon: Icons.cloud_off_rounded,
+                              title: 'Không tải được ca làm việc',
+                              message: snapshot.hasError
+                                  ? snapshot.error.toString()
+                                  : 'Ca làm việc không còn khả dụng.',
+                              color: attendanceRed,
+                              onRetry: () {
+                                setState(() {
+                                  _assignmentFuture = ref
+                                      .read(attendanceRepositoryProvider)
+                                      .getMyToday();
+                                });
+                              },
+                            ),
+                          ],
+                        );
+                      }
+
+                      final distance = _distanceToProject(assignment);
+                      final isInside = _isInsideProject(assignment);
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                        children: [
+                          ShiftSummaryCard(assignment: assignment),
+                          if (assignment.checkInAt != null) ...[
+                            const SizedBox(height: 12),
+                            CheckInStatusBanner(
+                              checkInAt: assignment.checkInAt!,
+                              checkOutAt: assignment.checkOutAt,
+                              now: _now,
+                            ),
+                          ],
+                          const SizedBox(height: 22),
+                          LocationVerificationPanel(
+                            hasPosition: _position != null,
+                            isInside: isInside,
+                            distanceMeters: distance,
+                            radiusMeters: assignment.geofenceRadiusMeters,
+                            loading: _locating,
+                            onRefresh: _submitting ? null : _getGps,
+                          ),
+                          const SizedBox(height: 20),
+                          CircularAttendanceAction(
+                            isCheckOut: widget.isCheckOut,
+                            loading: _submitting,
+                            onPressed: () => _submit(assignment),
+                          ),
+                          const SizedBox(height: 20),
+                          PhotoVerificationCard(
+                            isCheckOut: widget.isCheckOut,
+                            preview: _photo == null
+                                ? null
+                                : FileImage(File(_photo!.path)),
+                            onTakePhoto: _submitting ? null : _takePhoto,
+                          ),
+                          if (_errorMessage != null) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFECEC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: attendanceRed.withOpacity(0.25),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline_rounded,
+                                    color: attendanceRed,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _errorMessage!,
+                                      style: const TextStyle(
+                                        color: Color(0xFFB42328),
+                                        fontSize: 12,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-
-            // Photo section
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.camera_alt),
-                          const SizedBox(width: 8),
-                          Text('Ảnh xác nhận', style: Theme.of(context).textTheme.titleMedium),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_photo != null)
-                        Container(
-                          height: 200,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                          ),
-                          child: Image.file(File(_photo!.path), fit: BoxFit.cover),
-                        )
-                      else
-                        Container(
-                          height: 200,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey),
-                            color: Colors.grey[200],
-                          ),
-                          child: const Center(child: Text('Chưa chụp ảnh')),
-                        ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: _loading ? null : _takePhoto,
-                        icon: const Icon(Icons.camera),
-                        label: Text(_photo == null ? l.takePhoto : l.retakePhoto),
-                      ),
-                    ],
-                  ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            if (_errorMsg != null)
-              Text(_errorMsg!, style: const TextStyle(color: Colors.red)),
-            const Spacer(),
-
-            ElevatedButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(widget.isCheckOut ? l.submitCheckOut : l.submitCheckIn),
+            AttendanceBottomNavigation(
+              onHome: () => context.go('/today'),
+              onPlaceholder: _showComingSoon,
+              onAttendance: () {},
             ),
           ],
         ),

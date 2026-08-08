@@ -6,6 +6,10 @@ class ShiftAssignment {
   final String id;
   final String projectId;
   final String projectName;
+  final String projectAddress;
+  final double? projectLatitude;
+  final double? projectLongitude;
+  final int geofenceRadiusMeters;
   final String shiftId;
   final String shiftName;
   final String startTime;
@@ -19,6 +23,10 @@ class ShiftAssignment {
     required this.id,
     required this.projectId,
     required this.projectName,
+    required this.projectAddress,
+    required this.projectLatitude,
+    required this.projectLongitude,
+    required this.geofenceRadiusMeters,
     required this.shiftId,
     required this.shiftName,
     required this.startTime,
@@ -37,16 +45,35 @@ class ShiftAssignment {
       id: j['id'] as String,
       projectId: (project?['id'] ?? j['projectId']) as String,
       projectName: (project?['name'] ?? '') as String,
+      projectAddress: (project?['address'] ?? '') as String,
+      projectLatitude: _asDouble(project?['latitude']),
+      projectLongitude: _asDouble(project?['longitude']),
+      geofenceRadiusMeters: _asInt(project?['geofenceRadiusMeters']) ?? 100,
       shiftId: (shift?['id'] ?? j['shiftId']) as String,
       shiftName: (shift?['name'] ?? '') as String,
       startTime: (shift?['startTime'] ?? '') as String,
       endTime: (shift?['endTime'] ?? '') as String,
       date: DateTime.parse(j['date'] as String),
       attendanceRecordId: record?['id'] as String?,
-      checkInAt: record?['checkInAt'] != null ? DateTime.parse(record!['checkInAt'] as String) : null,
-      checkOutAt: record?['checkOutAt'] != null ? DateTime.parse(record!['checkOutAt'] as String) : null,
+      checkInAt: record?['checkInAt'] != null
+          ? DateTime.parse(record!['checkInAt'] as String).toLocal()
+          : null,
+      checkOutAt: record?['checkOutAt'] != null
+          ? DateTime.parse(record!['checkOutAt'] as String).toLocal()
+          : null,
     );
   }
+}
+
+double? _asDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '');
+}
+
+int? _asInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '');
 }
 
 class AttendanceRepository {
@@ -73,7 +100,11 @@ class AttendanceRepository {
   }) async {
     final res = await _http.post('/v1/attendance/check-in', data: {
       'shiftAssignmentId': shiftAssignmentId,
-      'gps': {'latitude': latitude, 'longitude': longitude, 'accuracy': accuracy},
+      'gps': {
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy
+      },
       'photoBase64': photoBase64,
     });
     return res;
@@ -88,7 +119,11 @@ class AttendanceRepository {
   }) async {
     return _http.post('/v1/attendance/check-out', data: {
       'shiftAssignmentId': shiftAssignmentId,
-      'gps': {'latitude': latitude, 'longitude': longitude, 'accuracy': accuracy},
+      'gps': {
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy
+      },
       'photoBase64': photoBase64,
     });
   }

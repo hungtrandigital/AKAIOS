@@ -1,22 +1,35 @@
 // Auth repository — login flow with phone + password or phone + OTP.
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/http_client.dart';
 import '../../../core/auth_storage.dart';
+
+final authStorageProvider = Provider<AuthStorage>((ref) => AuthStorage());
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  final storage = ref.read(authStorageProvider);
+  return AuthRepository(
+    http: HttpClient(authStorage: storage),
+    storage: storage,
+  );
+});
 
 class AuthRepository {
   final HttpClient _http;
   final AuthStorage _storage;
 
   AuthRepository({required HttpClient http, required AuthStorage storage})
-    : _http = http,
-      _storage = storage;
+      : _http = http,
+        _storage = storage;
 
   Future<bool> isLoggedIn() async {
     final token = await _storage.getAccessToken();
     return token != null && token.isNotEmpty;
   }
 
-  Future<void> loginWithPassword({required String phone, required String password}) async {
+  Future<void> loginWithPassword(
+      {required String phone, required String password}) async {
     final res = await _http.post('/v1/auth/login', data: {
       'phone': phone,
       'password': password,
@@ -28,7 +41,8 @@ class AuthRepository {
     await _http.post('/v1/auth/request-otp', data: {'phone': phone});
   }
 
-  Future<void> loginWithOtp({required String phone, required String otp}) async {
+  Future<void> loginWithOtp(
+      {required String phone, required String otp}) async {
     final res = await _http.post('/v1/auth/login-otp', data: {
       'phone': phone,
       'otp': otp,
