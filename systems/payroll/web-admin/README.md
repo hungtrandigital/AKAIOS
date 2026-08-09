@@ -5,8 +5,8 @@ employees, executive reporting, and RBAC administration.
 
 **Status:** The 2026-08-09 dependency-security candidate passes the production
 build, 9/9 live Playwright scenarios, and a Node 20 Alpine `/login` container
-smoke locally. Remote CI and exact-SHA merge evidence remain pending; pilot
-evidence is not claimed.
+smoke locally. Candidate `90a95b0` and merge commit `4f72810` each passed all
+nine remote CI jobs; deployment and pilot evidence are not claimed.
 
 ## Quick Start
 

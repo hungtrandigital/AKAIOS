@@ -1,7 +1,7 @@
 # Payroll System
 
 **System Name:** `payroll`
-**Status:** Prior remediation gate complete; 2026-08-09 dependency-security candidate validated locally; remote CI, exact-SHA merge, and pilot acceptance pending (PRD-EPIC-002)
+**Status:** 2026-08-09 dependency-security gate merged; deployment, remaining slice, and pilot acceptance pending (PRD-EPIC-002)
 **Owner:** @fullstack-engineer
 
 ## Overview
@@ -156,4 +156,4 @@ For each active employee:
 
 ---
 
-*The 2026-08-09 dependency-security candidate passes its local gates. Exact-SHA review, new remote CI, merge, deployment, and remaining slice/pilot acceptance remain pending.*
+*Reviewed candidate `90a95b0` passed all nine exact-SHA jobs, merged through PR #1 as `4f72810`, and passed all nine post-merge jobs. Deployment and remaining slice/pilot acceptance remain pending.*

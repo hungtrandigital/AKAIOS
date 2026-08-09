@@ -1,7 +1,7 @@
 # Attendance System
 
 **System Name:** `attendance`
-**Status:** Prior remediation gate complete; 2026-08-09 dependency-security candidate validated locally; exact-SHA CI, merge/deployment, remaining MVP slice, and pilot acceptance pending (PRD-EPIC-002)
+**Status:** 2026-08-09 dependency-security gate merged; deployment, remaining MVP slice, and pilot acceptance pending (PRD-EPIC-002)
 **Owner:** @fullstack-engineer
 
 ## Overview
@@ -173,4 +173,4 @@ attendance/
 
 ---
 
-*The prior remediation commit passed its historical remote gate. The 2026-08-09 dependency-security candidate passes locally; exact-SHA review, new remote CI, merge, deployment, and remaining slice/pilot acceptance remain pending.*
+*Reviewed candidate `90a95b0` passed all nine exact-SHA jobs, merged through PR #1 as `4f72810`, and passed all nine post-merge jobs. Deployment and remaining slice/pilot acceptance remain pending.*

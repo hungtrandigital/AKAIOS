@@ -1,6 +1,6 @@
 # System Overview — AKAIUNSAN
 
-**Status:** Reconciled with the 2026-08-09 local delivery candidate
+**Status:** Reconciled with the merged 2026-08-09 dependency-security gate
 
 **Last Updated:** 2026-08-09
 
@@ -65,15 +65,17 @@ terminates public TLS and reaches Caddy on local HTTP. The main hostname serves
 web plus the mobile `/api/attendance/v1/*` prefix; a separate storage hostname
 routes presigned MinIO requests.
 
-Local candidate validation is complete, including fresh migrations, 9/9 live
+Candidate validation is complete, including fresh migrations, 9/9 live
 Playwright scenarios against the final container stack, production package and
 image builds, non-root production-only application closures, API readiness
-checks, and a web-container `/login` smoke test. Commit `056a769` and its five green
-remote jobs remain historical baseline evidence only; the 2026-08-09 candidate
-still requires an exact-SHA review and a new green remote CI run before merge.
-The live server, tunnel policy, log rotation, backup schedule/restore drill, iOS
-release signing and physical-device validation, and pilot/scale-out are not yet
-accepted.
+checks, and a web-container `/login` smoke test. Commit `056a769` and its five
+green remote jobs remain historical baseline evidence only. Reviewed candidate
+`90a95b0` passed all nine exact-SHA jobs in [Actions run 31295175661](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295175661),
+merged through [PR #1](https://github.com/hungtrandigital/AKAIOS/pull/1) as
+`4f72810`, and passed all nine post-merge jobs in [Actions run 31295350615](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295350615).
+The live server, tunnel policy, log rotation, backup schedule/restore drill,
+iOS release signing and physical-device validation, and pilot/scale-out are not
+yet accepted.
 
 ## Future Systems
 

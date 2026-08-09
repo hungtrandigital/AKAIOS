@@ -132,7 +132,7 @@ providers. Seed/demo credentials are forbidden on production and live pilot data
 
 ## Validation Boundary
 
-Current local-candidate evidence covers seven fresh migrations, real
+Local candidate evidence covers seven fresh migrations, real
 PostgreSQL/Redis/MinIO integration, Attendance 13/13 plus Payroll 1/1 integration
 tests, 9/9 live Playwright scenarios, package and production image builds,
 production-only non-root closures for all three long-running images, real
@@ -141,10 +141,12 @@ API readiness endpoints, web `/login`, image-based Playwright 9/9,
 Compose/Caddy configuration, and Android build. Commit `056a769` and
 [GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275)
 are historical baseline evidence; they do not validate the 2026-08-09 candidate.
-That candidate still requires exact-SHA review and a new green remote CI run
-before merge or deployment. iOS release signing and physical-device validation,
-production DNS/tunnel policy, backup/restore, capacity, and pilot behavior remain
-release gates.
+Reviewed candidate `90a95b0` passed all nine jobs in [Actions run 31295175661](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295175661),
+merged through [PR #1](https://github.com/hungtrandigital/AKAIOS/pull/1) as
+`4f72810`, and passed the nine-job post-merge [Actions run 31295350615](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295350615).
+No deployment occurred. iOS release signing and physical-device validation,
+production DNS/tunnel policy, backup/restore, capacity, and pilot behavior
+remain release gates.
 
 ## Related Documents
 
