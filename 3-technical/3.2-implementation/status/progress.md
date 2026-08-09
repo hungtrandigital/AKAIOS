@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Last Updated:** 2026-08-09 (production dependency audit remediated locally; remote CI/merge and HPC routing update pending)
+**Last Updated:** 2026-08-09 (production dependency gate merged; HPC routing and deployment pending)
 
 ## Production Dependency Security Remediation — 2026-08-09
 
@@ -43,7 +43,9 @@
   the three long-running images it enforces non-root execution, pruned and
   relocatable dependency closures, Argon2/Sharp/ExcelJS runtime smokes, and web
   `/login` HTTP 200. Migration execution remains local evidence; this job only
-  proves that target builds. Its first remote run remains a pre-merge gate.
+  proves that target builds. The exact candidate [Actions run 31295175661](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295175661)
+  and post-merge `main` [Actions run 31295350615](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295350615)
+  each pass all nine jobs, including this container gate.
 - Final local gates pass on the remediated graph: frozen-lockfile install, lint
   (0 errors), typecheck, 170/170 unit tests, coverage above 90%, all production
   package builds, seven fresh migrations, Attendance 13/13 plus Payroll 1/1
@@ -53,8 +55,10 @@
   verified by the complete production build/browser suite; a React 19 migration
   is not bundled into this audit-only batch.
 - The separate corporate-website npm audit is outside the 43-finding pnpm batch
-  and remains a distinct release risk. This remediation does not authorize HPC
-  deployment; remote CI and exact-SHA review must pass before merge or rollout.
+  and remains a distinct release risk. Code Reviewer and Docs Guardian returned
+  GO for candidate `90a95b0`, which merged through [PR #1](https://github.com/hungtrandigital/AKAIOS/pull/1)
+  as `4f72810`. Neither the merge nor its green CI authorizes HPC deployment;
+  the mobile route and normal release/operations gates remain open.
 
 ## Android UAT Package and HPC Route Readiness — 2026-08-09
 

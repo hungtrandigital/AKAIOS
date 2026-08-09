@@ -154,10 +154,12 @@ operator deployment responsibility.
 
 ## Validation Boundary
 
-The implementation is locally validated by unit/coverage suites, real-service
-integration, live web E2E, production package/image builds, configuration checks,
-and Android analysis/tests/APK. Native iOS, load/SLO testing, production tunnel,
-backup/restore, immutable remote CI, and pilot acceptance remain open gates.
+The implementation is validated locally and by the green exact-SHA and
+post-merge CI runs recorded in the active plan. Unit/coverage suites,
+real-service integration, live web E2E, production package/image builds,
+configuration checks, and Android analysis/tests/APK pass. iOS release signing
+and physical-device validation, load/SLO testing, production tunnel,
+backup/restore, and pilot acceptance remain open gates.
 
 ## Related Documents
 

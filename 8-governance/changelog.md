@@ -113,8 +113,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the migration CLI remains isolated in a one-shot Compose target. Added an
   independent exact-SHA Actions job to rebuild those four targets and enforce
   the non-root/closure/native-library/web-login checks on the three long-running
-  images before merge; remote migration execution is not claimed. HPC
-  deployment remains separately gated.
+  images before merge; remote migration execution is not claimed. Reviewed
+  candidate `90a95b0` passed all nine jobs in [Actions run 31295175661](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295175661),
+  merged through [PR #1](https://github.com/hungtrandigital/AKAIOS/pull/1) as
+  `4f72810`, and passed all nine post-merge jobs in [Actions run 31295350615](https://github.com/hungtrandigital/AKAIOS/actions/runs/31295350615).
+  HPC deployment remains separately gated.
 - **PRD-SLICE-003 calendar-stable browser gate:** Replaced a fixed July date in
   the monthly scheduling E2E with a different valid date derived from the active
   month. The focused regression and the complete 9/9 Playwright suite now pass
