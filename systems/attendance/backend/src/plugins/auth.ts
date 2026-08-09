@@ -37,5 +37,5 @@ export const requireInternalApiKey = async (request: FastifyRequest) => {
 }
 
 export const registerAuthPlugin = fp(async (app: import('fastify').FastifyInstance) => {
-  app.decorateRequest('user', null)
+  app.decorateRequest('user', undefined)
 })

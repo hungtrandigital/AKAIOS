@@ -8,7 +8,7 @@ info:
 
     **Auth:** Bearer JWT (15-min TTL) + refresh token cookie (30 days).
     **Internal:** `X-Internal-API-Key` header (service-to-service only).
-    **Rate limits:** 100 req/min unauth, 600 req/min per user authenticated.
+    **Rate limits:** Production API instances enforce a global 100 requests/minute limit; auth endpoints add OTP/challenge abuse controls.
     **Time:** ISO 8601 UTC; VN time (UTC+7) at presentation layer.
     **Money:** VNĐ as string (Decimal); never float.
     **Errors:** `{ error: { code, message, details? } }`
@@ -22,14 +22,6 @@ info:
   contact:
     name: AKAIUNSAN Engineering
     email: engineering@ak.local
-
-servers:
-  - url: https://ak-tunnel.example.com/api
-    description: Production (on-prem via Cloudflare Tunnel)
-  - url: http://localhost:3000/api
-    description: Local dev — Attendance API
-  - url: http://localhost:3001/api
-    description: Local dev — Payroll API
 
 tags:
   - name: auth
@@ -48,8 +40,8 @@ tags:
     description: Payroll periods, lines, approval
   - name: payroll-rules
     description: Configurable payroll rules
-  - name: audit
-    description: Audit trail (admin actions)
+  - name: rbac
+    description: Permission catalog and role mappings (system_admin only)
   - name: internal
     description: Service-to-service (X-Internal-API-Key required)
 
@@ -125,7 +117,7 @@ paths:
   /v1/auth/admin-login:
     post:
       tags: [auth]
-      summary: Admin login (email + password); may require 2FA
+      summary: Admin login (email + password); always starts mandatory TOTP challenge
       security: []
       requestBody:
         required: true
@@ -134,13 +126,14 @@ paths:
             schema: { $ref: '#/components/schemas/AdminLogin' }
       responses:
         '200':
-          description: OK (either LoginResponse or TwoFactorRequired)
+          description: TOTP challenge created in an httpOnly SameSite=Strict cookie
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Opaque totpChallenge cookie; no challenge token is returned in JSON
           content:
             application/json:
-              schema:
-                oneOf:
-                  - $ref: '#/components/schemas/LoginResponse'
-                  - $ref: '#/components/schemas/TwoFactorRequired'
+              schema: { $ref: '#/components/schemas/TwoFactorRequired' }
 
   /v1/auth/verify-2fa:
     post:
@@ -153,9 +146,8 @@ paths:
           application/json:
             schema:
               type: object
-              required: [tempToken, totpCode]
+              required: [totpCode]
               properties:
-                tempToken: { type: string }
                 totpCode: { type: string, pattern: '^[0-9]{6}$' }
       responses:
         '200':
@@ -167,7 +159,16 @@ paths:
   /v1/auth/refresh:
     post:
       tags: [auth]
-      summary: Refresh access token (uses refreshToken cookie)
+      summary: Rotate refresh token (browser cookie or native request body)
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string, description: Native clients only }
       responses:
         '200':
           description: OK
@@ -178,11 +179,21 @@ paths:
                 properties:
                   accessToken: { type: string }
                   expiresIn: { type: integer, example: 900 }
+                  refreshToken: { type: string, description: Present for native/body-token rotation }
 
   /v1/auth/logout:
     post:
       tags: [auth]
       summary: Logout (revoke refresh token)
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string, description: Native clients only }
       responses:
         '204': { description: OK }
 
@@ -219,18 +230,18 @@ paths:
               schema: { $ref: '#/components/schemas/PaginatedEmployees' }
     post:
       tags: [identity]
-      summary: Create employee (admin/supervisor)
+      summary: Create employee (BO/system admin; permission-gated)
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/EmployeeCreate' }
       responses:
-        '201':
+        '200':
           description: Created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Employee' }
+              schema: { $ref: '#/components/schemas/EmployeeResponse' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /v1/employees/{id}:
@@ -247,7 +258,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Employee' }
+              schema: { $ref: '#/components/schemas/EmployeeResponse' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
       tags: [identity]
@@ -263,20 +274,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Employee' }
-    delete:
-      tags: [identity]
-      summary: Soft-delete employee
-      responses:
-        '204': { description: Deleted }
-
   # ===== PROJECTS =====
   /v1/projects:
     get:
       tags: [projects]
       summary: List projects
       parameters:
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/LimitParam' }
         - in: query
           name: status
           schema: { type: string, enum: [active, paused, ended] }
@@ -285,7 +288,12 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/PaginatedProjects' }
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Project' }
     post:
       tags: [projects]
       summary: Create project
@@ -295,7 +303,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ProjectCreate' }
       responses:
-        '201':
+        '200':
           description: Created
           content:
             application/json:
@@ -318,7 +326,7 @@ paths:
               schema: { $ref: '#/components/schemas/Project' }
     patch:
       tags: [projects]
-      summary: Update project
+      summary: Update project (BO/system admin; permission-gated)
       requestBody:
         required: true
         content:
@@ -326,10 +334,71 @@ paths:
             schema: { $ref: '#/components/schemas/ProjectUpdate' }
       responses:
         '200':
-          description: OK
+          description: Updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Project' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/projects/{id}/supervisors:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [projects]
+      summary: List explicit project supervisor memberships (BO/system admin only)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProjectSupervisor' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [projects]
+      summary: Grant explicit project supervisor membership (BO/system admin only, audited)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Membership granted or already present
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectSupervisor' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/projects/{id}/supervisors/{userId}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: userId
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [projects]
+      summary: Revoke project supervisor membership immediately (BO/system admin only, audited)
+      responses:
+        '204': { description: Membership revoked }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   # ===== SHIFTS =====
   /v1/shifts:
@@ -356,13 +425,13 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ShiftCreate' }
       responses:
-        '201':
+        '200':
           description: Created
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Shift' }
 
-  /v1/shift-assignments:
+  /v1/shifts/assignments:
     get:
       tags: [shifts]
       summary: List shift assignments
@@ -374,11 +443,22 @@ paths:
           name: projectId
           schema: { type: string, format: uuid }
         - in: query
+          name: status
+          schema: { type: string, enum: [scheduled, checked_in, checked_out, completed, missed, cancelled] }
+        - in: query
           name: from
+          description: Inclusive shift-assignment work date.
           schema: { type: string, format: date }
         - in: query
           name: to
+          description: Inclusive shift-assignment work date.
           schema: { type: string, format: date }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
       responses:
         '200':
           description: OK
@@ -386,37 +466,143 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [data, pagination, summary]
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/ShiftAssignment' }
+                    items: { $ref: '#/components/schemas/ShiftAssignmentRoster' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+                  summary: { $ref: '#/components/schemas/ShiftAssignmentSummary' }
     post:
       tags: [shifts]
       summary: Assign shift to employee
+      description: |
+        Exact duplicate employee/project/shift/date assignments are rejected.
+        Temporal overlaps return `409` with `details.requiresConfirmation=true`
+        plus an opaque `conflictToken`. Confirmation must resubmit that token with
+        `confirmConflicts=true`; a changed request, resource, or conflict set returns
+        `409` with `details.reconfirmRequired=true` and the current warnings/token.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/ShiftAssignmentCreate' }
       responses:
-        '201':
+        '200':
           description: Assigned
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ShiftAssignment' }
+              schema: { $ref: '#/components/schemas/ShiftAssignmentCreateResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /v1/shifts/assignments/copy-preview:
+    post:
+      tags: [shifts]
+      summary: Preview same-project schedule copy
+      description: |
+        Maps each non-cancelled source assignment to the target range by calendar-day
+        offset. The inclusive source range may contain at most 31 days. No data is
+        written. Supervisors are limited to projects with active membership.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShiftAssignmentCopyPreviewRequest' }
+      responses:
+        '200':
+          description: Deterministic copy preview
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShiftAssignmentCopyPreview' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/shifts/assignments/copy:
+    post:
+      tags: [shifts]
+      summary: Atomically copy a same-project schedule range
+      description: |
+        Requires the preview inputs plus a client-generated UUID idempotency key.
+        The opaque `previewToken` returned by copy-preview is mandatory; if any
+        source, target conflict, or relevant resource changes before save, the
+        API returns 409 with `repreviewRequired=true`.
+        Exact duplicates and invalid resources are hard failures. Soft temporal
+        conflicts require `confirmConflicts=true`. Only schedule fields are copied;
+        every target starts as `scheduled` without attendance. Replaying a completed
+        request returns the original assignments without writing duplicates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShiftAssignmentCopyRequest' }
+      responses:
+        '200':
+          description: Atomic copy result or idempotent replay
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShiftAssignmentCopyResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /v1/shifts/assignments/{id}/cancel:
+    post:
+      tags: [shifts]
+      summary: Cancel a scheduled shift assignment
+      description: |
+        BO/admin may cancel tenant assignments; supervisors are limited to projects where they have active membership.
+        Only an assignment still in `scheduled` state and without attendance can be cancelled. The reason and actor are audited.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShiftAssignmentCancel' }
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShiftAssignmentRoster' }
+        '400':
+          description: Invalid or too-short cancellation reason
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/BusinessRuleViolation' }
 
   # ===== ATTENDANCE =====
   /v1/attendance/my-today:
     get:
       tags: [attendance]
-      summary: Current employee's assignment for today
+      summary: Current employee's assignments for today
+      description: |
+        New clients consume the complete `data` array. During the rolling mobile
+        upgrade window, the earliest assignment is also projected at the top
+        level so the previously shipped single-assignment client keeps working.
       responses:
         '200':
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ShiftAssignmentWithAttendance' }
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ShiftAssignmentWithAttendance' }
 
   /v1/attendance/check-in:
     post:
@@ -424,6 +610,9 @@ paths:
       summary: Employee check-in (GPS + photo)
       description: |
         Enforces BR-ATT-001 (GPS in geofence), BR-ATT-002 (late), BR-ATT-004 (no double), BR-ATT-005 (photo required).
+        JPEG data is fully decoded, limited to 5 MB and 16 MP, and must be at least 320x240.
+        The official app offers camera-only capture, but MVP has no device attestation/liveness;
+        direct API camera origin and capture time are therefore not cryptographically proven.
       requestBody:
         required: true
         content:
@@ -435,6 +624,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AttendanceRecord' }
+        '400':
+          description: Invalid request or non-JPEG photo data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '422': { $ref: '#/components/responses/BusinessRuleViolation' }
 
   /v1/attendance/check-out:
@@ -452,6 +646,45 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AttendanceRecord' }
+        '400':
+          description: Invalid request or non-JPEG photo data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /v1/attendance/assignments/{id}/manual-event:
+    post:
+      tags: [attendance]
+      summary: Record an audited manual check-in/out after capture failure
+      description: |
+        Requires `attendance.override` and an active supervisor with explicit project membership,
+        or a system-admin break-glass account. Employees and BO reviewers cannot call this path.
+        A supervisor cannot record their own attendance. The event stores no synthetic GPS/photo;
+        it is durably marked through override provenance and an atomic `override_attendance` audit.
+        Event time must match the assignment business date (or next date for overnight checkout)
+        and its support window from four hours before shift start to twelve hours after shift end.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Shift-assignment ID.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualAttendanceEvent' }
+      responses:
+        '200':
+          description: Manual event recorded and audited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttendanceRecord' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
 
   /v1/attendance/records:
     get:
@@ -473,6 +706,10 @@ paths:
         - in: query
           name: status
           schema: { type: string, enum: [present, late, early_leave, half_day, absent, on_leave, holiday] }
+        - in: query
+          name: limit
+          description: Maximum records returned; defaults to 100.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
       responses:
         '200':
           description: OK
@@ -483,7 +720,7 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/AttendanceRecord' }
+                    items: { $ref: '#/components/schemas/AttendanceRecordWithAssignment' }
 
   /v1/attendance/records/{id}/override:
     post:
@@ -508,6 +745,26 @@ paths:
 
   # ===== CUSTOMER REPORTS =====
   /v1/reports/customer:
+    get:
+      tags: [reports]
+      summary: List customer reports; supervisors see only explicitly assigned projects
+      parameters:
+        - in: query
+          name: projectId
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Tenant- and membership-scoped report metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CustomerReport' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [reports]
       summary: Generate customer report (PDF or CSV)
@@ -517,7 +774,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CustomerReportRequest' }
       responses:
-        '201':
+        '200':
           description: Generated
           content:
             application/json:
@@ -528,10 +785,11 @@ paths:
                   downloadUrl:
                     type: string
                     description: Presigned URL, 5-min expiry
+                  size: { type: integer, minimum: 0 }
                   generatedAt: { type: string, format: date-time }
 
   # ===== PAYROLL =====
-  /v1/payroll-periods:
+  /v1/payroll/periods:
     get:
       tags: [payroll]
       summary: List payroll periods
@@ -567,14 +825,14 @@ paths:
                 year: { type: integer, example: 2026 }
                 month: { type: integer, minimum: 1, maximum: 12, example: 7 }
       responses:
-        '201':
+        '200':
           description: Opened
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PayrollPeriod' }
         '409': { $ref: '#/components/responses/Conflict' }
 
-  /v1/payroll-periods/{id}:
+  /v1/payroll/periods/{id}:
     parameters:
       - in: path
         name: id
@@ -597,18 +855,18 @@ paths:
                         type: array
                         items: { $ref: '#/components/schemas/PayrollLine' }
 
-  /v1/payroll-periods/{id}/calculate:
+  /v1/payroll/periods/{id}/calculate:
     post:
       tags: [payroll]
-      summary: Trigger payroll calculation job
+      summary: Calculate payroll synchronously in a serialized transaction
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '202':
-          description: Queued
+        '200':
+          description: Calculated
           content:
             application/json:
               schema:
@@ -616,8 +874,12 @@ paths:
                 properties:
                   jobId: { type: string }
                   message: { type: string }
+                  periodId: { type: string, format: uuid }
+                  linesCreated: { type: integer }
+        '502': { $ref: '#/components/responses/AttendanceBadGateway' }
+        '503': { $ref: '#/components/responses/AttendanceUnavailable' }
 
-  /v1/payroll-periods/{id}/approve:
+  /v1/payroll/periods/{id}/approve:
     post:
       tags: [payroll]
       summary: Approve payroll period (bo_admin)
@@ -633,7 +895,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/PayrollPeriod' }
 
-  /v1/payroll-periods/{id}/lock:
+  /v1/payroll/periods/{id}/lock:
     post:
       tags: [payroll]
       summary: Lock period (system_admin only, irreversible)
@@ -645,31 +907,42 @@ paths:
       responses:
         '200': { description: Locked }
 
-  /v1/payroll-periods/{id}/export:
-    get:
+  /v1/payroll/periods/{id}/mark-paid:
+    post:
       tags: [payroll]
-      summary: Export period to Excel/CSV
+      summary: Mark an approved payroll period as paid
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string, format: uuid }
-        - in: query
-          name: format
-          schema: { type: string, enum: [xlsx, csv], default: xlsx }
       responses:
         '200':
-          description: File
+          description: Paid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayrollPeriod' }
+
+  /v1/payroll/periods/{id}/export:
+    get:
+      tags: [payroll]
+      summary: Export period to Excel (XLSX)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: XLSX file
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema: { type: string, format: binary }
-            text/csv:
-              schema: { type: string }
 
-  /v1/payroll-lines/{id}/override:
+  /v1/payroll/lines/{id}/override:
     post:
       tags: [payroll]
-      summary: Override payroll line (advance, deductions)
+      summary: Override or clear allowance, advance, and other deductions on a payroll line
       parameters:
         - in: path
           name: id
@@ -688,16 +961,22 @@ paths:
               schema: { $ref: '#/components/schemas/PayrollLine' }
 
   # ===== PAYROLL RULES =====
-  /v1/payroll-rules:
+  /v1/payroll/rules:
     get:
       tags: [payroll-rules]
-      summary: Current effective payroll rules
+      summary: List payroll rule versions for the authenticated tenant
       responses:
         '200':
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/PayrollRule' }
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PayrollRule' }
     post:
       tags: [payroll-rules]
       summary: Create new payroll rules version (system_admin)
@@ -705,28 +984,19 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/PayrollRule' }
+            schema: { $ref: '#/components/schemas/PayrollRuleCreate' }
       responses:
-        '201': { description: Created }
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PayrollRule' }
 
-  # ===== AUDIT =====
-  /v1/audit-logs:
+  # ===== RBAC =====
+  /v1/rbac/permissions:
     get:
-      tags: [audit]
-      summary: Query audit logs (system_admin only)
-      parameters:
-        - in: query
-          name: actorId
-          schema: { type: string, format: uuid }
-        - in: query
-          name: entityType
-          schema: { type: string }
-        - in: query
-          name: from
-          schema: { type: string, format: date-time }
-        - in: query
-          name: to
-          schema: { type: string, format: date-time }
+      tags: [rbac]
+      summary: List the permission catalog
       responses:
         '200':
           description: OK
@@ -737,7 +1007,61 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/AuditLog' }
+                    items: { $ref: '#/components/schemas/Permission' }
+
+  /v1/rbac/roles:
+    get:
+      tags: [rbac]
+      summary: List role-permission mappings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/RolePermissions' }
+
+  /v1/rbac/roles/{role}:
+    put:
+      tags: [rbac]
+      summary: Replace all permissions assigned to a role
+      parameters:
+        - in: path
+          name: role
+          required: true
+          schema:
+            type: string
+            enum: [employee, supervisor, bo_admin, system_admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissionCodes]
+              properties:
+                permissionCodes:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+      responses:
+        '200':
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [role, permissionCodes, count]
+                properties:
+                  role: { type: string }
+                  permissionCodes:
+                    type: array
+                    items: { type: string }
+                  count: { type: integer }
 
   # ===== INTERNAL (service-to-service) =====
   /internal/attendance:
@@ -748,16 +1072,22 @@ paths:
         - internalApiKey: []
       parameters:
         - in: query
+          name: tenantId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
           name: employeeId
           required: true
           schema: { type: string, format: uuid }
         - in: query
           name: from
           required: true
+          description: Inclusive assignment work date; the inclusive range may contain at most 366 calendar days.
           schema: { type: string, format: date }
         - in: query
           name: to
           required: true
+          description: Inclusive assignment work date; must be on or after `from`.
           schema: { type: string, format: date }
       responses:
         '200':
@@ -769,7 +1099,12 @@ paths:
                 properties:
                   data:
                     type: array
-                    items: { $ref: '#/components/schemas/AttendanceRecord' }
+                    items: { $ref: '#/components/schemas/InternalAttendanceRecord' }
+        '400':
+          description: Invalid calendar date, reversed range, or range longer than 366 days
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
 components:
@@ -827,6 +1162,16 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+    AttendanceBadGateway:
+      description: Attendance service returned an invalid or failed response
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    AttendanceUnavailable:
+      description: Attendance service timed out or could not be reached
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
 
@@ -858,7 +1203,7 @@ components:
       properties:
         latitude: { type: number, format: double, minimum: -90, maximum: 90 }
         longitude: { type: number, format: double, minimum: -180, maximum: 180 }
-        accuracy: { type: number, format: double, description: GPS accuracy in meters }
+        accuracy: { type: number, format: double, minimum: 0, description: GPS accuracy in meters }
 
     # ===== Auth =====
     EmployeeLogin:
@@ -881,14 +1226,15 @@ components:
       properties:
         accessToken: { type: string }
         expiresIn: { type: integer, example: 900 }
+        refreshToken: { type: string, description: Native employee sessions; browser admin sessions use the cookie }
         user: { $ref: '#/components/schemas/User' }
 
     TwoFactorRequired:
       type: object
-      required: [tempToken, message]
+      required: [message, expiresIn]
       properties:
-        tempToken: { type: string }
         message: { type: string, example: '2FA verification required' }
+        expiresIn: { type: integer, example: 300 }
 
     # ===== User / Employee =====
     User:
@@ -896,27 +1242,77 @@ components:
       required: [id, phone, role, status]
       properties:
         id: { type: string, format: uuid }
-        email: { type: string, format: email, nullable: true }
+        email: { type: [string, 'null'], format: email }
         phone: { type: string }
         role: { type: string, enum: [employee, supervisor, bo_admin, system_admin] }
         status: { type: string, enum: [active, inactive, suspended] }
-        employee: { $ref: '#/components/schemas/Employee', nullable: true }
+        employee: { anyOf: [{ $ref: '#/components/schemas/Employee' }, { type: 'null' }] }
 
     Employee:
       type: object
       required: [id, userId, employeeCode, fullName, hireDate, baseSalary, salaryType, status]
       properties:
         id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
         userId: { type: string, format: uuid }
         employeeCode: { type: string, example: NV001 }
         fullName: { type: string, example: 'Nguyễn Văn A' }
+        dateOfBirth: { type: [string, 'null'], format: date }
         hireDate: { type: string, format: date }
         baseSalary: { type: string, description: 'VNĐ as string Decimal, e.g. 10000000.00' }
         salaryType: { type: string, enum: [monthly, hourly] }
-        hourlyRate: { type: string, nullable: true }
-        bankAccount: { type: string, nullable: true }
-        bankName: { type: string, nullable: true }
+        hourlyRate: { type: [string, 'null'] }
+        bankAccount: { type: [string, 'null'] }
+        bankName: { type: [string, 'null'] }
+        idNumber: { type: [string, 'null'] }
         status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        user:
+          type: object
+          required: [id, phone, role, status]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: [string, 'null'], format: email }
+            phone: { type: string }
+            role: { type: string, enum: [employee] }
+            status: { type: string, enum: [active, inactive, suspended] }
+        temporaryPassword: { type: string, description: Present only on employee creation }
+
+    EmployeeSupervisorView:
+      type: object
+      required: [id, userId, employeeCode, fullName, status, user]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        employeeCode: { type: string }
+        fullName: { type: string }
+        status: { type: string, enum: [active, inactive] }
+        user:
+          type: object
+          required: [id, phone, role, status]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: [string, 'null'], format: email }
+            phone: { type: string }
+            role: { type: string, enum: [employee] }
+            status: { type: string, enum: [active, inactive, suspended] }
+        temporaryPassword: { type: string, description: Present only on employee creation }
+
+    AttendanceEmployeeView:
+      type: object
+      required: [id, userId, employeeCode, fullName, status]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        employeeCode: { type: string }
+        fullName: { type: string }
+        status: { type: string, enum: [active, inactive] }
+
+    EmployeeResponse:
+      oneOf:
+        - $ref: '#/components/schemas/Employee'
+        - $ref: '#/components/schemas/EmployeeSupervisorView'
 
     EmployeeCreate:
       type: object
@@ -925,20 +1321,37 @@ components:
         phone: { type: string, pattern: '^\+84[0-9]{9}$' }
         fullName: { type: string }
         employeeCode: { type: string }
-        hireDate: { type: string, format: date }
-        baseSalary: { type: string }
+        dateOfBirth: { type: string, format: date }
+        hireDate: { type: string, format: date, description: Must not be in the future in the Vietnam business calendar. }
+        baseSalary: { type: string, pattern: '^\d+(?:\.\d{1,2})?$' }
         salaryType: { type: string, enum: [monthly, hourly] }
-        hourlyRate: { type: string }
+        hourlyRate: { type: string, pattern: '^\d+(?:\.\d{1,2})?$' }
         bankAccount: { type: string }
         bankName: { type: string }
+        idNumber: { type: string }
+        temporaryPassword: { type: string, minLength: 8 }
+      allOf:
+        - if:
+            properties:
+              salaryType: { const: hourly }
+            required: [salaryType]
+          then:
+            required: [hourlyRate]
+            properties:
+              hourlyRate:
+                type: string
+                pattern: '^(?:[1-9]\d*(?:\.\d{1,2})?|0\.(?:0[1-9]|[1-9]\d?))$'
 
     EmployeeUpdate:
       type: object
+      description: The merged stored employee plus patch must contain a positive hourlyRate whenever the effective salaryType is hourly.
       properties:
         fullName: { type: string }
-        baseSalary: { type: string }
+        baseSalary: { type: string, pattern: '^\d+(?:\.\d{1,2})?$' }
         salaryType: { type: string, enum: [monthly, hourly] }
-        hourlyRate: { type: string }
+        hourlyRate: { type: string, pattern: '^\d+(?:\.\d{1,2})?$' }
+        bankAccount: { type: string }
+        bankName: { type: string }
         status: { type: string, enum: [active, inactive] }
 
     PaginatedEmployees:
@@ -946,7 +1359,7 @@ components:
       properties:
         data:
           type: array
-          items: { $ref: '#/components/schemas/Employee' }
+          items: { $ref: '#/components/schemas/EmployeeResponse' }
         pagination: { $ref: '#/components/schemas/Pagination' }
 
     # ===== Project =====
@@ -963,7 +1376,7 @@ components:
         longitude: { type: number }
         geofenceRadiusMeters: { type: integer, default: 100 }
         contractStartDate: { type: string, format: date }
-        contractEndDate: { type: string, format: date, nullable: true }
+        contractEndDate: { type: [string, 'null'], format: date }
         status: { type: string, enum: [active, paused, ended] }
 
     ProjectCreate:
@@ -983,35 +1396,51 @@ components:
     ProjectUpdate:
       type: object
       properties:
+        code: { type: string }
         name: { type: string }
         clientName: { type: string }
         address: { type: string }
         latitude: { type: number }
         longitude: { type: number }
-        geofenceRadiusMeters: { type: integer }
+        geofenceRadiusMeters: { type: integer, minimum: 1 }
+        contractStartDate: { type: string, format: date }
+        contractEndDate: { type: string, format: date }
         status: { type: string, enum: [active, paused, ended] }
+        reportTemplateConfig: { type: object, additionalProperties: true }
 
-    PaginatedProjects:
+    ProjectSupervisor:
       type: object
+      required: [userId, createdAt]
       properties:
-        data:
-          type: array
-          items: { $ref: '#/components/schemas/Project' }
-        pagination: { $ref: '#/components/schemas/Pagination' }
+        projectId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        assignedById: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        supervisor:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: [string, 'null'], format: email }
+            phone: { type: string }
+            status: { type: string, enum: [active, inactive, suspended] }
 
     # ===== Shift =====
     Shift:
       type: object
-      required: [id, name, startTime, endTime, breakMinutes, lateThresholdMinutes, isOvernight]
+      required: [id, tenantId, name, startTime, endTime, breakMinutes, lateThresholdMinutes, isOvernight, isActive, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
         name: { type: string, example: 'Ca sáng' }
         startTime: { type: string, example: '06:00' }
         endTime: { type: string, example: '14:00' }
         breakMinutes: { type: integer, default: 60 }
         lateThresholdMinutes: { type: integer, default: 15 }
         isOvernight: { type: boolean, default: false }
-        color: { type: string, example: '#FF5733' }
+        color: { type: [string, 'null'], example: '#FF5733' }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
 
     ShiftCreate:
       type: object
@@ -1027,14 +1456,22 @@ components:
 
     ShiftAssignment:
       type: object
-      required: [id, employeeId, projectId, shiftId, date, status]
+      required: [id, employeeId, projectId, shiftId, date, status, assignedById, assignedAt, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         employeeId: { type: string, format: uuid }
         projectId: { type: string, format: uuid }
         shiftId: { type: string, format: uuid }
-        date: { type: string, format: date }
+        date:
+          type: string
+          format: date-time
+          description: Prisma `DATE` serialized as an ISO date-time at UTC midnight.
         status: { type: string, enum: [scheduled, checked_in, checked_out, completed, missed, cancelled] }
+        assignedById: { type: string, format: uuid }
+        assignedAt: { type: string, format: date-time }
+        notes: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
 
     ShiftAssignmentCreate:
       type: object
@@ -1045,13 +1482,163 @@ components:
         shiftId: { type: string, format: uuid }
         date: { type: string, format: date }
         notes: { type: string }
+        confirmConflicts:
+          type: boolean
+          default: false
+          description: Explicit acknowledgement of returned temporal conflict warnings.
+        conflictToken:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque fingerprint returned with a 409 warning and required when confirming it.
+
+    ScheduleConflictWarning:
+      type: object
+      required: [type, employeeId, date, shiftId, conflictCount, message]
+      properties:
+        type: { type: string, enum: [time_overlap, same_day_multiple_shift] }
+        employeeId: { type: string, format: uuid }
+        date: { type: string, format: date }
+        shiftId: { type: string, format: uuid }
+        conflictCount: { type: integer, minimum: 1 }
+        message: { type: string }
+
+    ShiftAssignmentCreateResult:
+      allOf:
+        - $ref: '#/components/schemas/ShiftAssignment'
+        - type: object
+          required: [warnings]
+          properties:
+            warnings:
+              type: array
+              items: { $ref: '#/components/schemas/ScheduleConflictWarning' }
+
+    ShiftAssignmentCopyPreviewRequest:
+      type: object
+      required: [projectId, sourceFrom, sourceTo, targetStart]
+      properties:
+        projectId: { type: string, format: uuid }
+        sourceFrom: { type: string, format: date }
+        sourceTo:
+          type: string
+          format: date
+          description: Inclusive and at most 30 calendar days after sourceFrom.
+        targetStart: { type: string, format: date }
+
+    ShiftAssignmentCopyRequest:
+      allOf:
+        - $ref: '#/components/schemas/ShiftAssignmentCopyPreviewRequest'
+        - type: object
+          required: [requestId, previewToken]
+          properties:
+            requestId: { type: string, format: uuid }
+            previewToken:
+              type: string
+              pattern: '^[0-9a-f]{64}$'
+              description: Opaque fingerprint returned by the matching preview.
+            confirmConflicts:
+              type: boolean
+              default: false
+
+    ShiftAssignmentCopyPreviewItem:
+      type: object
+      required: [sourceAssignmentId, sourceDate, targetDate, employee, shift, warnings, blockingReasons]
+      properties:
+        sourceAssignmentId: { type: string, format: uuid }
+        sourceDate: { type: string, format: date }
+        targetDate: { type: string, format: date }
+        employee: { $ref: '#/components/schemas/ShiftAssignmentEmployee' }
+        shift: { $ref: '#/components/schemas/Shift' }
+        notes: { type: [string, 'null'] }
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleConflictWarning' }
+        blockingReasons:
+          type: array
+          items:
+            type: string
+            enum: [exact_duplicate, employee_inactive, shift_inactive, outside_contract]
+
+    ShiftAssignmentCopyPreview:
+      type: object
+      required: [previewToken, projectId, sourceFrom, sourceTo, targetFrom, targetTo, items, summary]
+      properties:
+        previewToken:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque fingerprint required unchanged by the copy request.
+        projectId: { type: string, format: uuid }
+        sourceFrom: { type: string, format: date }
+        sourceTo: { type: string, format: date }
+        targetFrom: { type: string, format: date }
+        targetTo: { type: string, format: date }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ShiftAssignmentCopyPreviewItem' }
+        summary:
+          type: object
+          required: [total, warningCount, blockingCount]
+          properties:
+            total: { type: integer, minimum: 0 }
+            warningCount: { type: integer, minimum: 0 }
+            blockingCount: { type: integer, minimum: 0 }
+
+    ShiftAssignmentCopyResult:
+      type: object
+      required: [requestId, replayed, assignments, warnings]
+      properties:
+        requestId: { type: string, format: uuid }
+        replayed: { type: boolean }
+        assignments:
+          type: array
+          items: { $ref: '#/components/schemas/ShiftAssignmentRoster' }
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleConflictWarning' }
+
+    ShiftAssignmentCancel:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 500 }
+
+    ShiftAssignmentEmployee:
+      type: object
+      required: [id, userId, employeeCode, fullName, status]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        employeeCode: { type: string }
+        fullName: { type: string }
+        status: { type: string, enum: [active, inactive, suspended] }
+
+    ShiftAssignmentRoster:
+      allOf:
+        - $ref: '#/components/schemas/ShiftAssignment'
+        - type: object
+          required: [employee, project, shift, attendanceRecord]
+          properties:
+            employee: { $ref: '#/components/schemas/ShiftAssignmentEmployee' }
+            project: { $ref: '#/components/schemas/Project' }
+            shift: { $ref: '#/components/schemas/Shift' }
+            attendanceRecord: { anyOf: [{ $ref: '#/components/schemas/AttendanceRecord' }, { type: 'null' }] }
+
+    ShiftAssignmentSummary:
+      type: object
+      required: [scheduled, checked_in, checked_out, completed, missed, cancelled]
+      properties:
+        scheduled: { type: integer, minimum: 0 }
+        checked_in: { type: integer, minimum: 0 }
+        checked_out: { type: integer, minimum: 0 }
+        completed: { type: integer, minimum: 0 }
+        missed: { type: integer, minimum: 0 }
+        cancelled: { type: integer, minimum: 0 }
 
     ShiftAssignmentWithAttendance:
       allOf:
         - $ref: '#/components/schemas/ShiftAssignment'
         - type: object
           properties:
-            attendanceRecord: { $ref: '#/components/schemas/AttendanceRecord', nullable: true }
+            attendanceRecord: { anyOf: [{ $ref: '#/components/schemas/AttendanceRecord' }, { type: 'null' }] }
             shift: { $ref: '#/components/schemas/Shift' }
             project: { $ref: '#/components/schemas/Project' }
 
@@ -1062,16 +1649,55 @@ components:
       properties:
         id: { type: string, format: uuid }
         shiftAssignmentId: { type: string, format: uuid }
-        checkInAt: { type: string, format: date-time, nullable: true }
-        checkOutAt: { type: string, format: date-time, nullable: true }
-        checkInGps: { $ref: '#/components/schemas/GPSCoordinate', nullable: true }
-        checkOutGps: { $ref: '#/components/schemas/GPSCoordinate', nullable: true }
-        checkInPhotoUrl: { type: string, nullable: true }
-        checkOutPhotoUrl: { type: string, nullable: true }
+        employeeId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        checkInAt: { type: [string, 'null'], format: date-time }
+        checkOutAt: { type: [string, 'null'], format: date-time }
+        checkInGps: { anyOf: [{ $ref: '#/components/schemas/GPSCoordinate' }, { type: 'null' }] }
+        checkOutGps: { anyOf: [{ $ref: '#/components/schemas/GPSCoordinate' }, { type: 'null' }] }
+        checkInPhotoUrl: { type: [string, 'null'] }
+        checkOutPhotoUrl: { type: [string, 'null'] }
         status: { type: string, enum: [present, late, early_leave, half_day, absent, on_leave, holiday] }
-        totalMinutesWorked: { type: integer, nullable: true }
-        overtimeMinutes: { type: integer, nullable: true }
-        lateMinutes: { type: integer, nullable: true }
+        totalMinutesWorked: { type: [integer, 'null'] }
+        overtimeMinutes: { type: [integer, 'null'] }
+        lateMinutes: { type: [integer, 'null'] }
+        overrideReason: { type: [string, 'null'] }
+        overrideById: { type: [string, 'null'], format: uuid }
+        overrideAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AttendanceRecordWithAssignment:
+      allOf:
+        - $ref: '#/components/schemas/AttendanceRecord'
+        - type: object
+          required: [shiftAssignment]
+          properties:
+            shiftAssignment:
+              allOf:
+                - $ref: '#/components/schemas/ShiftAssignment'
+                - type: object
+                  required: [employee, project, shift]
+                  properties:
+                    employee: { $ref: '#/components/schemas/AttendanceEmployeeView' }
+                    project: { $ref: '#/components/schemas/Project' }
+                    shift: { $ref: '#/components/schemas/Shift' }
+
+    InternalAttendanceRecord:
+      type: object
+      additionalProperties: false
+      required: [id, shiftAssignmentId, employeeId, workDate, status]
+      properties:
+        id: { type: string, format: uuid }
+        shiftAssignmentId: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        workDate: { type: string, format: date, description: Shift-assignment business date used for payroll period and holiday/weekend classification. }
+        checkInAt: { type: [string, 'null'], format: date-time }
+        checkOutAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [present, late, early_leave, half_day, absent, on_leave, holiday] }
+        totalMinutesWorked: { type: [integer, 'null'] }
+        overtimeMinutes: { type: [integer, 'null'] }
+        lateMinutes: { type: [integer, 'null'] }
 
     CheckInRequest:
       type: object
@@ -1081,7 +1707,7 @@ components:
         gps: { $ref: '#/components/schemas/GPSCoordinate' }
         photoBase64:
           type: string
-          description: JPEG base64-encoded, max 5 MB
+          description: Decodable JPEG base64, max 5 MB and 16 MP, minimum raster 320x240
 
     CheckOutRequest:
       type: object
@@ -1089,16 +1715,46 @@ components:
       properties:
         shiftAssignmentId: { type: string, format: uuid }
         gps: { $ref: '#/components/schemas/GPSCoordinate' }
-        photoBase64: { type: string }
+        photoBase64:
+          type: string
+          description: Decodable JPEG base64, max 5 MB and 16 MP, minimum raster 320x240
 
     AttendanceOverride:
       type: object
+      description: |
+        Working statuses (`present`, `late`, `early_leave`, `half_day`) require
+        complete non-null timestamps with `checkOutAt` later than `checkInAt`.
+        Non-working statuses (`absent`, `on_leave`, `holiday`) require both
+        effective timestamps to be null. When reconciling a record that already
+        has timestamps to a non-working status, callers must explicitly send
+        both fields as null; omitting a field preserves its existing value.
       required: [reason, newStatus]
       properties:
         reason: { type: string, minLength: 10 }
         newStatus: { type: string, enum: [present, late, early_leave, half_day, absent, on_leave, holiday] }
-        checkInAt: { type: string, format: date-time }
-        checkOutAt: { type: string, format: date-time }
+        checkInAt:
+          type: [string, 'null']
+          format: date-time
+          description: Explicitly send null when clearing an existing timestamp.
+        checkOutAt:
+          type: [string, 'null']
+          format: date-time
+          description: Explicitly send null when clearing an existing timestamp.
+
+    ManualAttendanceEvent:
+      type: object
+      additionalProperties: false
+      required: [event, occurredAt, reasonCode, reason]
+      properties:
+        event: { type: string, enum: [check_in, check_out] }
+        occurredAt:
+          type: string
+          format: date-time
+          description: Confirmed real event time; future values are rejected.
+        reasonCode:
+          type: string
+          enum: [capture_unavailable, permission_blocked, device_failure]
+        reason: { type: string, minLength: 10, maxLength: 500 }
 
     CustomerReportRequest:
       type: object
@@ -1109,6 +1765,27 @@ components:
         to: { type: string, format: date }
         format: { type: string, enum: [pdf, csv] }
 
+    CustomerReport:
+      type: object
+      required: [id, tenantId, projectId, periodFrom, periodTo, format, fileKey, generatedBy, generatedAt, project]
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        periodFrom: { type: string, format: date }
+        periodTo: { type: string, format: date }
+        format: { type: string, enum: [pdf, csv] }
+        fileKey: { type: string, description: Private MinIO object key; not a public URL. }
+        generatedBy: { type: string, format: uuid }
+        generatedAt: { type: string, format: date-time }
+        project:
+          type: object
+          required: [code, name, clientName]
+          properties:
+            code: { type: string }
+            name: { type: string }
+            clientName: { type: string }
+
     # ===== Payroll =====
     PayrollPeriod:
       type: object
@@ -1118,11 +1795,11 @@ components:
         year: { type: integer }
         month: { type: integer, minimum: 1, maximum: 12 }
         status: { type: string, enum: [open, calculating, calculated, approved, paid, locked] }
-        totalGross: { type: string, nullable: true }
-        totalNet: { type: string, nullable: true }
-        totalEmployees: { type: integer, nullable: true }
-        approvedAt: { type: string, format: date-time, nullable: true }
-        lockedAt: { type: string, format: date-time, nullable: true }
+        totalGross: { type: [string, 'null'] }
+        totalNet: { type: [string, 'null'] }
+        totalEmployees: { type: [integer, 'null'] }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        lockedAt: { type: [string, 'null'], format: date-time }
 
     PayrollLine:
       type: object
@@ -1131,23 +1808,47 @@ components:
         id: { type: string, format: uuid }
         payrollPeriodId: { type: string, format: uuid }
         employeeId: { type: string, format: uuid }
-        employeeCode: { type: string }
-        employeeName: { type: string }
         daysWorked: { type: integer }
+        workdayUnits: { type: string, description: Decimal paid-day units; half-day is 0.50. }
+        daysOnLeave: { type: integer }
+        absentDays: { type: integer }
         totalWorkMinutes: { type: integer }
         overtimeWeekdayMinutes: { type: integer }
         overtimeWeekendMinutes: { type: integer }
         overtimeHolidayMinutes: { type: integer }
+        lateMinutes: { type: integer }
         baseSalary: { type: string }
         proratedBase: { type: string }
         overtimeWeekdayAmount: { type: string }
         overtimeWeekendAmount: { type: string }
         overtimeHolidayAmount: { type: string }
+        latePenalty: { type: string }
         allowances: { type: string }
+        allowancesOverridden: { type: boolean }
         gross: { type: string }
+        bhxhNhanVien: { type: string, description: Always zero in ADR-003 MVP. }
+        bhxhDoanhNghiep: { type: string, description: Always zero in ADR-003 MVP. }
+        bhytNhanVien: { type: string, description: Always zero in ADR-003 MVP. }
+        bhytDoanhNghiep: { type: string, description: Always zero in ADR-003 MVP. }
+        bhtnNhanVien: { type: string, description: Always zero in ADR-003 MVP. }
+        bhtnDoanhNghiep: { type: string, description: Always zero in ADR-003 MVP. }
+        thueTNCN: { type: string, description: Always zero in ADR-003 MVP. }
+        tongKhauTru: { type: string, description: Always zero in ADR-003 MVP. }
         advance: { type: string }
         otherDeductions: { type: string }
         net: { type: string }
+        overrideReason: { type: [string, 'null'] }
+        overrideById: { type: [string, 'null'], format: uuid }
+        overrideAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        employee:
+          type: object
+          required: [id, employeeCode, fullName]
+          properties:
+            id: { type: string, format: uuid }
+            employeeCode: { type: string }
+            fullName: { type: string }
 
     PayrollLineOverride:
       type: object
@@ -1157,22 +1858,67 @@ components:
         advance: { type: string }
         otherDeductions: { type: string }
         allowances: { type: string }
+        clearAllowancesOverride:
+          type: boolean
+          description: Clear a prior manual allowance override and recompute it from the active rule; mutually exclusive with allowances.
 
     PayrollRule:
       type: object
-      required: [effectiveFrom, otWeekdayMultiplier, otWeekendMultiplier, otHolidayMultiplier]
+      required: [id, effectiveFrom, otWeekdayMultiplier, otWeekendMultiplier, otHolidayMultiplier, roundingMinutes, workingHoursPerDay, standardWorkingDaysPerMonth, taxMode]
       properties:
         id: { type: string, format: uuid }
         effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, 'null'], format: date }
         otWeekdayMultiplier: { type: string, example: '1.50' }
         otWeekendMultiplier: { type: string, example: '2.00' }
         otHolidayMultiplier: { type: string, example: '3.00' }
-        latePenaltyPerMinute: { type: string, nullable: true }
-        mealAllowancePerDay: { type: string, nullable: true }
-        phoneAllowance: { type: string, nullable: true }
+        latePenaltyPerMinute: { type: [string, 'null'] }
+        maxLatePenaltyPerDay: { type: [string, 'null'] }
+        mealAllowancePerDay: { type: [string, 'null'] }
+        phoneAllowance: { type: [string, 'null'] }
         roundingMinutes: { type: integer, default: 15 }
         workingHoursPerDay: { type: integer, default: 8 }
         standardWorkingDaysPerMonth: { type: integer, default: 26 }
+        taxMode: { type: string, enum: [none] }
+
+    PayrollRuleCreate:
+      type: object
+      additionalProperties: false
+      required: [effectiveFrom, otWeekdayMultiplier, otWeekendMultiplier, otHolidayMultiplier]
+      properties:
+        effectiveFrom: { type: string, format: date }
+        otWeekdayMultiplier: { type: number, minimum: 1, maximum: 5 }
+        otWeekendMultiplier: { type: number, minimum: 1, maximum: 5 }
+        otHolidayMultiplier: { type: number, minimum: 1, maximum: 5 }
+        latePenaltyPerMinute: { type: string, pattern: '^\d{1,13}(?:\.\d{1,2})?$' }
+        maxLatePenaltyPerDay: { type: string, pattern: '^\d{1,13}(?:\.\d{1,2})?$' }
+        mealAllowancePerDay: { type: string, pattern: '^\d{1,13}(?:\.\d{1,2})?$' }
+        phoneAllowance: { type: string, pattern: '^\d{1,13}(?:\.\d{1,2})?$' }
+        roundingMinutes: { type: integer, minimum: 1, default: 15 }
+        workingHoursPerDay: { type: integer, minimum: 1, maximum: 24, default: 8 }
+        standardWorkingDaysPerMonth: { type: integer, minimum: 1, maximum: 31, default: 26 }
+        taxMode: { type: string, enum: [none], default: none }
+
+    Permission:
+      type: object
+      required: [id, code, module, action]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: attendance.override }
+        module: { type: string, example: attendance }
+        action: { type: string, example: update }
+        description: { type: [string, 'null'] }
+
+    RolePermissions:
+      type: object
+      required: [role, permissions]
+      properties:
+        role:
+          type: string
+          enum: [employee, supervisor, bo_admin, system_admin]
+        permissions:
+          type: array
+          items: { $ref: '#/components/schemas/Permission' }
 
     # ===== Audit =====
     AuditLog:
@@ -1185,7 +1931,7 @@ components:
         action: { type: string, example: override_attendance }
         entityType: { type: string }
         entityId: { type: string, format: uuid }
-        previousValue: { type: object, nullable: true }
-        newValue: { type: object, nullable: true }
+        previousValue: { type: [object, 'null'] }
+        newValue: { type: [object, 'null'] }
         ipAddress: { type: string }
         occurredAt: { type: string, format: date-time }

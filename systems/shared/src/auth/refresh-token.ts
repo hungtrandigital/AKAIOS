@@ -1,8 +1,5 @@
-// OTP generation + verification.
-// Phase 1: MOCK mode — OTPs printed to server log instead of sent via SMS.
-// Phase 2: Integrate real SMS gateway (SpeedSMS, VNPT, eSMS).
-//
-// Also includes refresh-token generation with token-family rotation tracking.
+// OTP generation/verification and refresh-token primitives.
+// Provider dispatch and Redis-backed OTP persistence live in otp.ts.
 
 import { randomBytes, randomInt, createHash } from 'node:crypto'
 

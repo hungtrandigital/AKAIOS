@@ -1,5 +1,5 @@
-// Generate demo attendance_records for the last 3 full months.
-// Run: `pnpm db:seed:attendance`
+// Generate historical demo attendance_records through yesterday.
+// Run: `ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:attendance`
 //
 // Realistic distribution:
 //   - 85% present (full day, on time)
@@ -12,34 +12,89 @@
 //     - 10%: create late (checkIn 10-45 min after shift start)
 //     - 5%: skip (no record, counts as absent)
 
-import { PrismaClient, AttendanceStatus } from '@prisma/client'
-import { isWeekend } from '../../engine/calendar.js'
+import { createHash } from 'node:crypto'
+import {
+  Prisma,
+  PrismaClient,
+  AttendanceStatus,
+  ShiftAssignmentStatus,
+  UserRole,
+} from '@prisma/client'
 
 const prisma = new PrismaClient()
+const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 const MONTHS_BACK = 3  // Cover 3 full months (e.g. May + Jun + partial Jul)
+const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60 * 1000)
 }
 
-function randomBetween(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
+function isSundayDateOnly(date: Date): boolean {
+  return date.getUTCDay() === 0
+}
+
+function assertDemoSeedAllowed(): void {
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error('Refusing demo seed: set ALLOW_DEMO_SEED=true only for disposable development or controlled-UAT data')
+  }
+}
+
+function deterministicFraction(seed: string): number {
+  return createHash('sha256').update(seed).digest().readUInt32BE(0) / 0x1_0000_0000
+}
+
+function deterministicBetween(seed: string, min: number, max: number): number {
+  return Math.floor(deterministicFraction(seed) * (max - min + 1)) + min
+}
+
+function buildVietnamShiftDateTime(date: Date, time: string, isNextDay = false): Date {
+  const [hoursText, minutesText] = time.split(':')
+  const hours = Number(hoursText)
+  const minutes = Number(minutesText)
+  if (!Number.isInteger(hours) || hours < 0 || hours > 23
+    || !Number.isInteger(minutes) || minutes < 0 || minutes > 59) {
+    throw new Error(`Invalid shift time format: ${time}`)
+  }
+  const dateKey = date.toISOString().slice(0, 10)
+  const result = new Date(
+    `${dateKey}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00.000+07:00`,
+  )
+  if (isNextDay) result.setUTCDate(result.getUTCDate() + 1)
+  return result
+}
+
+function currentVietnamDateOnly(): Date {
+  const vietnamNow = new Date(Date.now() + VIETNAM_UTC_OFFSET_MS)
+  return new Date(Date.UTC(
+    vietnamNow.getUTCFullYear(),
+    vietnamNow.getUTCMonth(),
+    vietnamNow.getUTCDate(),
+  ))
 }
 
 async function main() {
-  const today = new Date()
-  today.setUTCHours(0, 0, 0, 0)
+  assertDemoSeedAllowed()
+  const today = currentVietnamDateOnly()
+  const historyEnd = new Date(today)
+  historyEnd.setUTCDate(historyEnd.getUTCDate() - 1)
   // Start: first day of (current_month - MONTHS_BACK + 1)
   // e.g. today=2026-07-17, MONTHS_BACK=3 → start=2026-05-01
-  const startDate = new Date(today.getFullYear(), today.getMonth() - (MONTHS_BACK - 1), 1)
+  const startDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - (MONTHS_BACK - 1), 1))
 
-  console.log(`Generating demo attendance from ${startDate.toISOString().slice(0, 10)} to ${today.toISOString().slice(0, 10)} (${MONTHS_BACK} months back)\n`)
+  console.log(`Generating historical attendance from ${startDate.toISOString().slice(0, 10)} to ${historyEnd.toISOString().slice(0, 10)}; today remains open for UAT\n`)
 
-  const records: any[] = []
+  const records: Prisma.AttendanceRecordUncheckedCreateInput[] = []
 
   // Load all shift assignments in window
-  const assignments = await prisma.shiftAssignment.findMany({
-    where: { date: { gte: startDate, lte: today } },
+  let assignments = await prisma.shiftAssignment.findMany({
+    where: {
+      date: { gte: startDate, lte: historyEnd },
+      employee: { tenantId: AK_TENANT_ID },
+      project: { tenantId: AK_TENANT_ID },
+      shift: { tenantId: AK_TENANT_ID },
+      status: { not: ShiftAssignmentStatus.cancelled },
+    },
     include: { shift: true, project: true },
   })
 
@@ -47,8 +102,8 @@ async function main() {
   // every Mon-Sat has a shift_assignment for every active employee.
   const datesWithAssignments = new Set(assignments.map((a) => a.date.toISOString().slice(0, 10)))
   const missing: Date[] = []
-  for (let d = new Date(startDate); d <= today; d.setUTCDate(d.getUTCDate() + 1)) {
-    if (isWeekend(d)) continue
+  for (let d = new Date(startDate); d <= historyEnd; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (isSundayDateOnly(d)) continue
     if (!datesWithAssignments.has(d.toISOString().slice(0, 10))) {
       missing.push(new Date(d))
     }
@@ -57,16 +112,21 @@ async function main() {
   if (missing.length > 0) {
     console.log(`  Missing ${missing.length} Mon-Sat dates (no shift_assignment) — creating…`)
     const employees = await prisma.employee.findMany({
-      where: { tenantId: 'c0ffee00-0000-4000-8000-000000000001', status: 'active' },
+      where: { tenantId: AK_TENANT_ID, status: 'active' },
     })
     const projects = await prisma.project.findMany({
-      where: { tenantId: 'c0ffee00-0000-4000-8000-000000000001', status: 'active' },
+      where: { tenantId: AK_TENANT_ID, status: 'active' },
     })
-    const morningShift = await prisma.shift.findFirst({ where: { name: 'Ca sáng' } })
-    const afternoonShift = await prisma.shift.findFirst({ where: { name: 'Ca chiều' } })
+    const assignmentOwner = await prisma.user.findFirst({
+      where: { tenantId: AK_TENANT_ID, role: UserRole.system_admin },
+      select: { id: true },
+    })
+    const morningShift = await prisma.shift.findFirst({ where: { tenantId: AK_TENANT_ID, name: 'Ca sáng' } })
+    const afternoonShift = await prisma.shift.findFirst({ where: { tenantId: AK_TENANT_ID, name: 'Ca chiều' } })
+    if (!assignmentOwner) throw new Error('Missing system admin — run dev-seed first')
     if (!morningShift || !afternoonShift) throw new Error('Missing default shifts — run dev-seed first')
 
-    const newAssignments: any[] = []
+    const newAssignments: Prisma.ShiftAssignmentCreateManyInput[] = []
     for (const date of missing) {
       for (let i = 0; i < employees.length; i++) {
         const shift = i % 2 === 0 ? morningShift : afternoonShift
@@ -75,7 +135,7 @@ async function main() {
           projectId: projects[i % projects.length]!.id,
           shiftId: shift.id,
           date: new Date(date),
-          assignedById: '4812c985-bcd6-4e65-af50-c483900f92c6',
+          assignedById: assignmentOwner.id,
           status: 'scheduled',
         })
       }
@@ -86,31 +146,65 @@ async function main() {
       await prisma.shiftAssignment.createMany({ data: newAssignments.slice(i, i + CHUNK) })
     }
     console.log(`    → Created ${newAssignments.length} shift_assignments`)
-    // Re-load with new ones
-    assignments.push(
-      ...(await prisma.shiftAssignment.findMany({
-        where: { date: { gte: startDate, lte: today } },
-        include: { shift: true, project: true },
-      }))
-    )
+    // Re-load once so existing assignments are not processed twice.
+    assignments = await prisma.shiftAssignment.findMany({
+      where: {
+        date: { gte: startDate, lte: historyEnd },
+        employee: { tenantId: AK_TENANT_ID },
+        project: { tenantId: AK_TENANT_ID },
+        shift: { tenantId: AK_TENANT_ID },
+        status: { not: ShiftAssignmentStatus.cancelled },
+      },
+      include: { shift: true, project: true },
+    })
   }
 
   console.log(`  Found ${assignments.length} shift assignments in window`)
 
+  const existingAttendance = await prisma.attendanceRecord.findMany({
+    where: {
+      shiftAssignment: {
+        date: { gte: startDate, lte: historyEnd },
+        employee: { tenantId: AK_TENANT_ID },
+        project: { tenantId: AK_TENANT_ID },
+        shift: { tenantId: AK_TENANT_ID },
+        status: { not: ShiftAssignmentStatus.cancelled },
+      },
+    },
+    select: { shiftAssignmentId: true },
+  })
+  const assignmentIdsWithAttendance = new Set(
+    existingAttendance.map((record) => record.shiftAssignmentId),
+  )
+
   let presentCount = 0
   let lateCount = 0
   let absentCount = 0
+  let preservedCount = 0
+  let preservedAssignmentStateCount = 0
   let weekendCount = 0
+  const missedAssignmentIds: string[] = []
 
   for (const a of assignments) {
     // Skip Sundays
-    if (isWeekend(a.date)) {
+    if (isSundayDateOnly(a.date)) {
       weekendCount++
       continue
     }
 
-    // Random outcome: 85% present, 10% late, 5% absent
-    const roll = Math.random()
+    // An existing row may contain real UAT data. Preserve it byte-for-byte on
+    // every rerun, including after the tested day moves into history.
+    if (assignmentIdsWithAttendance.has(a.id)) {
+      preservedCount++
+      continue
+    }
+    if (a.status !== ShiftAssignmentStatus.scheduled) {
+      preservedAssignmentStateCount++
+      continue
+    }
+
+    // Deterministic outcome: 85% present, 10% late, 5% absent.
+    const roll = deterministicFraction(`${a.id}:outcome`)
     let status: 'present' | 'late' | 'absent'
     let lateMinutes = 0
     if (roll < 0.85) {
@@ -118,34 +212,30 @@ async function main() {
       presentCount++
     } else if (roll < 0.95) {
       status = 'late'
-      lateMinutes = randomBetween(10, 45)
+      lateMinutes = deterministicBetween(`${a.id}:late`, 10, 45)
       lateCount++
     } else {
       status = 'absent'
       absentCount++
+      missedAssignmentIds.push(a.id)
       continue // Skip — no attendance record
     }
 
-    // Parse shift start/end "HH:mm"
-    const [sh, sm] = a.shift.startTime.split(':').map(Number) ?? [8, 0]
-    const [eh, em] = a.shift.endTime.split(':').map(Number) ?? [17, 0]
+    const scheduledStart = buildVietnamShiftDateTime(a.date, a.shift.startTime)
+    const scheduledEnd = buildVietnamShiftDateTime(
+      a.date,
+      a.shift.endTime,
+      a.shift.isOvernight,
+    )
 
-    // Date for check-in: assignment date at shift start (UTC)
-    const scheduledStart = new Date(a.date)
-    scheduledStart.setUTCHours(sh ?? 8, sm ?? 0, 0, 0)
-    const scheduledEnd = new Date(a.date)
-    scheduledEnd.setUTCHours(eh ?? 17, em ?? 0, 0, 0)
-    // For overnight shifts (e.g. 22:00 → 06:00), end time is next day
-    if ((eh ?? 17) < (sh ?? 8)) {
-      scheduledEnd.setUTCDate(scheduledEnd.getUTCDate() + 1)
-    }
-
-    const checkInAt = addMinutes(scheduledStart, lateMinutes + randomBetween(-2, 5))
-    const checkOutAt = addMinutes(scheduledEnd, randomBetween(-10, 5))
-
-    // Convert to ISO strings
-    const checkInStr = checkInAt.toISOString()
-    const checkOutStr = checkOutAt.toISOString()
+    const checkInAt = addMinutes(
+      scheduledStart,
+      lateMinutes + deterministicBetween(`${a.id}:arrival`, -2, 5),
+    )
+    const checkOutAt = addMinutes(
+      scheduledEnd,
+      deterministicBetween(`${a.id}:checkout`, -10, 5),
+    )
 
     // Total minutes worked (rough)
     const totalMinutes = Math.max(0, Math.round((checkOutAt.getTime() - checkInAt.getTime()) / 60000) - (a.shift.breakMinutes ?? 60))
@@ -155,8 +245,8 @@ async function main() {
       shiftAssignmentId: a.id,
       employeeId: a.employeeId,
       projectId: a.projectId,
-      checkInAt: checkInStr,
-      checkOutAt: checkOutStr,
+      checkInAt,
+      checkOutAt,
       checkInGps: { latitude: Number(a.project.latitude), longitude: Number(a.project.longitude), accuracy: 10 },
       checkOutGps: { latitude: Number(a.project.latitude), longitude: Number(a.project.longitude), accuracy: 10 },
       checkInPhotoKey: null, // Skip photo upload in seed
@@ -168,32 +258,38 @@ async function main() {
     })
   }
 
-  console.log(`  Distribution: ${presentCount} present, ${lateCount} late, ${absentCount} absent, ${weekendCount} Sundays skipped`)
+  console.log(`  Distribution: ${presentCount} present, ${lateCount} late, ${absentCount} absent, ${preservedCount} existing records preserved, ${preservedAssignmentStateCount} existing assignment states preserved, ${weekendCount} Sundays skipped`)
 
-  // Bulk insert via createMany (skipDuplicates for re-runs)
-  console.log(`\n  Upserting ${records.length} attendance records...`)
-  // Note: createMany with skipDuplicates requires unique constraint on shiftAssignmentId (which we have)
+  console.log(`\n  Creating up to ${records.length} missing attendance records...`)
+  const CHUNK = 1000
   let created = 0
-  for (const r of records) {
-    try {
-      await prisma.attendanceRecord.upsert({
-        where: { shiftAssignmentId: r.shiftAssignmentId },
-        update: {
-          checkInAt: new Date(r.checkInAt),
-          checkOutAt: new Date(r.checkOutAt),
-          totalMinutesWorked: r.totalMinutesWorked,
-          overtimeMinutes: r.overtimeMinutes,
-          lateMinutes: r.lateMinutes,
-          status: r.status,
+  for (let index = 0; index < records.length; index += CHUNK) {
+    const chunk = records.slice(index, index + CHUNK)
+    created += await prisma.$transaction(async (tx) => {
+      const result = await tx.attendanceRecord.createMany({ data: chunk, skipDuplicates: true })
+      await tx.shiftAssignment.updateMany({
+        where: {
+          id: { in: chunk.map((record) => record.shiftAssignmentId) },
+          status: ShiftAssignmentStatus.scheduled,
         },
-        create: r,
+        data: { status: ShiftAssignmentStatus.checked_out },
       })
-      created++
-    } catch (err) {
-      // Skip duplicates
-    }
+      return result.count
+    })
   }
-  console.log(`  ✓ ${created} attendance records upserted\n`)
+
+  let markedMissed = 0
+  for (let index = 0; index < missedAssignmentIds.length; index += CHUNK) {
+    const result = await prisma.shiftAssignment.updateMany({
+      where: {
+        id: { in: missedAssignmentIds.slice(index, index + CHUNK) },
+        status: ShiftAssignmentStatus.scheduled,
+      },
+      data: { status: ShiftAssignmentStatus.missed },
+    })
+    markedMissed += result.count
+  }
+  console.log(`  ✓ ${created} attendance records created; ${markedMissed} absent assignments marked missed; existing records unchanged\n`)
 }
 
 main()

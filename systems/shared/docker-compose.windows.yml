@@ -1,0 +1,56 @@
+# Windows 10/11 local/UAT override for Docker Desktop with Linux containers.
+# Always merge this file after docker-compose.yml. It replaces Linux /data bind
+# mounts with stable Docker named volumes and keeps every host port on loopback.
+# It is not the approved Ubuntu production profile.
+
+services:
+  attendance-api:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+
+  payroll-api:
+    ports: !override
+      - "127.0.0.1:3001:3001"
+
+  postgres:
+    ports: !override
+      - "127.0.0.1:5432:5432"
+    volumes: !override
+      - akaios-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    ports: !override
+      - "127.0.0.1:6379:6379"
+    volumes: !override
+      - akaios-redis-data:/data
+
+  minio:
+    ports: !override
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes: !override
+      - akaios-minio-data:/data
+
+  web-admin:
+    ports: !override
+      - "127.0.0.1:3002:3002"
+
+  caddy:
+    ports: !override
+      - "127.0.0.1:80:80"
+    volumes: !override
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - akaios-caddy-data:/data
+      - akaios-caddy-config:/config
+
+volumes:
+  akaios-postgres-data:
+    name: akaios-postgres-data
+  akaios-redis-data:
+    name: akaios-redis-data
+  akaios-minio-data:
+    name: akaios-minio-data
+  akaios-caddy-data:
+    name: akaios-caddy-data
+  akaios-caddy-config:
+    name: akaios-caddy-config

@@ -2,6 +2,8 @@
 
 **Status:** Accepted
 **Date:** 2026-07-16
+**Amended:** 2026-08-09 — security maintenance upgraded the chosen Next.js
+App Router implementation from 14 to 15 without changing the framework decision.
 **Decider:** @fullstack-engineer (proposed), @user (approved)
 **Related:** [Infrastructure](../../3-technical/3.1-system-foundation/infrastructure.md), [System Design](../../3-technical/3.1-system-foundation/design-standards/system-design.md)
 
@@ -38,11 +40,12 @@ Requirements: 200 blue-collar users on personal phones (mostly Android), 15 proj
 
 | Option | Verdict |
 | --- | --- |
-| **Next.js 14 (App Router)** (chosen) | Same TS ecosystem as backend, SSR for fast initial loads, easy Docker deploy, dev pool |
+| **Next.js 15 (App Router)** (chosen; upgraded from 14) | Same TS ecosystem as backend, SSR for fast initial loads, easy Docker deploy, dev pool |
 | Plain React + Vite | Less batteries-included (no API routes, no SSR) | |
 | Vue 3 + Nuxt | Smaller VN dev pool | |
 
-**Decision:** Next.js 14.
+**Decision:** Next.js 15 (the original Next.js 14 choice was upgraded in-place
+for production security fixes; App Router and React architecture are unchanged).
 
 ### Database
 
@@ -101,7 +104,7 @@ Adopt the stack:
 
 - Mobile: Flutter 3.24 (Dart 3.5)
 - Backend: Node.js 20 LTS + Fastify + TypeScript (strict mode)
-- Web admin: Next.js 14 (App Router) + TypeScript
+- Web admin: Next.js 15 (App Router) + TypeScript
 - Database: PostgreSQL 16
 - Cache / queue: Redis 7 + BullMQ
 - Object storage: MinIO (S3-compatible)
@@ -131,3 +134,16 @@ Each layer is independently swappable:
 - DB → MySQL migration possible (Prisma supports both)
 
 ADR supersedes none. Superseded by none.
+
+## Implementation Note — 2026-07-18
+
+The accepted component choices remain, with these MVP refinements:
+
+- Redis stores atomic OTP/TOTP challenge and abuse-control state plus readiness
+  dependencies. Payroll runs synchronously and transactionally in the API; no
+  BullMQ queue or worker is shipped.
+- Caddy is the local HTTP origin reverse proxy. Cloudflare Tunnel terminates
+  public TLS at the edge, so Caddy auto-HTTPS is not used in the shipped topology.
+- “No cloud dependencies” applies only to durable application data/services.
+  Public access and production SMS depend on Cloudflare Tunnel and SpeedSMS;
+  GitHub Actions is the remote delivery gate.

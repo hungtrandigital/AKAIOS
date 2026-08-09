@@ -15,8 +15,7 @@ export interface ProjectLocation {
  */
 export function validateGeofence(
   userGps: GPSCoordinate,
-  project: ProjectLocation,
-  options: { warnOnlyOnLowAccuracy?: boolean } = {}
+  project: ProjectLocation
 ): void {
   const projectCenter = new GPSCoordinate({
     latitude: project.latitude,
@@ -26,16 +25,8 @@ export function validateGeofence(
 
   const distance = userGps.distanceTo(projectCenter)
 
-  // BR-ATT-010: Allow check-in if GPS accuracy is poor (>50m) but warn.
-  // We do NOT enforce geofence strictly if accuracy > 50m.
-  if (userGps.accuracy > 50) {
-    if (options.warnOnlyOnLowAccuracy) {
-      return
-    }
-    return
-  }
-
-  // Strict geofence check
+  // Accuracy is client-supplied telemetry. It may inform review UX, but it must
+  // never expand or bypass the authoritative project geofence.
   if (distance > project.geofenceRadiusMeters) {
     throw new BusinessRuleViolationError(
       `Check-in location is ${Math.round(distance)}m from project (max ${project.geofenceRadiusMeters}m)`,

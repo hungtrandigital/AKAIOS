@@ -1,7 +1,7 @@
 # Domain Specs — AKAIUNSAN Attendance + Payroll
 
 **Status:** Active — Phase 0 deliverable for PRD-EPIC-002
-**Last Updated:** 2026-07-16
+**Last Updated:** 2026-07-18
 **Owner:** @system-architecture + @fullstack-engineer
 **Related:** [System Design](../design-standards/system-design.md), [API Contracts](api-contracts/)
 
@@ -19,7 +19,7 @@ Domain-Driven Design (DDD) model for the Attendance and Payroll bounded contexts
 | Vietnamese | English | Definition |
 | --- | --- | --- |
 | Nhân viên | Employee | Người làm việc vệ sinh, dùng mobile app check-in/out |
-| Giám sát | Supervisor | Người quản lý 1 dự án, override chấm công, duyệt ca |
+| Giám sát | Supervisor | Người quản lý các dự án được BO/system admin gán, override chấm công, duyệt ca |
 | BO Staff | Back-Office Staff | Nhân viên văn phòng xử lý lương, báo cáo |
 | Dự án | Project | Site khách hàng nơi NV làm việc (15 sites hiện tại) |
 | Ca | Shift | Khung giờ làm việc (ca sáng, ca chiều, ca tối, custom) |
@@ -41,6 +41,11 @@ Domain-Driven Design (DDD) model for the Attendance and Payroll bounded contexts
 
 ## Bounded Contexts
 
+The YAML below is the domain-facing aggregate model, not an exhaustive database
+catalog. The committed Prisma schema is authoritative for persistence-only
+columns, indexes, relations, and defaults; OpenAPI is authoritative for transport
+DTOs. Fields shown here must still match their persisted names and nullability.
+
 ### 1. Identity (Shared Kernel)
 
 Owns: authentication, users, employees, roles.
@@ -51,16 +56,18 @@ Owns: authentication, users, employees, roles.
 User:
   id: UUID (PK)
   tenantId: UUID (FK to Tenant)
-  email: String (nullable, unique per tenant)
-  phone: String (unique per tenant)
-  passwordHash: String (nullable, for admin)
+  email: String (nullable, globally unique in the current schema)
+  phone: String (globally unique in the current schema)
+  passwordHash: String (nullable, for password-authenticated admin or employee)
   role: enum(employee | supervisor | bo_admin | system_admin)
   status: enum(active | inactive | suspended)
+  lastLoginAt: DateTime (nullable)
   createdAt: DateTime
   updatedAt: DateTime
 
 Employee:
   id: UUID (PK)
+  tenantId: UUID (FK to Tenant)
   userId: UUID (FK to User, unique)
   employeeCode: String (mã NV, e.g., "NV001")
   fullName: String (họ tên đầy đủ)
@@ -68,11 +75,12 @@ Employee:
   hireDate: Date
   baseSalary: Decimal(15,2)  # VNĐ, base cho payroll
   salaryType: enum(monthly | hourly)
-  hourlyRate: Decimal(15,2)  # chỉ dùng nếu salaryType=hourly
+  hourlyRate: Decimal(15,2) (nullable)  # required positive when salaryType=hourly
   bankAccount: String (nullable, số tài khoản)
   bankName: String (nullable, tên NH)
-  idNumber: String (CCCD)
+  idNumber: String (nullable, CCCD)
   status: enum(active | inactive)
+  deletedAt: DateTime (nullable)
   createdAt: DateTime
   updatedAt: DateTime
 
@@ -104,8 +112,7 @@ ShiftAssignment:
   shiftId: UUID (FK to Shift)
   date: Date  # ngày làm việc
   status: enum(scheduled | checked_in | checked_out | completed | missed | cancelled)
-  attendanceRecordId: UUID (FK to AttendanceRecord, nullable)
-  assignedBy: UUID (FK to User)  # supervisor/BO gán
+  assignedById: UUID (FK to User)  # supervisor/BO gán
   assignedAt: DateTime
   notes: String (nullable)
   createdAt: DateTime
@@ -118,18 +125,20 @@ ShiftAssignment:
 AttendanceRecord:
   id: UUID (PK)
   shiftAssignmentId: UUID (FK to ShiftAssignment, unique)
+  employeeId: UUID (FK to Employee)
+  projectId: UUID (FK to Project)
   checkInAt: DateTime (nullable)
   checkOutAt: DateTime (nullable)
-  checkInGps: JSONB { lat, lng, accuracy } (nullable)
-  checkOutGps: JSONB { lat, lng, accuracy } (nullable)
-  checkInPhotoUrl: String (nullable, MinIO presigned URL)
-  checkOutPhotoUrl: String (nullable, MinIO presigned URL)
+  checkInGps: JSONB { latitude, longitude, accuracy } (nullable)
+  checkOutGps: JSONB { latitude, longitude, accuracy } (nullable)
+  checkInPhotoKey: String (nullable, private MinIO object key)
+  checkOutPhotoKey: String (nullable, private MinIO object key)
   status: enum(present | late | early_leave | half_day | absent | on_leave | holiday)
   totalMinutesWorked: Integer (nullable, computed)
   overtimeMinutes: Integer (nullable, computed)
   lateMinutes: Integer (nullable, computed)
   overrideReason: String (nullable, nếu supervisor sửa)
-  overrideBy: UUID (FK to User, nullable)
+  overrideById: UUID (FK to User, nullable)
   overrideAt: DateTime (nullable)
   createdAt: DateTime
   updatedAt: DateTime
@@ -142,16 +151,19 @@ AttendanceRecord:
 ```yaml
 Shift:
   id: UUID (PK)
+  tenantId: UUID (FK to Tenant)
   name: String  # "Ca sáng", "Ca chiều", "Ca tối", or custom
   startTime: Time  # "06:00"
   endTime: Time  # "14:00"
   breakMinutes: Integer  # giờ nghỉ giữa ca (mặc định 60 phút)
   lateThresholdMinutes: Integer  # sau startTime bao nhiêu phút tính late (default 15)
   isOvernight: Boolean  # ca qua đêm (vd: 22:00-06:00 ngày hôm sau)
-  color: String  # UI color (hex)
+  color: String (nullable)  # UI color (hex)
   isActive: Boolean
   createdAt: DateTime
   updatedAt: DateTime
+
+Constraint: UNIQUE(tenantId, name)
 ```
 
 **Project**
@@ -170,10 +182,32 @@ Project:
   contractStartDate: Date
   contractEndDate: Date (nullable)
   status: enum(active | paused | ended)
-  reportTemplateConfig: JSONB  # cấu hình template báo cáo KH
+  reportTemplateConfig: JSONB (nullable)  # cấu hình template báo cáo KH
+  deletedAt: DateTime (nullable)
   createdAt: DateTime
   updatedAt: DateTime
 ```
+
+**ProjectSupervisor (authorization membership)**
+
+```yaml
+ProjectSupervisor:
+  projectId: UUID (FK to Project)
+  userId: UUID (FK to User, role = supervisor, status = active)
+  assignedById: UUID (FK to User, role = bo_admin | system_admin)
+  createdAt: DateTime
+  primaryKey: [projectId, userId]
+```
+
+- `ProjectSupervisor` is the sole project-management authorization source for a supervisor.
+  A `ShiftAssignment`, including a supervisor's own historical/self-created shift, never grants access.
+- BO/system admin grant or revoke membership transactionally with an `AuditLog`. Project,
+  supervisor, assigning actor, and request must belong to the same tenant; unauthorized and
+  cross-tenant identifiers fail closed as `404`.
+- Revocation takes effect on the next request. Supervisor project, attendance, employee,
+  report, and shift-assignment queries must predicate both tenant ownership and membership.
+- Employee visibility includes employees with historical or current shift assignments in an
+  authorized project, but responses use a non-payroll, non-identity safe DTO.
 
 #### Value Objects
 
@@ -217,6 +251,9 @@ class ShiftTimeRange {
 
 #### Domain Events
 
+These are conceptual event payloads only; the MVP does not publish them to a
+message bus. Photo references are private object keys, never public URLs.
+
 ```yaml
 ShiftAssigned:
   shiftAssignmentId: UUID
@@ -232,7 +269,7 @@ CheckedIn:
   projectId: UUID
   checkInAt: DateTime
   gps: GPSCoordinate
-  photoUrl: String
+  photoKey: String
   isLate: Boolean
   lateMinutes: Integer
   occurredAt: DateTime
@@ -250,6 +287,8 @@ AttendanceOverridden:
   attendanceRecordId: UUID
   overriddenBy: UUID
   reason: String
+  reasonCode: enum(capture_unavailable | permission_blocked | device_failure) (optional)
+  provenance: enum(correction | manual)
   previousStatus: AttendanceStatus
   newStatus: AttendanceStatus
   occurredAt: DateTime
@@ -270,12 +309,48 @@ CustomerReportGenerated:
 2. **Late detection (BR-ATT-002):** Check-in sau `Shift.startTime + lateThresholdMinutes` (default 15 phút) → status = `late`. Trước đó → `present`.
 3. **Missing check-out (BR-ATT-003):** Nếu NV check-in nhưng quên check-out, cuối ngày supervisor có thể manual add check-out time. Hệ thống không tự động set check-out = endOfDay.
 4. **Double check-in prevention (BR-ATT-004):** Nếu `AttendanceRecord.checkInAt` đã có cho assignment này, API reject check-in lần 2. Tương tự cho check-out.
-5. **Photo required (BR-ATT-005):** Cả check-in và check-out đều yêu cầu ảnh (JPEG, max 5 MB). Không có ảnh → reject.
-6. **Schedule conflict (BR-ATT-006):** Khi gán shift cho NV, nếu NV đã có shift khác cùng ngày (overlap thời gian) → cảnh báo supervisor (không block, vì có thể NV cover ca khác).
+5. **Photo required (BR-ATT-005):** Employee self check-in/out luôn yêu cầu ảnh JPEG mới chụp trong official client, tối đa 5 MB; không có ảnh, ảnh thư viện hoặc placeholder → reject. Server phải giải mã đầy đủ JPEG, giới hạn tối đa 16 MP và tối thiểu 320×240, không chỉ tin magic bytes. Camera lỗi không làm yếu GPS/photo policy của employee endpoint. MVP chưa có device attestation/liveness, nên freshness/camera origin là client control chứ không phải bằng chứng mật mã cho direct API caller.
+6. **Schedule conflict and acknowledgement (BR-ATT-006):** Một
+   employee/project/shift/date không-cancelled trùng hoàn toàn luôn bị reject.
+   Một ca khác của cùng nhân viên có thời gian chồng với ca cùng ngày hoặc ca qua
+   đêm ở ngày liền kề là soft conflict: API trả warning và chỉ lưu khi scheduler
+   được phân quyền gửi xác nhận rõ ràng. Warning trả một opaque fingerprint gắn
+   với đúng request, tài nguyên ca và tập conflict hiện tại; xác nhận phải gửi
+   lại fingerprint đó, và phải review lại nếu dữ liệu đã thay đổi. Assignment đã
+   xác nhận vẫn là lịch thật,
+   phải có audit chứa actor và conflict evidence, và mobile Today phải hiển thị
+   tất cả assignment không-cancelled trong business date để nhân viên chọn đúng ca.
 7. **Project geofence required (BR-ATT-007):** Project phải có latitude/longitude + radius trước khi cho check-in.
-8. **Past date check-in (BR-ATT-008):** NV không được check-in cho assignment ngày quá khứ (>7 ngày). Supervisor có thể backfill có lý do.
+8. **Past date check-in (BR-ATT-008):** NV không được check-in cho assignment quá 7 ngày trước ngày Việt Nam hiện tại. Operator manual event cũng tuân theo cửa sổ này và không nhận thời điểm tương lai.
 9. **Holiday override (BR-ATT-009):** Nếu assignment date là ngày lễ VN và status = `present` → tính lương OT holiday (3x).
-10. **Geofence precision (BR-ATT-010):** GPS accuracy > 50m → cảnh báo nhưng vẫn cho check-in (NV có thể ở trong tòa nhà, GPS kém).
+10. **GPS accuracy telemetry (BR-ATT-010):** Client gửi `accuracy` không âm để lưu làm bằng chứng/telemetry. MVP không áp ngưỡng accuracy riêng; server luôn kiểm tra khoảng cách Haversine với bán kính dự án và accuracy không được mở rộng/bỏ qua geofence.
+11. **Shift cancellation audit (BR-ATT-011):** BO/admin chỉ được hủy assignment còn ở trạng thái `scheduled` và chưa có attendance; supervisor chỉ được hủy trong dự án có membership đang hiệu lực. Lý do hủy từ 10–500 ký tự, actor và trạng thái trước/sau phải được ghi audit atomically. Đổi lịch được thực hiện theo chuỗi hủy lịch cũ rồi tạo lịch mới.
+12. **Tenant-owned shift catalog (BR-ATT-012):** Mỗi `Shift` thuộc đúng một tenant; list/create template và assignment lookup luôn predicate tenant. Tên ca unique trong tenant nhưng có thể trùng giữa các tenant.
+13. **Camera-failure manual event (BR-ATT-013):** Khi không thể chụp ảnh, employee không được bypass. Chỉ supervisor active có membership đúng project hoặc system admin break-glass, với `attendance.override`, mới tạo `check_in|check_out` thủ công cho assignment còn hợp lệ. Supervisor không được tự ghi cho chính mình. Reason code chỉ nhận `capture_unavailable|permission_blocked|device_failure`; note tối thiểu 10 ký tự. Event time phải thuộc business date của assignment (checkout ca qua đêm có thể ở ngày kế tiếp) và nằm trong support window từ 4 giờ trước scheduled start đến 12 giờ sau scheduled end. Event không giả lập GPS/photo, lưu actor/reason/time trong override provenance, đổi record + assignment bằng compare-and-set và ghi `override_attendance` audit trong cùng transaction. BO chỉ review ngoại lệ, không tạo event.
+14. **Monthly project schedule and copy (BR-ATT-014):** Monthly view là
+    projection của `ShiftAssignment` theo một authorized project và khoảng ngày
+    đầu/cuối tháng Việt Nam, không tạo aggregate kế hoạch mới. Copy nhận một
+    source range tối đa 31 ngày và một target start trong cùng project, giữ nguyên
+    day offset, employee, shift và notes; target luôn bắt đầu ở `scheduled` và
+    không copy attendance, cancellation state hoặc audit cũ. Preview là bắt buộc.
+    Preview trả opaque fingerprint của source rows, target mapping, resources và
+    conflicts; bulk save bắt buộc gửi lại fingerprint đó và phải yêu cầu preview
+    mới nếu dữ liệu thay đổi. UI phải cho BO xem đầy đủ mọi source→target mapping,
+    đưa warning/blocker lên trước nhưng không ẩn các dòng hợp lệ. Bulk save atomic,
+    dùng client UUID idempotency key,
+    hard-fail nếu có exact duplicate/invalid resource/contract breach, và yêu cầu
+    xác nhận nếu có soft conflict theo BR-ATT-006. Một audit cấp request lưu
+    source, target, created IDs, stable result snapshot, actor và conflict
+    acknowledgement; replay chỉ trả snapshot ban đầu, không chiếu trạng thái hay
+    attendance đã thay đổi sau đó.
+    Vì MVP chưa định nghĩa break/OT xuyên nhiều ca, payroll phải gom paid-day,
+    meal allowance và late-cap theo unique Vietnam business date nhưng fail closed
+    nếu có hơn một assignment đã thực sự làm trong cùng ngày. Customer report
+    cũng fail closed nếu một employee/project/date có nhiều assignment đã check-in,
+    để BO reconcile thay vì xuất trùng ngày/giờ.
+    Attendance đã reconcile thành `absent|on_leave|holiday` là trạng thái terminal
+    không làm việc trên mobile Today, kể cả assignment kỹ thuật vẫn mang trạng
+    thái cũ; client không được hiển thị nút check-in cho record này.
 
 ### 3. Payroll Bounded Context
 
@@ -316,7 +391,8 @@ PayrollLine:
   payrollPeriodId: UUID (FK to PayrollPeriod)
   employeeId: UUID (FK to Employee)
   # Input data
-  daysWorked: Integer  # số ngày làm thực tế
+  daysWorked: Integer  # số attendance-day không absent/on_leave, dùng để hiển thị
+  workdayUnits: Decimal(5,2)  # persisted paid-day units used by proration/allowances
   daysOnLeave: Integer  # số ngày nghỉ phép (có/không lương tùy rule)
   totalWorkMinutes: Integer  # tổng phút làm (từ attendance)
   overtimeWeekdayMinutes: Integer
@@ -326,19 +402,29 @@ PayrollLine:
   absentDays: Integer
   # Money breakdown
   baseSalary: Decimal(15,2)
-  proratedBase: Decimal(15,2)  # base × (daysWorked / workingDaysInMonth)
+  proratedBase: Decimal(15,2)  # monthly: workdayUnits prorata; hourly: regular minutes × hourlyRate
   overtimeWeekdayAmount: Decimal(15,2)
   overtimeWeekendAmount: Decimal(15,2)
   overtimeHolidayAmount: Decimal(15,2)
   latePenalty: Decimal(15,2)  # số tiền phạt trễ (nếu rule bật)
   allowances: Decimal(15,2)  # tổng phụ cấp
   gross: Decimal(15,2)
+  # Persisted compliance columns; guaranteed zero while ADR-003 MVP gate is active
+  bhxhNhanVien: Decimal(15,2)
+  bhxhDoanhNghiep: Decimal(15,2)
+  bhytNhanVien: Decimal(15,2)
+  bhytDoanhNghiep: Decimal(15,2)
+  bhtnNhanVien: Decimal(15,2)
+  bhtnDoanhNghiep: Decimal(15,2)
+  thueTNCN: Decimal(15,2)
+  tongKhauTru: Decimal(15,2)
   advance: Decimal(15,2)  # tạm ứng
   otherDeductions: Decimal(15,2)
   net: Decimal(15,2)
   # Override
+  allowancesOverridden: Boolean  # true khi BO đã override allowance thủ công
   overrideReason: String (nullable)
-  overrideBy: UUID (FK to User, nullable)
+  overrideById: UUID (FK to User, nullable)
   overrideAt: DateTime (nullable)
   createdAt: DateTime
   updatedAt: DateTime
@@ -371,6 +457,16 @@ PayrollRule:
   workingHoursPerDay: Integer  # default 8
   # Standard working days (for prorated base)
   standardWorkingDaysPerMonth: Integer  # default 26 (Mon-Sat, off Sunday)
+  # Persisted compliance config; non-none modes are rejected in the MVP
+  taxMode: enum(none | tncn_only | full | custom)
+  bhxhRateNv: Decimal(5,4) (nullable)
+  bhxhRateDn: Decimal(5,4) (nullable)
+  bhytRateNv: Decimal(5,4) (nullable)
+  bhytRateDn: Decimal(5,4) (nullable)
+  bhtnRateNv: Decimal(5,4) (nullable)
+  bhtnRateDn: Decimal(5,4) (nullable)
+  pitBrackets: JSONB (nullable)
+  updatedBy: UUID (nullable)
   createdAt: DateTime
   updatedAt: DateTime
 ```
@@ -381,14 +477,17 @@ PayrollRule:
 
 ```typescript
 class Money {
-  constructor(public readonly amount: number) {
-    // amount in VNĐ, integer to avoid float issues (or Decimal.js for precise)
-  }
+  readonly amount: Decimal
+  constructor(value: Decimal.Value)
+  static zero(): Money
+  static fromVNĐ(value: number | string): Money
   add(other: Money): Money
   subtract(other: Money): Money
-  multiply(factor: number): Money
+  multiply(factor: number | Decimal): Money
+  divide(divisor: number | Decimal): Money
   isGreaterThan(other: Money): boolean
-  format(locale: string = 'vi-VN'): string  // "1.234.567 ₫"
+  toDBString(): string
+  format(): string  // Vietnamese VND formatting
 }
 ```
 
@@ -428,13 +527,23 @@ PayrollLineOverridden:
 
 1. **Pro-rated base (BR-PAY-001):**
    ```
-   proratedBase = baseSalary × (daysWorked / standardWorkingDaysPerMonth)
+   monthly: proratedBase = baseSalary × (workdayUnits / standardWorkingDaysPerMonth)
+   hourly:  proratedBase = hourlyRate × regularWorkMinutes / 60
    ```
-   Vd: NV monthly salary 10tr, làm 22/26 ngày → prorated = 8.46tr.
+   `workdayUnits`: normal/holiday = 1, half-day = 0.5, absent/on_leave = 0,
+   evaluated once per unique Vietnam business date and capped at 1 for that date;
+   monthly units are capped at the configured standard. `daysWorked` remains an
+   integer unique-date display/persistence count. If more than one assignment has
+   worked attendance on the same date, calculation returns an actionable
+   reconciliation error with employee, date, and assignment IDs; MVP does not
+   infer cross-shift breaks or OT. Hourly employees require a positive
+   `hourlyRate` at Employee create/update and again at calculation.
 
 2. **OT calculation (BR-PAY-002):**
    ```
-   overtimeWeekdayAmount = (baseSalary / standardWorkingDays / workingHoursPerDay / 60) × otWeekdayMinutes × otWeekdayMultiplier
+   monthly minuteRate = baseSalary / standardWorkingDays / workingHoursPerDay / 60
+   hourly minuteRate  = hourlyRate / 60
+   overtimeAmount = minuteRate × roundedOTMinutes × categoryMultiplier
    ```
    Vd: base 10tr, 26 ngày, 8h/ngày = ~48,000 VNĐ/giờ → 1h OT weekday (1.5x) = ~72,000 VNĐ.
 
@@ -442,14 +551,16 @@ PayrollLineOverridden:
 
 4. **Late penalty (BR-PAY-004):**
    ```
-   latePenalty = min(lateMinutes × latePenaltyPerMinute, maxLatePenaltyPerDay) × daysLate
+   latePenalty = sum(min(recordLateMinutes × latePenaltyPerMinute, maxLatePenaltyPerDay))
    ```
-   Chỉ áp dụng nếu rule bật. Default OFF ở MVP (BO xử lý thủ công).
+   Các record trong cùng business date được cộng late minutes rồi cap đúng một
+   lần cho ngày đó. Chỉ áp dụng nếu rule bật; default OFF ở MVP (BO xử lý thủ công).
 
 5. **Allowances (BR-PAY-005):**
    ```
-   totalAllowances = mealAllowancePerDay × daysWorked + phoneAllowance (nếu có)
+   totalAllowances = mealAllowancePerDay × workdayUnits + phoneAllowance (nếu có)
    ```
+   Meal allowance dùng unique-date workday units, không tăng theo số assignment.
 
 6. **Gross calculation (BR-PAY-006):**
    ```
@@ -467,9 +578,9 @@ PayrollLineOverridden:
    open → calculating → calculated → approved → paid → locked
    ```
    - open: BO có thể sửa attendance input
-   - calculating: hệ thống đang tính (job chạy)
+   - calculating: trạng thái CAS tạm thời trong transaction tính đồng bộ; không có background job
    - calculated: đã có lines, BO có thể review + override từng line
-   - approved: BO đã duyệt, không thể sửa line nữa (chỉ admin mới revert được)
+   - approved: BO đã duyệt, không thể sửa line; MVP không có endpoint revert
    - paid: BO đã chuyển khoản, ghi ngày paid
    - locked: đóng kỳ, không thể mở lại (lưu trữ)
 
@@ -536,42 +647,51 @@ Business rules:
 Identity (Shared Kernel)
   ↓ provides Users, Employees, Projects
 Attendance
-  ↓ publishes AttendanceRecorded events
-Payroll (subscribes, reads via Internal API)
+  ↓ exposes a tenant-bound attendance projection
+Payroll (reads synchronously via Internal API)
 ```
 
 **Concretely:**
-- Payroll API calls Attendance API: `GET /api/internal/attendance?employeeId=...&from=YYYY-MM-DD&to=YYYY-MM-DD` để lấy attendance data cho kỳ lương.
-- Attendance writes domain events to Redis pub/sub; Payroll subscribes (Phase 3+, optional).
+- Payroll API calls Attendance API: `GET /internal/attendance?tenantId=...&employeeId=...&from=YYYY-MM-DD&to=YYYY-MM-DD` with `X-Internal-API-Key` để lấy attendance data cho kỳ lương.
+- Redis pub/sub/domain-event delivery is not implemented in the MVP. Any future asynchronous integration requires a separately approved design with durability and idempotency semantics.
 
 ## Cross-Cutting Concerns
 
 ### Audit Trail (BR-X-001)
 
-Tất cả hành động admin/supervisor/BO ghi vào `AuditLog`:
+Các thay đổi nhạy cảm đã triển khai ghi `AuditLog`: attendance override,
+grant/revoke supervisor membership, payroll calculate/approve/override/export,
+và payroll-rule update. Không được suy diễn rằng mọi
+CRUD/state transition đều đã có audit; mở rộng coverage là gate riêng trước khi
+coi audit trail là toàn diện.
 
 ```yaml
 AuditLog:
   id: UUID (PK)
+  tenantId: UUID (FK to Tenant)
   actorId: UUID (FK to User)
   actorRole: String
   action: String  # "override_attendance", "approve_payroll", "create_user"
   entityType: String  # "AttendanceRecord", "PayrollPeriod"
-  entityId: UUID
+  entityId: UUID (nullable)
   previousValue: JSONB (nullable)
   newValue: JSONB (nullable)
-  ipAddress: String
-  userAgent: String
+  ipAddress: String (nullable)
+  userAgent: String (nullable)
   occurredAt: DateTime
 ```
 
 ### Tenancy (BR-X-002)
-- Mọi bảng có `tenantId` (FK to Tenant)
-- Middleware tự động filter theo `tenantId` từ JWT (MVP chỉ có 1 tenant = AKAIUNSAN, nhưng schema sẵn sàng cho multi-tenant tương lai)
+- Aggregate roots như `User`, `Employee`, `Project`, `PayrollPeriod`, và report có
+  `tenantId`; child records được scope qua quan hệ tới các roots này.
+- Route/service queries phải đưa tenant từ JWT (hoặc tenant-bound internal API
+  input) vào predicate. Prisma không tự động thêm tenant filter.
 
 ### Soft Delete (BR-X-003)
-- Các bảng chính (Employee, Project, Shift) dùng `deletedAt: DateTime (nullable)` thay vì xóa cứng
-- Query mặc định filter `WHERE deletedAt IS NULL`
+- `Employee` và `Project` dùng `deletedAt`; `Shift` dùng `isActive`. Không có cơ
+  chế soft-delete tổng quát áp dụng tự động cho mọi model.
+- Các route/service đã triển khai phải thêm `deletedAt: null` vào predicate phù
+  hợp; Prisma không có middleware/global scope tự động làm việc này.
 
 ## Domain Glossary Index
 
@@ -591,4 +711,4 @@ AuditLog:
 - [System Design](../design-standards/system-design.md) — C4 diagrams
 - [API Contracts](api-contracts/) — OpenAPI specs (DTOs match domain model)
 - [Coding Standards](../design-standards/coding-standards.md) — Implementation conventions
-- [ADR-003: Skip VN Compliance at MVP](../../8-governance/decision-log/adr-003-skip-vn-compliance-mvp.md) — Why no BHXH/PIT in MVP
+- [ADR-003: Skip VN Compliance at MVP](../../../8-governance/decision-log/adr-003-skip-vn-compliance-mvp.md) — Why no BHXH/PIT in MVP

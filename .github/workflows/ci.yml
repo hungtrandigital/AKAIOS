@@ -10,24 +10,31 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  JWT_SECRET: ci-test-secret-do-not-use-in-production
+  INTERNAL_API_KEY: ci-test-internal-key-do-not-use-in-production
+  DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+  REDIS_URL: redis://localhost:6379
+  MINIO_ENDPOINT: localhost:9000
+  MINIO_ROOT_USER: ak_admin
+  MINIO_ROOT_PASSWORD: ci-test-minio-password
+  ATTENDANCE_API_URL: http://localhost:3000
+  PAYROLL_API_URL: http://localhost:3001
+
 jobs:
-  # =====================================================
-  # Lint + Typecheck + Test (no DB required)
-  # =====================================================
   quality:
-    name: Lint + Typecheck + Test
+    name: Lint, typecheck, unit tests, coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      JWT_SECRET: ci-test-secret-do-not-use-in-prod-32
-      INTERNAL_API_KEY: ci-test-key-do-not-use-in-prod-32
-      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-      REDIS_URL: redis://localhost:6379
-      MINIO_ENDPOINT: localhost:9000
-      MINIO_ROOT_USER: ak_admin
-      MINIO_ROOT_PASSWORD: ci-test-password
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -36,7 +43,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -51,32 +58,40 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit tests
-        run: pnpm test
+        run: pnpm test:unit
 
-      - name: Build all packages
-        run: pnpm build
+      - name: Coverage thresholds
+        run: pnpm test:coverage
 
-  # =====================================================
-  # Corporate website (independent npm + Node 22 project)
-  # =====================================================
+      - name: Upload coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: systems/**/coverage/**
+          if-no-files-found: ignore
+          retention-days: 7
+
   corporate-website:
-    name: Corporate Website
+    name: Corporate website
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: systems/corporate-website
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: systems/corporate-website/package-lock.json
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
@@ -84,14 +99,376 @@ jobs:
       - name: Test and build
         run: npm test
 
-  # =====================================================
-  # Integration tests (with Postgres + Redis containers)
-  # =====================================================
-  integration:
-    name: Integration Tests (with Postgres + Redis)
+  build:
+    name: Production build
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Build all packages
+        run: pnpm build
+
+  container-runtime:
+    name: Production container runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ATTENDANCE_IMAGE: akaios-ci/attendance:${{ github.event.pull_request.head.sha || github.sha }}
+      ATTENDANCE_MIGRATION_IMAGE: akaios-ci/attendance-migration:${{ github.event.pull_request.head.sha || github.sha }}
+      PAYROLL_IMAGE: akaios-ci/payroll:${{ github.event.pull_request.head.sha || github.sha }}
+      WEB_IMAGE: akaios-ci/web:${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Build production and migration images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker build \
+            --file systems/attendance/backend/Dockerfile \
+            --tag "$ATTENDANCE_IMAGE" \
+            .
+          docker build \
+            --file systems/attendance/backend/Dockerfile \
+            --target migration \
+            --tag "$ATTENDANCE_MIGRATION_IMAGE" \
+            .
+          docker build \
+            --file systems/payroll/backend/Dockerfile \
+            --tag "$PAYROLL_IMAGE" \
+            .
+          docker build \
+            --file systems/payroll/web-admin/Dockerfile \
+            --build-arg ATTENDANCE_API_URL=http://attendance-api:3000 \
+            --build-arg PAYROLL_API_URL=http://payroll-api:3001 \
+            --tag "$WEB_IMAGE" \
+            .
+
+      - name: Validate production image closures and runtime libraries
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          web_container="akaios-web-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # Invoked by the trap below.
+          # shellcheck disable=SC2317
+          cleanup() {
+            docker rm --force "$web_container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT INT TERM
+
+          assert_non_root() {
+            local image="$1"
+            local configured_user
+            local runtime_uid
+
+            configured_user="$(docker image inspect \
+              --format '{{.Config.User}}' "$image")"
+            case "$configured_user" in
+              ""|0|0:*|root|root:*)
+                echo "$image has a root/default image user: '$configured_user'" >&2
+                return 1
+                ;;
+            esac
+
+            runtime_uid="$(docker run --rm --entrypoint node "$image" \
+              --eval 'process.stdout.write(String(process.getuid()))')"
+            if [[ "$runtime_uid" == "0" ]]; then
+              echo "$image executes as root despite Config.User=$configured_user" >&2
+              return 1
+            fi
+            echo "$image runs as UID $runtime_uid (Config.User=$configured_user)"
+          }
+
+          assert_pruned_dependency_tree() {
+            local image="$1"
+
+            docker run --rm --user 0:0 --entrypoint sh "$image" -c '
+              set -eu
+              test -d /app
+
+              forbidden="$(
+                find /app -type d -print | while IFS= read -r directory; do
+                  name=${directory##*/}
+                  parent=${directory%/*}
+                  parent_name=${parent##*/}
+                  case "$parent_name:$name" in
+                    node_modules:vitest|node_modules:@vitest|\
+                    node_modules:vite|node_modules:eslint|\
+                    node_modules:@typescript-eslint|node_modules:tsx|\
+                    node_modules:turbo|node_modules:prisma|\
+                    node_modules:@playwright|node_modules:playwright|\
+                    node_modules:playwright-core|\
+                    .pnpm:vitest@*|.pnpm:@vitest+*|.pnpm:vite@*|\
+                    .pnpm:eslint@*|.pnpm:@typescript-eslint+*|\
+                    .pnpm:tsx@*|.pnpm:turbo@*|.pnpm:prisma@*|\
+                    .pnpm:@playwright+test@*|.pnpm:playwright@*|\
+                    .pnpm:playwright-core@*)
+                      printf "%s\n" "$directory"
+                      ;;
+                  esac
+                done
+              )"
+              if [ -n "$forbidden" ]; then
+                echo "Forbidden development package directories in /app:" >&2
+                echo "$forbidden" >&2
+                exit 1
+              fi
+
+              find /app -type l -print | while IFS= read -r link; do
+                target=$(readlink "$link")
+                case "$target" in
+                  /*)
+                    echo "Absolute symlink is not allowed: $link -> $target" >&2
+                    exit 1
+                    ;;
+                esac
+                if [ ! -e "$link" ]; then
+                  echo "Broken symlink: $link -> $target" >&2
+                  exit 1
+                fi
+              done
+            '
+            echo "$image has a pruned, relocatable /app dependency tree"
+          }
+
+          for image in "$ATTENDANCE_IMAGE" "$PAYROLL_IMAGE" "$WEB_IMAGE"; do
+            assert_non_root "$image"
+            assert_pruned_dependency_tree "$image"
+          done
+
+          docker run --rm --entrypoint node "$ATTENDANCE_IMAGE" --eval '
+            const { createRequire } = require("node:module");
+            const appRequire = createRequire("/app/package.json");
+            const sharedRequire = createRequire(appRequire.resolve("@ak/shared"));
+            const argon2 = sharedRequire("argon2");
+            const sharp = appRequire("sharp");
+
+            (async () => {
+              const password = "container-runtime-smoke";
+              const hash = await argon2.hash(password, {
+                type: argon2.argon2id,
+                memoryCost: 4096,
+                timeCost: 2,
+              });
+              if (!(await argon2.verify(hash, password))) {
+                throw new Error("Argon2 verification failed");
+              }
+
+              const jpeg = await sharp({
+                create: {
+                  width: 2,
+                  height: 2,
+                  channels: 3,
+                  background: { r: 20, g: 40, b: 60 },
+                },
+              }).jpeg().toBuffer();
+              const metadata = await sharp(jpeg).metadata();
+              if (metadata.format !== "jpeg" || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) {
+                throw new Error("Sharp did not emit a valid JPEG");
+              }
+              console.log("Attendance Argon2 and Sharp JPEG smoke passed");
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+          '
+
+          docker run --rm --entrypoint node "$PAYROLL_IMAGE" --eval '
+            const ExcelJS = require("exceljs");
+
+            (async () => {
+              const workbook = new ExcelJS.Workbook();
+              const sheet = workbook.addWorksheet("Runtime smoke");
+              sheet.addRow(["employee", "net"]);
+              sheet.addRow(["AK-001", 123456]);
+              const bytes = await workbook.xlsx.writeBuffer();
+
+              const loaded = new ExcelJS.Workbook();
+              await loaded.xlsx.load(bytes);
+              const value = loaded.getWorksheet("Runtime smoke").getCell("B2").value;
+              if (value !== 123456) {
+                throw new Error(`ExcelJS workbook round-trip failed: ${value}`);
+              }
+              console.log("Payroll ExcelJS workbook smoke passed");
+            })().catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+          '
+
+          docker run --detach \
+            --name "$web_container" \
+            --publish 127.0.0.1:3002:3002 \
+            "$WEB_IMAGE"
+          for ((attempt = 1; attempt <= 60; attempt++)); do
+            status="$(curl --silent --show-error \
+              --output "$RUNNER_TEMP/web-login.html" \
+              --write-out '%{http_code}' \
+              http://127.0.0.1:3002/login || true)"
+            if [[ "$status" == "200" ]]; then
+              echo "Web standalone /login returned HTTP 200"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs "$web_container" || true
+          echo "Web standalone /login did not return HTTP 200" >&2
+          exit 1
+
+  windows-deployment-config:
+    name: Windows deployment config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Create non-secret validation environment
+        run: |
+          cp .env.example .env
+          sed -i 's/CHANGE_ME_RANDOM_32_BYTES/ci-validation-random-value/g' .env
+          sed -i 's/base64-encoded-32-byte-key/ci-validation-totp-key/g' .env
+          sed -i 's/CHANGE_ME_MIN_PASSWORD/ci-validation-minio-password/g' .env
+          sed -i 's/POSTGRES_PASSWORD="CHANGE_ME"/POSTGRES_PASSWORD="ci-validation-postgres-password"/' .env
+          sed -i 's/NODE_ENV="development"/NODE_ENV="production"/' .env
+          sed -i 's/SMS_MODE="mock"/SMS_MODE="speedsms"/' .env
+          sed -i 's/SPEEDSMS_ACCESS_TOKEN=""/SPEEDSMS_ACCESS_TOKEN="ci-validation-token"/' .env
+
+      - name: Validate merged Windows Compose profile
+        run: |
+          compose=(docker compose --env-file .env \
+            -f systems/shared/docker-compose.yml \
+            -f systems/shared/docker-compose.windows.yml)
+          "${compose[@]}" config --quiet
+          "${compose[@]}" config --format json > "$RUNNER_TEMP/windows-compose.json"
+          for service in attendance-api payroll-api postgres redis minio web-admin caddy; do
+            jq -e --arg service "$service" \
+              '.services[$service].ports | length > 0 and all(.host_ip == "127.0.0.1")' \
+              "$RUNNER_TEMP/windows-compose.json" >/dev/null
+          done
+          jq -e '
+            (.services.postgres.volumes | any(.type == "volume" and .source == "akaios-postgres-data" and .target == "/var/lib/postgresql/data")) and
+            (.services.redis.volumes | any(.type == "volume" and .source == "akaios-redis-data" and .target == "/data")) and
+            (.services.minio.volumes | any(.type == "volume" and .source == "akaios-minio-data" and .target == "/data"))
+          ' "$RUNNER_TEMP/windows-compose.json" >/dev/null
+          if jq -e '.. | strings | select(startswith("/data/"))' \
+            "$RUNNER_TEMP/windows-compose.json" >/dev/null; then
+            echo 'Windows Compose still contains a Linux /data bind mount.' >&2
+            exit 1
+          fi
+
+  windows-powershell-parse:
+    name: Windows PowerShell parse
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Parse guarded deployment script
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '3-technical/3.3-devops/windows-docker.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) > $null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.ToString() }
+            exit 1
+          }
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $findings = Invoke-ScriptAnalyzer `
+            -Path '3-technical/3.3-devops/windows-docker.ps1' `
+            -Severity Error
+          if ($findings.Count -gt 0) {
+            $findings | Format-Table -AutoSize
+            exit 1
+          }
+
+  mobile:
+    name: Flutter mobile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: systems/attendance/mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.5
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Generate localization sources
+        run: flutter gen-l10n
+
+      - name: Check Dart formatting
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          lib/core lib/features lib/main.dart test
+
+      - name: Analyze mobile application
+        run: flutter analyze
+
+      - name: Run mobile tests
+        run: flutter test
+
+      - name: Build Android debug APK
+        run: >-
+          flutter build apk --debug
+          --dart-define=API_BASE_URL=https://example.invalid/api/attendance
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-mobile-debug-apk
+          path: systems/attendance/mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -118,15 +495,12 @@ jobs:
           --health-retries 5
 
     env:
-      JWT_SECRET: ci-test-secret-do-not-use-in-prod-32
-      INTERNAL_API_KEY: ci-test-key-do-not-use-in-prod-32
       DATABASE_URL: postgresql://ak_test:ak_test@localhost:5432/ak_test
-      REDIS_URL: redis://localhost:6379
-      MINIO_ENDPOINT: localhost:9000
-      MINIO_ROOT_USER: ak_admin
-      MINIO_ROOT_PASSWORD: ci-test-password
+      RUN_INTEGRATION: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -135,17 +509,173 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
+          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm prisma:generate
-      - name: Apply Prisma schema
-        run: pnpm prisma:push
-      - run: pnpm test
+      - name: Start MinIO
+        run: >-
+          docker run --detach --name minio
+          --publish 9000:9000
+          --env MINIO_ROOT_USER
+          --env MINIO_ROOT_PASSWORD
+          minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          server /data
 
-      - name: Upload coverage
-        if: always()
+      - name: Wait for MinIO
+        run: |
+          for ((attempt = 1; attempt <= 30; attempt++)); do
+            if curl --fail --silent http://localhost:9000/minio/health/live; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs minio
+          exit 1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Apply migrations
+        run: pnpm prisma:migrate:deploy
+
+      - name: Run integration tests
+        run: pnpm test:integration
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ak_test
+          POSTGRES_PASSWORD: ak_test
+          POSTGRES_DB: ak_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://ak_test:ak_test@localhost:5432/ak_test
+      E2E_ADMIN_EMAIL: admin@ak.local
+      E2E_ADMIN_PASSWORD: admin123!
+      E2E_BASE_URL: http://localhost:3002
+      E2E_NO_SERVER: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Start MinIO
+        run: >-
+          docker run --detach --name minio
+          --publish 9000:9000
+          --env MINIO_ROOT_USER
+          --env MINIO_ROOT_PASSWORD
+          minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+          server /data
+
+      - name: Wait for MinIO
+        run: |
+          for ((attempt = 1; attempt <= 30; attempt++)); do
+            if curl --fail --silent http://localhost:9000/minio/health/live; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs minio
+          exit 1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @ak/payroll-web-admin exec playwright install --with-deps chromium
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Apply migrations
+        run: pnpm prisma:migrate:deploy
+
+      - name: Generate ephemeral E2E 2FA secrets
+        shell: bash
+        run: |
+          encryption_key="$(openssl rand -base64 32 | tr -d '\n')"
+          totp_secret="$(openssl rand 20 | base32 | tr -d '=\n')"
+          echo "::add-mask::$encryption_key"
+          echo "::add-mask::$totp_secret"
+          echo "TOTP_ENCRYPTION_KEY=$encryption_key" >> "$GITHUB_ENV"
+          echo "E2E_TOTP_SECRET=$totp_secret" >> "$GITHUB_ENV"
+
+      - name: Seed E2E data
+        env:
+          ALLOW_DEMO_SEED: "true"
+        run: pnpm --filter @ak/shared db:seed && pnpm --filter @ak/shared db:seed:rbac
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Start application
+        run: |
+          pnpm --filter @ak/attendance-api start > "$RUNNER_TEMP/attendance-api.log" 2>&1 &
+          pnpm --filter @ak/payroll-api start > "$RUNNER_TEMP/payroll-api.log" 2>&1 &
+          pnpm --filter @ak/payroll-web-admin start > "$RUNNER_TEMP/web-admin.log" 2>&1 &
+
+      - name: Wait for application
+        run: |
+          for ((attempt = 1; attempt <= 60; attempt++)); do
+            if curl --fail --silent http://localhost:3000/health/live \
+              && curl --fail --silent http://localhost:3001/health/live \
+              && curl --fail --silent http://localhost:3002/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 100 "$RUNNER_TEMP/attendance-api.log" || true
+          tail -n 100 "$RUNNER_TEMP/payroll-api.log" || true
+          tail -n 100 "$RUNNER_TEMP/web-admin.log" || true
+          exit 1
+
+      - name: Run Playwright tests
+        run: pnpm test:e2e
+
+      - name: Upload E2E diagnostics
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
-          path: '**/coverage/**'
+          name: e2e-diagnostics
+          path: |
+            systems/payroll/web-admin/playwright-report/**
+            systems/payroll/web-admin/test-results/**
+            ${{ runner.temp }}/attendance-api.log
+            ${{ runner.temp }}/payroll-api.log
+            ${{ runner.temp }}/web-admin.log
+          if-no-files-found: ignore
+          retention-days: 7

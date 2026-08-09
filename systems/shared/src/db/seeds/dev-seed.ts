@@ -1,5 +1,7 @@
-// Dev/pilot seed data — creates 1 tenant + 15 projects + ~30 admin users + 200 employees + shifts + sample payroll rules.
-// Run: `pnpm db:seed` (from repo root, after migrations applied).
+// Development/controlled-UAT seed data — creates one tenant, demo operators,
+// 200 employees, 15 projects, shifts, assignments, and sample payroll rules.
+// Never run against production or pilot data.
+// Run: `ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed` (after migrations).
 
 import {
   PrismaClient,
@@ -8,6 +10,7 @@ import {
   ShiftAssignmentStatus,
 } from '@prisma/client'
 import { hashPassword } from '../../auth/password.js'
+import { encryptTotpSecret } from '../../auth/otp.js'
 import { isWeekend } from '../../engine-helpers.js'
 
 const prisma = new PrismaClient()
@@ -54,12 +57,19 @@ const NUM_EMPLOYEES = 200
 // Fixed UUID for AKAIUNSAN tenant — used across seeds and tests
 export const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 
+function assertDemoSeedAllowed(): void {
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error('Refusing demo seed: set ALLOW_DEMO_SEED=true only for disposable development or controlled-UAT data')
+  }
+}
+
 export async function seedDevData(): Promise<{
   tenantId: string
   adminUserId: string
   projectCount: number
   employeeCount: number
 }> {
+  assertDemoSeedAllowed()
   console.log('Seeding tenant AKAIUNSAN...')
 
   // === Tenant ===
@@ -88,6 +98,46 @@ export async function seedDevData(): Promise<{
     },
   })
 
+  // CI/dev only: enroll the seeded E2E admin with an ephemeral secret supplied
+  // by the environment. Production admins use the operator enrollment command.
+  const e2eTotpSecret = process.env.E2E_TOTP_SECRET
+  if (e2eTotpSecret) {
+    const envelope = encryptTotpSecret(e2eTotpSecret, `${adminUser.tenantId}:${adminUser.id}`)
+    await prisma.totpCredential.upsert({
+      where: { userId: adminUser.id },
+      update: { ...envelope, lastUsedCounter: null, rotatedAt: new Date() },
+      create: { userId: adminUser.id, ...envelope },
+    })
+
+    const e2ePasswordHash = process.env.E2E_ADMIN_PASSWORD
+      ? await hashPassword(process.env.E2E_ADMIN_PASSWORD)
+      : adminPassword
+    for (let index = 0; index < 5; index += 1) {
+      const e2eAdmin = await prisma.user.upsert({
+        where: { phone: `+8490999900${index}` },
+        update: {
+          email: `e2e-admin-${index}@ak.local`,
+          passwordHash: e2ePasswordHash,
+          role: UserRole.system_admin,
+          status: 'active',
+        },
+        create: {
+          tenantId: tenant.id,
+          phone: `+8490999900${index}`,
+          email: `e2e-admin-${index}@ak.local`,
+          passwordHash: e2ePasswordHash,
+          role: UserRole.system_admin,
+        },
+      })
+      const e2eEnvelope = encryptTotpSecret(e2eTotpSecret, `${e2eAdmin.tenantId}:${e2eAdmin.id}`)
+      await prisma.totpCredential.upsert({
+        where: { userId: e2eAdmin.id },
+        update: { ...e2eEnvelope, lastUsedCounter: null, rotatedAt: new Date() },
+        create: { userId: e2eAdmin.id, ...e2eEnvelope },
+      })
+    }
+  }
+
   const boUser = await prisma.user.upsert({
     where: { phone: '+84900000002' },
     update: {},
@@ -99,6 +149,14 @@ export async function seedDevData(): Promise<{
       role: UserRole.bo_admin,
     },
   })
+  if (e2eTotpSecret) {
+    const envelope = encryptTotpSecret(e2eTotpSecret, `${boUser.tenantId}:${boUser.id}`)
+    await prisma.totpCredential.upsert({
+      where: { userId: boUser.id },
+      update: { ...envelope, lastUsedCounter: null, rotatedAt: new Date() },
+      create: { userId: boUser.id, ...envelope },
+    })
+  }
 
   const supervisors = []
   for (let i = 0; i < 5; i++) {
@@ -119,12 +177,13 @@ export async function seedDevData(): Promise<{
   // === Shifts ===
   const shiftRecords: { id: string; name: string }[] = []
   for (const s of SHIFTS) {
-    const existing = await prisma.shift.findFirst({ where: { name: s.name } })
+    const existing = await prisma.shift.findFirst({ where: { tenantId: tenant.id, name: s.name } })
     if (existing) {
       shiftRecords.push({ id: existing.id, name: existing.name })
     } else {
       const created = await prisma.shift.create({
         data: {
+          tenantId: tenant.id,
           name: s.name,
           startTime: s.startTime,
           endTime: s.endTime,
@@ -161,6 +220,27 @@ export async function seedDevData(): Promise<{
             headerText: `BÁO CÁO DỊCH VỤ VỆ SINH - ${c.name.toUpperCase()}`,
             footerText: 'Cảm ơn Quý khách đã sử dụng dịch vụ AKAIUNSAN',
           },
+        },
+      })
+    )
+  )
+
+  // Explicit demo-only supervisor authorization. Production is intentionally
+  // not backfilled from historical shift assignments.
+  await Promise.all(
+    supervisors.map((supervisor, index) =>
+      prisma.projectSupervisor.upsert({
+        where: {
+          projectId_userId: {
+            projectId: projects[index % projects.length]!.id,
+            userId: supervisor.id,
+          },
+        },
+        update: { assignedById: adminUser.id },
+        create: {
+          projectId: projects[index % projects.length]!.id,
+          userId: supervisor.id,
+          assignedById: adminUser.id,
         },
       })
     )
@@ -222,25 +302,19 @@ export async function seedDevData(): Promise<{
       const project = projects[(empIdx + dayOffset) % projects.length]!
       const shift = shiftRecords[empIdx % 2]!
 
-      await prisma.shiftAssignment.upsert({
-        where: {
-          employeeId_projectId_shiftId_date: {
-            employeeId: employee.id,
-            projectId: project.id,
-            shiftId: shift.id,
-            date,
-          },
-        },
-        update: {},
-        create: {
+      const existingAssignment = await prisma.shiftAssignment.findFirst({
+        where: { employeeId: employee.id, date, status: { not: 'cancelled' } },
+      })
+      if (!existingAssignment) {
+        await prisma.shiftAssignment.create({ data: {
           employeeId: employee.id,
           projectId: project.id,
           shiftId: shift.id,
           date,
           status: ShiftAssignmentStatus.scheduled,
           assignedById: boUser.id,
-        },
-      })
+        } })
+      }
       assignmentCount++
     }
   }
@@ -248,21 +322,34 @@ export async function seedDevData(): Promise<{
 
   // === Default Payroll Rules ===
   console.log('Creating default payroll rules...')
-  await prisma.payrollRule.create({
-    data: {
+  const payrollRuleData = {
+    tenantId: tenant.id,
+    effectiveFrom: new Date('2024-01-01'),
+    otWeekdayMultiplier: 1.5,
+    otWeekendMultiplier: 2.0,
+    otHolidayMultiplier: 3.0,
+    mealAllowancePerDay: 30000,
+    phoneAllowance: 200000,
+    roundingMinutes: 15,
+    workingHoursPerDay: 8,
+    standardWorkingDaysPerMonth: 26,
+    updatedBy: adminUser.id,
+  }
+  const existingPayrollRule = await prisma.payrollRule.findFirst({
+    where: {
       tenantId: tenant.id,
-      effectiveFrom: new Date('2024-01-01'),
-      otWeekdayMultiplier: 1.5,
-      otWeekendMultiplier: 2.0,
-      otHolidayMultiplier: 3.0,
-      mealAllowancePerDay: 30000,
-      phoneAllowance: 200000,
-      roundingMinutes: 15,
-      workingHoursPerDay: 8,
-      standardWorkingDaysPerMonth: 26,
-      updatedBy: adminUser.id,
+      effectiveFrom: payrollRuleData.effectiveFrom,
     },
+    orderBy: { createdAt: 'asc' },
   })
+  if (existingPayrollRule) {
+    await prisma.payrollRule.update({
+      where: { id: existingPayrollRule.id },
+      data: payrollRuleData,
+    })
+  } else {
+    await prisma.payrollRule.create({ data: payrollRuleData })
+  }
 
   console.log('✅ Seed complete!')
   console.log('')

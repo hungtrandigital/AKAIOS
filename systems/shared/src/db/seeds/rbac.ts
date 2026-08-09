@@ -34,7 +34,7 @@ const PERMISSIONS: PermissionDef[] = [
   // projects
   { code: 'projects.view',   module: 'projects',  action: 'view',    description: 'Xem danh sách dự án' },
   { code: 'projects.create', module: 'projects',  action: 'create',  description: 'Tạo dự án mới' },
-  { code: 'projects.update', module: 'projects',  action: 'update',  description: 'Sửa thông tin dự án' },
+  { code: 'projects.update', module: 'projects',  action: 'update',  description: 'Sửa dự án và quản lý supervisor membership (BO/admin only)' },
   { code: 'projects.delete', module: 'projects',  action: 'delete',  description: 'Xoá / kết thúc dự án' },
 
   // attendance
@@ -51,6 +51,7 @@ const PERMISSIONS: PermissionDef[] = [
   { code: 'payroll.approve',  module: 'payroll', action: 'approve', description: 'Duyệt kỳ lương' },
   { code: 'payroll.export',   module: 'payroll', action: 'export',  description: 'Xuất Excel bảng lương' },
   { code: 'payroll.lock',     module: 'payroll', action: 'approve', description: 'Khoá kỳ lương (sau khi trả)' },
+  { code: 'payroll.rules.manage', module: 'payroll', action: 'manage', description: 'Cấu hình quy tắc tính lương' },
 
   // reports
   { code: 'reports.view',     module: 'reports', action: 'view',   description: 'Xem báo cáo khách hàng' },

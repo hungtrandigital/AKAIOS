@@ -1,5 +1,5 @@
 // Demo accounts seed — creates high-profile demo users for showcase + marketing.
-// Run AFTER `pnpm db:seed` (dev-seed.ts) to layer named demo users on top of 200 random employees.
+// Run AFTER dev-seed with `ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:demo`.
 //
 // Creates:
 //   - 1 CEO (Trần Minh CEO) — full read-only + executive dashboard
@@ -7,17 +7,119 @@
 //   - 1 Senior BO (Phạm Linh Senior BO)
 //   - 1 Junior BO (Nguyễn Trang Junior BO)
 //   - 3 Senior Supervisors (tên VN thật) — 1 cho mỗi dự án flagship
-//   - 5 Demo Employees (NV-DEMO-01..05) — dùng cho marketing demo
+//   - 5 Demo Employees (NV-DEMO-01..05) — each receives an open UAT schedule
+//     on today plus 13 following Mon-Sat working dates.
 //
 // All passwords are simple + memorable for showcase (NHƯNG KHÔNG dùng production).
 
-import { PrismaClient, UserRole, SalaryType } from '@prisma/client'
+import { PrismaClient, UserRole, SalaryType, ShiftAssignmentStatus } from '@prisma/client'
 import { hashPassword } from '../../auth/password.js'
-import { AK_TENANT_ID } from './dev-seed.js'
 
 const prisma = new PrismaClient()
+const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 
 const DEMO_PASSWORD = 'Demo@2026' // Uniform password for ALL demo accounts
+const UAT_SCHEDULE_DAYS = 14
+const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000
+
+const DEMO_EMPLOYEE_SCHEDULES = [
+  { employeeCode: 'NV-DEMO-01', projectCode: 'PRJ001', shiftName: 'Ca sáng' },
+  { employeeCode: 'NV-DEMO-02', projectCode: 'PRJ004', shiftName: 'Ca chiều' },
+  { employeeCode: 'NV-DEMO-03', projectCode: 'PRJ007', shiftName: 'Ca hành chính' },
+  { employeeCode: 'NV-DEMO-04', projectCode: 'PRJ001', shiftName: 'Ca tối' },
+  { employeeCode: 'NV-DEMO-05', projectCode: 'PRJ004', shiftName: 'Ca sáng' },
+] as const
+
+function assertDemoSeedAllowed(): void {
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    throw new Error('Refusing demo seed: set ALLOW_DEMO_SEED=true only for disposable development or controlled-UAT data')
+  }
+}
+
+function currentVietnamDateOnly(): Date {
+  const vietnamNow = new Date(Date.now() + VIETNAM_UTC_OFFSET_MS)
+  return new Date(Date.UTC(
+    vietnamNow.getUTCFullYear(),
+    vietnamNow.getUTCMonth(),
+    vietnamNow.getUTCDate(),
+  ))
+}
+
+function uatScheduleDates(start: Date, count: number): Date[] {
+  const dates: Date[] = []
+  const candidate = new Date(start)
+  while (dates.length < count) {
+    // Always include the requested start date so a Sunday deployment can still
+    // be exercised immediately; subsequent Sundays follow the Mon-Sat calendar.
+    if (dates.length === 0 || candidate.getUTCDay() !== 0) {
+      dates.push(new Date(candidate))
+    }
+    candidate.setUTCDate(candidate.getUTCDate() + 1)
+  }
+  return dates
+}
+
+async function seedEmployeeUatSchedules(assignedById: string): Promise<number> {
+  const dates = uatScheduleDates(currentVietnamDateOnly(), UAT_SCHEDULE_DAYS)
+  let created = 0
+
+  for (const schedule of DEMO_EMPLOYEE_SCHEDULES) {
+    const [employee, project, shift] = await Promise.all([
+      prisma.employee.findUnique({
+        where: {
+          tenantId_employeeCode: {
+            tenantId: AK_TENANT_ID,
+            employeeCode: schedule.employeeCode,
+          },
+        },
+      }),
+      prisma.project.findUnique({
+        where: {
+          tenantId_code: {
+            tenantId: AK_TENANT_ID,
+            code: schedule.projectCode,
+          },
+        },
+      }),
+      prisma.shift.findFirst({
+        where: {
+          tenantId: AK_TENANT_ID,
+          name: schedule.shiftName,
+          isActive: true,
+        },
+      }),
+    ])
+    if (!employee || !project || !shift) {
+      throw new Error(`Missing UAT schedule dependency for ${schedule.employeeCode}`)
+    }
+
+    for (const date of dates) {
+      const existingAssignment = await prisma.shiftAssignment.findFirst({
+        where: {
+          employeeId: employee.id,
+          date,
+          status: { not: ShiftAssignmentStatus.cancelled },
+        },
+      })
+      if (existingAssignment) continue
+
+      await prisma.shiftAssignment.create({
+        data: {
+          employeeId: employee.id,
+          projectId: project.id,
+          shiftId: shift.id,
+          date,
+          assignedById,
+          status: ShiftAssignmentStatus.scheduled,
+        },
+      })
+      created += 1
+    }
+  }
+
+  console.log(`Created ${created} missing open UAT assignments for today plus 13 following Mon-Sat dates`)
+  return created
+}
 
 const DEMO_ACCOUNTS = [
   // ===== EXECUTIVE =====
@@ -146,77 +248,140 @@ const DEMO_ACCOUNTS = [
   },
 ]
 
+async function assertDemoIdentityReservations(): Promise<void> {
+  const [existingUsers, existingEmployees] = await Promise.all([
+    prisma.user.findMany({
+      where: { phone: { in: DEMO_ACCOUNTS.map((account) => account.phone) } },
+      select: {
+        id: true,
+        tenantId: true,
+        phone: true,
+        employee: { select: { tenantId: true, employeeCode: true, userId: true } },
+      },
+    }),
+    prisma.employee.findMany({
+      where: {
+        tenantId: AK_TENANT_ID,
+        employeeCode: { in: DEMO_ACCOUNTS.map((account) => account.employeeCode) },
+      },
+      select: { tenantId: true, employeeCode: true, userId: true },
+    }),
+  ])
+  const usersByPhone = new Map(existingUsers.map((user) => [user.phone, user]))
+  const employeesByCode = new Map(existingEmployees.map((employee) => [employee.employeeCode, employee]))
+
+  for (const account of DEMO_ACCOUNTS) {
+    const user = usersByPhone.get(account.phone)
+    const employee = employeesByCode.get(account.employeeCode)
+    if (!user && !employee) continue
+
+    const identityMatches = user?.tenantId === AK_TENANT_ID
+      && employee?.tenantId === AK_TENANT_ID
+      && employee.userId === user.id
+      && user.employee?.tenantId === AK_TENANT_ID
+      && user.employee.employeeCode === account.employeeCode
+      && user.employee.userId === user.id
+    if (!identityMatches) {
+      throw new Error(
+        `Refusing demo seed: reserved identity collision for ${account.phone} / ${account.employeeCode}`,
+      )
+    }
+  }
+}
+
 async function createDemoAccounts() {
+  assertDemoSeedAllowed()
   console.log('Creating demo accounts...\n')
+  await assertDemoIdentityReservations()
   const passwordHash = await hashPassword(DEMO_PASSWORD)
+  const membershipAdmin = await prisma.user.findFirst({
+    where: { tenantId: AK_TENANT_ID, role: UserRole.system_admin, status: 'active' },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (!membershipAdmin) throw new Error('Seeded system admin required before demo project memberships')
 
-  for (const acc of DEMO_ACCOUNTS) {
-    // Upsert user
-    const user = await prisma.user.upsert({
-      where: { phone: acc.phone },
-      update: {
-        email: acc.email ?? undefined,
-        role: acc.role,
-      },
-      create: {
-        tenantId: AK_TENANT_ID,
-        phone: acc.phone,
-        email: acc.email ?? null,
-        passwordHash,
-        role: acc.role,
-      },
-    })
+  const identities = await prisma.$transaction(async (tx) => {
+    const seeded = []
+    for (const acc of DEMO_ACCOUNTS) {
+      const user = await tx.user.upsert({
+        where: { phone: acc.phone },
+        update: {
+          email: acc.email ?? undefined,
+          // Controlled-UAT seed is intentionally authoritative for every demo
+          // identity. Re-applying it must repair credentials left by an older
+          // seed version instead of only refreshing employee passwords.
+          passwordHash,
+          role: acc.role,
+          status: 'active',
+        },
+        create: {
+          tenantId: AK_TENANT_ID,
+          phone: acc.phone,
+          email: acc.email ?? null,
+          passwordHash,
+          role: acc.role,
+        },
+      })
+      const employee = await tx.employee.upsert({
+        where: { tenantId_employeeCode: { tenantId: AK_TENANT_ID, employeeCode: acc.employeeCode } },
+        update: {
+          fullName: acc.fullName,
+          baseSalary: acc.baseSalary.toString(),
+          status: 'active',
+        },
+        create: {
+          tenantId: AK_TENANT_ID,
+          userId: user.id,
+          employeeCode: acc.employeeCode,
+          fullName: acc.fullName,
+          hireDate: new Date('2024-01-01'),
+          baseSalary: acc.baseSalary.toString(),
+          salaryType: SalaryType.monthly,
+        },
+      })
+      seeded.push({ user, employee })
+    }
+    return seeded
+  }, { maxWait: 10_000, timeout: 30_000 })
 
-    // Upsert employee (link to user)
-    const employee = await prisma.employee.upsert({
-      where: { tenantId_employeeCode: { tenantId: AK_TENANT_ID, employeeCode: acc.employeeCode } },
-      update: {
-        fullName: acc.fullName,
-        baseSalary: acc.baseSalary.toString(),
-      },
-      create: {
-        tenantId: AK_TENANT_ID,
-        userId: user.id,
-        employeeCode: acc.employeeCode,
-        fullName: acc.fullName,
-        hireDate: new Date('2024-01-01'),
-        baseSalary: acc.baseSalary.toString(),
-        salaryType: SalaryType.monthly,
-      },
-    })
+  for (let index = 0; index < DEMO_ACCOUNTS.length; index += 1) {
+    const acc = DEMO_ACCOUNTS[index]!
+    const { user, employee } = identities[index]!
 
-    // For supervisors, link to their flagship project (assign as project supervisor via shift assignment today)
+    // Demo supervisors receive explicit, idempotent project membership.
     if ('projectCode' in acc && acc.projectCode) {
       const project = await prisma.project.findUnique({
         where: { tenantId_code: { tenantId: AK_TENANT_ID, code: acc.projectCode } },
       })
       if (project) {
+        await prisma.projectSupervisor.upsert({
+          where: { projectId_userId: { projectId: project.id, userId: user.id } },
+          update: { assignedById: membershipAdmin.id },
+          create: {
+            projectId: project.id,
+            userId: user.id,
+            assignedById: membershipAdmin.id,
+          },
+        })
         // Create a "supervisor on duty" assignment for today
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
+        const today = currentVietnamDateOnly()
         const morningShift = await prisma.shift.findFirst({
-          where: { name: 'Ca sáng' },
+          where: { tenantId: AK_TENANT_ID, name: 'Ca sáng' },
         })
         if (morningShift) {
-          await prisma.shiftAssignment.upsert({
-            where: {
-              employeeId_projectId_shiftId_date: {
-                employeeId: employee.id,
-                projectId: project.id,
-                shiftId: morningShift.id,
-                date: today,
-              },
-            },
-            update: {},
-            create: {
+          const existingAssignment = await prisma.shiftAssignment.findFirst({
+            where: { employeeId: employee.id, date: today, status: { not: 'cancelled' } },
+          })
+          if (!existingAssignment) {
+            await prisma.shiftAssignment.create({ data: {
               employeeId: employee.id,
               projectId: project.id,
               shiftId: morningShift.id,
               date: today,
-              assignedById: user.id,
+              assignedById: membershipAdmin.id,
               status: 'scheduled',
-            },
-          })
+            } })
+          }
         }
       }
     }
@@ -234,6 +399,8 @@ async function createDemoAccounts() {
     console.log(`           Note: ${acc.note}`)
     console.log('')
   }
+
+  await seedEmployeeUatSchedules(membershipAdmin.id)
 
   console.log('======================================')
   console.log(`✅ ${DEMO_ACCOUNTS.length} demo accounts created/updated`)

@@ -9,6 +9,8 @@ Active DevOps documentation for AKAIUNSAN's on-premise deployment of attendance 
 ### Key Documents
 
 - **[server-steps.md](server-steps.md)** — On-premises deployment runbook (Ubuntu 22.04 + Docker Compose + Cloudflare Tunnel)
+- **[windows-docker-deployment.md](windows-docker-deployment.md)** — Windows 10/11 + Docker Desktop/WSL2 local or controlled-UAT deploy from an exact reviewed Git SHA
+- **[windows-docker.ps1](windows-docker.ps1)** — Guarded Windows validate/install/update/reseed/status/start/stop automation
 - **[local-config/](local-config/)** — Local development configuration (gitignored)
 
 ## Configuration
@@ -20,8 +22,18 @@ Active DevOps documentation for AKAIUNSAN's on-premise deployment of attendance 
 
 ### Server Configuration
 - Production server setup (single Ubuntu host, Docker Compose stack)
-- PostgreSQL + Redis + MinIO + 3 backend services + Caddy
+- PostgreSQL + Redis + MinIO + 2 API services + web admin + Caddy
 - Cloudflare Tunnel for external access
+
+### Windows Local / UAT
+
+- The approved production/pilot baseline remains Ubuntu 22.04 under ADR-002.
+- Windows 10/11 is supported only as a local or controlled-UAT Docker Desktop
+  host using Linux containers and the required thin Compose override.
+- Git transports code, migrations, and seed scripts. Seed-only Windows data may
+  be owner-approved for a clean rebuild; production/pilot data may not.
+- The Windows automation does not configure the public tunnel, firewall, remote
+  Docker access, Git push, or volume cleanup.
 
 ## Deployment
 
@@ -29,21 +41,29 @@ Active DevOps documentation for AKAIUNSAN's on-premise deployment of attendance 
 1. Provision Ubuntu 22.04 server (Dell OptiPlex / used server)
 2. Install Docker + Docker Compose
 3. Clone AKAIOS repo + create `.env` with secrets (`openssl rand -hex 32`)
-4. Run Prisma migrations
-5. (Optional) Run seed data
-6. `docker compose up -d`
-7. Configure Cloudflare Tunnel for external access
+4. Build lockfile-backed production artifacts, tag the exact release SHA, and run the one-shot Prisma migration service
+5. Run the mandatory idempotent RBAC seed
+6. For upgrades, reconcile legacy manual allowance overrides before recalculation
+7. Provision real production operators and enroll TOTP; never run demo seeds on production/pilot
+8. `docker compose up -d`
+9. Configure Caddy's HTTP origin hosts and Cloudflare Tunnel
 
 See **[server-steps.md](server-steps.md)** for step-by-step runbook.
+For the existing seed-only Windows UAT host, follow
+**[windows-docker-deployment.md](windows-docker-deployment.md)** instead of
+adapting Bash/Linux commands ad hoc.
 
 ### CI/CD Pipeline
 
-`.github/workflows/ci.yml` runs on every push/PR:
+`.github/workflows/ci.yml` runs for pushes to `main` and pull requests targeting `main`:
 - Lint
 - Typecheck (TypeScript strict)
 - Unit tests (Vitest)
 - Build
 - Integration tests (with services, requires Docker)
+- Browser E2E with fresh migrations, seeded TOTP admins, and live services
+- Flutter format, analysis, tests, and Android debug APK build
+- Windows Compose merge validation and PowerShell syntax validation
 
 ## Monitoring
 
@@ -55,7 +75,7 @@ See **[server-steps.md](server-steps.md)** for step-by-step runbook.
 | `GET /health/ready` | Readiness probe (checks DB + Redis + MinIO) | 200 if all checks OK, 503 otherwise |
 
 ### Monitoring Strategy (MVP)
-- UptimeRobot free tier polls `/health/ready` every 5 min
+- A host-local systemd timer or equivalent polls both `/health/ready` endpoints every 5 minutes; the current Caddy routes do not expose them externally
 - Slack/Telegram webhook alert on failures
 
 ### Future (after MVP)
@@ -64,8 +84,8 @@ See **[server-steps.md](server-steps.md)** for step-by-step runbook.
 
 ## Disaster Recovery
 
-- **RTO:** 4 hours (restore from backup VPS)
-- **RPO:** 24 hours (daily `pg_dump` + MinIO sync)
+- **RTO objective:** 4 hours (unvalidated until a recorded isolated restore drill passes)
+- **RPO objective:** 24 hours (unvalidated until scheduled PostgreSQL and MinIO backups pass)
 - See server-steps.md "Disaster Recovery" section for runbook
 
 ## Related Documents
@@ -74,4 +94,3 @@ See **[server-steps.md](server-steps.md)** for step-by-step runbook.
 - **[Server Steps](server-steps.md)** — Detailed deployment procedures
 - **[ADRs](../../8-governance/decision-log/)** — ADR-002 (on-prem hosting), ADR-004 (repo file placement)
 - **[Operations Monitoring](../../7-operations-monitoring/README.md)** — Post-deployment monitoring
-

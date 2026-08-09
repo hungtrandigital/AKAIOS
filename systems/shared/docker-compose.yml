@@ -1,6 +1,7 @@
 # Full production Docker Compose for AKAIUNSAN attendance + payroll.
 # Hosts both Fastify backends + Next.js web-admin + Postgres + Redis + MinIO
-# on a single on-premise server. Caddy reverse proxy terminates TLS.
+# on a single on-premise server. Caddy serves a private HTTP origin and
+# Cloudflare Tunnel terminates public TLS in the documented deployment.
 #
 # Usage on production server:
 #   1. Copy .env.example to .env and fill real secrets
@@ -23,12 +24,17 @@ services:
     container_name: ak-attendance-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - ../../.env
     environment:
       - NODE_ENV=production
       - ATTENDANCE_API_PORT=3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ak_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-ak_main}?schema=public
+      - REDIS_URL=redis://redis:6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT:?MINIO_PUBLIC_ENDPOINT must be set}
+      - TRUSTED_PROXY=loopback,linklocal,uniquelocal
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +42,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     networks:
       - ak-net
     healthcheck:
@@ -59,13 +67,15 @@ services:
     container_name: ak-payroll-api
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     env_file:
       - ../../.env
     environment:
       - NODE_ENV=production
       - PAYROLL_API_PORT=3001
       - ATTENDANCE_API_URL=http://attendance-api:3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ak_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-ak_main}?schema=public
+      - REDIS_URL=redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,6 +123,30 @@ services:
           memory: 4G
 
   # =====================================================
+  # DATABASE MIGRATIONS (runs once before APIs start)
+  # =====================================================
+  db-migrate:
+    build:
+      context: ../..
+      dockerfile: systems/attendance/backend/Dockerfile
+      target: migration
+    restart: "no"
+    env_file:
+      - ../../.env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ak_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-ak_main}?schema=public
+    command:
+      - ./systems/shared/node_modules/.bin/prisma
+      - migrate
+      - deploy
+      - --schema=systems/shared/src/db/prisma/schema.prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ak-net
+
+  # =====================================================
   # CACHE
   # =====================================================
   redis:
@@ -156,7 +190,7 @@ services:
       retries: 3
 
   # =====================================================
-  # WEB ADMIN (Next.js 14)
+  # WEB ADMIN (Next.js 15)
   # =====================================================
   web-admin:
     build:
@@ -168,7 +202,7 @@ services:
     container_name: ak-web-admin
     restart: unless-stopped
     ports:
-      - "3002:3002"
+      - "127.0.0.1:3002:3002"
     env_file:
       - ../../.env
     environment:
@@ -194,15 +228,16 @@ services:
           memory: 512M
 
   # =====================================================
-  # REVERSE PROXY + TLS
+  # REVERSE PROXY (public TLS terminates at Cloudflare Tunnel)
   # =====================================================
   caddy:
     image: caddy:2-alpine
     container_name: ak-caddy
     restart: unless-stopped
+    environment:
+      - CADDY_STORAGE_HOST=${CADDY_STORAGE_HOST:?CADDY_STORAGE_HOST must be set}
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - /data/caddy/data:/data

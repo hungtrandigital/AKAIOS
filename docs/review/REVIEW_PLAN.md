@@ -1,0 +1,1 @@
+Archived: [PRD-EPIC-002 review plan](../../archives/2026-07-17-prd-epic-002-review-plan/review-plan.md). Active scope and result: [canonical review report](../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md).

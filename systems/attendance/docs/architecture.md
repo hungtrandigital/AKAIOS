@@ -1,137 +1,122 @@
 # Attendance System — Architecture
 
-**Status:** Phase 0 — Architecture defined (PRD-EPIC-002)
-**Last Updated:** 2026-07-16
+**Status:** Implemented; local remediation/review gate GO (PRD-EPIC-002)
+
+**Last Updated:** 2026-07-18
+
 **Owner:** @system-architecture + @fullstack-engineer
 
-## Cross-Cutting Reference
+## Cross-Cutting References
 
-This system follows the shared architecture defined in:
-- [Infrastructure](../../3-technical/3.1-system-foundation/infrastructure.md) — Tech stack, on-prem setup
-- [System Design](../../3-technical/3.1-system-foundation/design-standards/system-design.md) — C4 diagrams
-- [Domain Specs](../../3-technical/3.1-system-foundation/architecture/domain-specs.md) — DDD aggregates and business rules
-- [API Contracts](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml) — REST endpoints
-- [Coding Standards](../../3-technical/3.1-system-foundation/design-standards/coding-standards.md) — TS/Flutter conventions
+- [Infrastructure](../../../3-technical/3.1-system-foundation/infrastructure.md)
+- [System design](../../../3-technical/3.1-system-foundation/design-standards/system-design.md)
+- [Domain specs](../../../3-technical/3.1-system-foundation/architecture/domain-specs.md)
+- [OpenAPI contract](../../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
+- [Coding standards](../../../3-technical/3.1-system-foundation/design-standards/coding-standards.md)
 
-This document adds **attendance-specific** architectural details only.
+## Purpose and Boundaries
 
-## System Purpose
-
-Manages employee check-in/out at 15 project sites via mobile app, with real-time visibility for supervisors and customer-facing reports.
+Attendance owns employee check-in/out, shifts, project geofences, supervisor
+membership, attendance overrides, photos, and customer reports. Payroll reads a
+tenant-scoped attendance projection through the authenticated internal API; it
+does not write attendance data.
 
 ## Components
 
-### Mobile App (Flutter)
+### Flutter mobile app
 
-- **State management:** Riverpod 2.x
-- **Auth:** Phone + password (or OTP); JWT in `flutter_secure_storage`
-- **Camera/GPS plugins:** `image_picker`, `geolocator`
-- **Offline support (Phase 3+):** queue failed check-ins, sync when online
-- **Localization:** Vietnamese (default), English (optional)
+- Riverpod providers live outside the presentation layer.
+- Employee login supports password or Redis-backed SMS OTP.
+- Native access and refresh tokens are stored with `flutter_secure_storage` and
+  rotated through a single-flight refresh path. Logout removes both tokens.
+- Check-in/out obtains GPS accuracy and a bounded JPEG, then sends the photo as
+  base64 JSON to the API. The API owns geofence enforcement and MinIO storage.
+- Android and iOS native projects include camera/location permissions. Android
+  permits cleartext only in debug; release builds require HTTPS and a real signing
+  configuration. iOS permits insecure networking only for localhost development.
+- Vietnamese and English localization sources are generated from ARB files.
 
-**Key screens:**
-1. Login (phone + password OR phone + OTP)
-2. Today — show today's assignment (shift, project, time)
-3. Check-in — button → request GPS → take photo → upload
-4. Check-out — same flow
-5. History — list of my recent check-ins/outs
+### Attendance API
 
-### Backend API (Fastify)
+Fastify mounts these route groups:
 
-**Routes (from openapi.yaml):**
-- `/v1/auth/*` — login, OTP, refresh (shared with payroll)
-- `/v1/employees/*` — CRUD
-- `/v1/projects/*` — CRUD with geofence config
-- `/v1/shifts/*` — shift template + assignment CRUD
-- `/v1/attendance/check-in`, `/v1/attendance/check-out`, `/v1/attendance/records`
-- `/v1/reports/customer` — generate customer report (PDF/CSV)
-- `/internal/attendance` — internal endpoint for payroll
+- `/v1/auth`: employee password/OTP login, admin password challenge, TOTP verify,
+  refresh, logout, and current-user lookup.
+- `/v1/attendance`: today's assignment, check-in, check-out, and scoped records.
+- `/v1/projects`: scoped project reads/creation plus audited supervisor
+  membership grant/revoke.
+- `/v1/employees`, `/v1/shifts`, `/v1/reports`, and `/v1/rbac`: permission-gated
+  administration and reporting.
+- `/internal/attendance`: service-to-service payroll projection protected by the
+  internal API key and tenant/period inputs.
 
-**Services:**
-- `AttendanceService` — recordCheckIn(), recordCheckOut(), calculateStatus()
-- `ScheduleService` — assignShift(), detectConflict()
-- `GeoService` — GPS validation (BR-ATT-001)
-- `PhotoService` — uploadToMinIO(), getPresignedUrl()
-- `ReportService` — generateCustomerPDF(), generateCSV()
+Authorization combines RBAC permissions, tenant predicates, and explicit
+`ProjectSupervisor` membership. Supervisor-facing responses use safe DTOs and do
+not expose password hashes, bank data, or unrelated employee PII.
 
-**Background Jobs (BullMQ):**
-- `cleanup-stale-checkins` — daily, marks assignments without check-out after 4 hours (await supervisor manual add)
-- `report-cleanup` — weekly, removes old report files from MinIO (>12 months)
+### Auth and concurrency state
 
-### Data Layer
+- Admin TOTP secrets are AES-256-GCM encrypted with versioned keys.
+- Redis stores single-use employee OTP challenges and abuse-control counters.
+- Refresh tokens are hashed in PostgreSQL and rotated with compare-and-swap;
+  replay revokes the token family.
+- Check-in/out and override operations use database transactions and conditional
+  writes so duplicate requests cannot create incoherent records.
 
-PostgreSQL tables (subset — see Domain Specs for full):
-- `users` — shared with payroll (Identity context)
-- `employees` — shared with payroll
-- `tenants` — multi-tenant ready
-- `projects` — with `latitude`, `longitude`, `geofenceRadiusMeters`
-- `shifts` — shift templates
-- `shift_assignments` — date × employee × project × shift
-- `attendance_records` — check-in/out + GPS + photo URLs + status
+### Storage and data
 
-## Key Business Rules (BR)
+PostgreSQL is shared physically with Payroll but bounded by tenant-aware models.
+Relevant tables include tenants, users, TOTP credentials, refresh tokens,
+employees, projects, project supervisors, shifts, assignments, attendance
+records, generated reports, permissions, role mappings, and audit logs.
 
-See [Domain Specs — Attendance](../../3-technical/3.1-system-foundation/architecture/domain-specs.md#business-rules-attendance) for full list. Top rules encoded in code:
+Check-in photo keys use a date/attendance-record/random UUID layout inside the
+private `attendance-photos` bucket. Customer-report keys include tenant, project,
+and report IDs. The API validates decoded JPEG size/type and returns short-lived
+presigned access rather than public object paths; authorization is enforced before
+records or report metadata are returned.
 
-| ID | Rule | Implementation |
-| --- | --- | --- |
-| BR-ATT-001 | GPS in geofence | `GeoService.isWithinRadius()` called in `/v1/attendance/check-in` route |
-| BR-ATT-002 | Late threshold | `AttendanceService.calculateStatus()` compares checkInAt to shift.startTime + lateThresholdMinutes |
-| BR-ATT-004 | No double check-in/out | Service checks `attendanceRecord.checkInAt === null` before allowing check-in |
-| BR-ATT-005 | Photo required | Schema validation in route rejects requests with `photoBase64 === null` |
-| BR-ATT-007 | Project geofence required | Project create/update enforces `latitude && longitude && geofenceRadiusMeters` |
-| BR-ATT-008 | Past date check-in | Route checks `assignment.date >= today - 7 days` |
+No BullMQ worker is shipped in the MVP. Cleanup/retention automation remains a
+future operational enhancement and must not be assumed by the deployment.
+
+## Core Invariants
+
+- Server-side Haversine distance must satisfy the configured project geofence.
+  Device accuracy is retained as evidence/telemetry and never expands or bypasses
+  that radius; no separate accuracy threshold is enforced in the MVP.
+- The server computes Vietnam work dates and shift boundaries; mobile timestamps
+  are evidence, not authority.
+- A shift assignment can have at most one coherent check-in/check-out sequence.
+- Checkout and overrides recompute status, worked minutes, late minutes, and OT
+  minutes together.
+- Manual changes require role/project scope and produce an audit record.
+- Customer reports and their object keys are tenant/project scoped. Photo records
+  are tenant/project-authorized through attendance data even though their private
+  bucket keys do not repeat those IDs.
+
+## Validation
+
+- Attendance unit tests: 43/43.
+- Fresh-database integration: 7/7, including auth replay, project scope, and
+  attendance concurrency.
+- Coverage: 100% statements/lines/functions and 96.15% branches.
+- Flutter 3.24.5: localization generation, analysis, 3/3 tests, and Android debug
+  APK build pass. iOS native compilation still requires a full Xcode/CocoaPods
+  and signing environment.
+- Live web-admin E2E: 7/7 against fresh migrations and seeded TOTP users.
 
 ## Deployment
 
-- Single Docker container `attendance-api` (Fastify)
-- Reads env vars: `DATABASE_URL`, `REDIS_URL`, `MINIO_*`, `JWT_SECRET`, `INTERNAL_API_KEY`
-- Exposed via Caddy at `https://ak-tunnel.example.com/api/v1/attendance/*`
-- MinIO bucket: `attendance-photos` (lifecycle: 12 months to cold storage)
+The production stack uses the Attendance Dockerfile, shared Compose file, Caddy,
+PostgreSQL 16, Redis 7, and MinIO. Required security configuration includes
+independent JWT/internal/TOTP keys, trusted-proxy boundaries, HTTPS, and SpeedSMS
+credentials; production refuses mock SMS mode.
 
-## Internal API (for Payroll)
+Follow the [on-premise runbook](../../../3-technical/3.3-devops/server-steps.md).
 
-`GET /internal/attendance?employeeId=X&from=Y&to=Z`
-- Auth: `X-Internal-API-Key` header
-- Returns: list of `AttendanceRecord` for the period
-- Used by Payroll system to fetch data for payroll calculation
+## Future Enhancements
 
-## Testing Strategy
-
-- Unit tests (Vitest): all services + value objects
-- Integration tests (Vitest + testcontainers): all routes with real Postgres/Redis/MinIO
-- E2E tests (Playwright): login → check-in → check-out flow
-- Widget tests (Flutter): login screen, check-in flow
-- Coverage: target ≥90%, 100% for `AttendanceService` and `GeoService`
-
-## Development Workflow
-
-```bash
-# Run tests
-pnpm test          # all
-pnpm test:unit     # unit only
-pnpm test:e2e      # Playwright
-
-# Lint + typecheck
-pnpm lint
-pnpm typecheck
-
-# DB migration
-pnpm prisma migrate dev
-
-# Build Docker image
-docker build -t attendance-api:latest .
-```
-
-## Future Enhancements (out of MVP)
-
-- Offline mode with retry queue
-- Face recognition / liveness detection
-- Push notifications via FCM
-- Customer-facing real-time dashboard
-- Geofence polygon (vs circle) for complex site shapes
-
-## Related Documents
-
-- [PRD-EPIC-002 Plan](../../3-technical/3.2-implementation/plans/active/PRD-EPIC-002.md)
-- [System Design](../../3-technical/3.1-system-foundation/design-standards/system-design.md#attendance-system-components)
+- Offline retry queue with explicit conflict semantics.
+- Push notifications and scheduled retention workers.
+- Face/liveness checks and polygon geofences.
+- Customer-facing real-time portal.

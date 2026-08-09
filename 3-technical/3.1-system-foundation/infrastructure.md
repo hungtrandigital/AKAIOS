@@ -1,188 +1,157 @@
-# Infrastructure — AKAIUNSAN Attendance + Payroll Systems
+# Infrastructure — AKAIUNSAN Attendance + Payroll
 
-**Status:** Active — Phase 0 deliverable for PRD-EPIC-002
-**Last Updated:** 2026-07-16
-**Owner:** @system-architecture
-**Related ADRs:** [adr-001-tech-stack](../architecture/api-contracts/../../../../8-governance/decision-log/adr-001-tech-stack.md), [adr-002-on-premise](../architecture/api-contracts/../../../../8-governance/decision-log/adr-002-on-premise.md)
+**Status:** Implemented repository topology; production operations and pilot evidence pending
 
-## Overview
+**Last Updated:** 2026-08-09
 
-This document describes the on-premise infrastructure hosting the **attendance** and **payroll** systems for AKAIUNSAN. Both systems share the same infrastructure (single server, single Postgres database, shared authentication) but are independently deployed as separate Docker Compose services to enable independent scaling and reuse.
+**Owner:** @system-architecture + @devops
 
-## Hosting Model
+**Related ADRs:** [ADR-001: Tech Stack](../../8-governance/decision-log/adr-001-tech-stack.md), [ADR-002: On-Premise Hosting](../../8-governance/decision-log/adr-002-on-premise.md)
 
-**Decision:** On-premise single server (user-approved). See ADR-002.
+## Scope
 
-- **Why on-prem:** Data residency in VN, low latency to 15 project sites, no recurring cloud cost, full control over backups.
-- **Trade-off:** We own hardware reliability, network uptime, and physical security. Mitigations: redundant storage, Cloudflare Tunnel for failover-friendly remote access, quarterly backup restore drills.
+This document describes what the repository ships for the single-host
+Attendance/Payroll deployment and separates it from operator-owned production
+targets. The stack has been built and configuration-validated locally; no live
+server, backup schedule, restore drill, load test, or pilot has been accepted yet.
 
-## Server Specification (Recommended Baseline)
+## Shipped Stack
 
-| Component | Spec | Rationale |
+| Component | Image/runtime | Host binding / role |
 | --- | --- | --- |
-| OS | Ubuntu 22.04 LTS | Long support, mature Docker support, easy to hire sysadmins in VN |
-| CPU | 4 vCPU (Intel Xeon or AMD EPYC) | Sufficient for backend + Postgres + MinIO concurrent load at 200 users |
-| RAM | 16 GB | Postgres 4 GB + Redis 1 GB + MinIO 2 GB + Backend 1 GB + Web 1 GB + headroom 7 GB |
-| Storage | 500 GB SSD (NVMe preferred) | Postgres ~50 GB/year at 200 users × 30 check-ins/day × 12 months + photos ~200 GB/year |
-| Backup storage | External USB HDD 1 TB (rotated weekly) OR 1× backup VPS (e.g., Vultr $6/mo) | Off-site backup for disaster recovery |
-| Network | Static IP (preferred) OR dynamic + Cloudflare Tunnel | Mobile app needs stable address |
-| Power | UPS 1000 VA minimum | Survive 30-min outages without data loss |
+| Attendance API | Node 20, Fastify, TypeScript | `127.0.0.1:3000`; auth, attendance, projects, reports, internal attendance projection |
+| Payroll API | Node 20, Fastify, TypeScript | `127.0.0.1:3001`; synchronous transactional payroll and XLSX export |
+| Web admin | Next.js 15 | `127.0.0.1:3002`; same-origin rewrites to both APIs |
+| PostgreSQL | PostgreSQL 16 | `127.0.0.1:5432`; shared physical schema and durable refresh-token records |
+| Redis | Redis 7 | `127.0.0.1:6379`; OTP/TOTP challenge state, abuse controls, and readiness checks—not payroll jobs |
+| MinIO | pinned MinIO release | `127.0.0.1:9000/9001`; private photos and generated reports |
+| Caddy | Caddy 2 | origin reverse proxy; public TLS terminates at Cloudflare Tunnel |
+| Mobile | Flutter 3.24.5 | Android debug APK validated; iOS release signing and physical-device validation pending |
 
-**Cost estimate (one-time + monthly):**
-- Server hardware: ~$800-1500 USD one-time (refurbished Dell OptiPlex or used server)
-- UPS: ~$100 USD one-time
-- Internet: existing office connection (assumed)
-- Cloudflare Tunnel: free (or $5/mo for advanced features)
-- Total recurring: ~$0-10 USD/month
+There is no BullMQ worker, Redis event bus, Prometheus/Grafana stack, centralized
+log collector, automatic retention worker, or offline mobile queue in the MVP.
 
-## Tech Stack
+## Network Topology
 
-| Layer | Technology | Version | Why |
-| --- | --- | --- | --- |
-| Mobile (employee) | Flutter | 3.24+ (Dart 3.5+) | Single codebase iOS + Android, strong camera/GPS libraries |
-| Backend API | Node.js + Fastify + TypeScript | Node 20 LTS | Async I/O, large ecosystem, type-safe, fast iteration |
-| Web admin | Next.js | 14.x (App Router) | React + SSR + TS, fast build, easy Docker deploy |
-| Database | PostgreSQL | 16 | Relational integrity for HR/payroll, JSONB for flexible fields |
-| ORM | Prisma | 5.x | Type-safe queries, migrations, strong TS integration |
-| Cache / queue | Redis | 7 | Sessions, BullMQ for payroll jobs |
-| Object storage | MinIO | RELEASE.2024+ | S3-compatible, self-hosted, on-prem friendly |
-| Reverse proxy + TLS | Caddy | 2.x | Auto HTTPS, simple config, low memory |
-| External access | Cloudflare Tunnel | free tier | Static URL, no port forwarding, DDoS protection |
-| Container runtime | Docker Engine + Compose | 24+ / v2 | Standard, well-documented |
-| CI | GitHub Actions or Gitea Actions | latest | Per repo host |
-
-## Network Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Internet                                                            │
-└────────┬──────────────────────────────────────┬─────────────────────┘
-         │ HTTPS                               │ HTTPS
-         │ (api.ak.internal)                    │ (admin.ak.internal)
-         │                                      │
-┌────────▼──────────────────────────────────────▼─────────────────────┐
-│  Cloudflare Tunnel (ak-tunnel)                                       │
-│  - Free, no port forwarding on office router                        │
-│  - DDoS protection                                                   │
-│  - TLS termination                                                   │
-└────────┬────────────────────────────────────────────────────────────┘
-         │ HTTP (internal)
-┌────────▼────────────────────────────────────────────────────────────┐
-│  Caddy (port 80, 443) on 127.0.0.1                                   │
-│  - Routes /api/*  → backend:3000                                     │
-│  - Routes /*      → web-admin:3001                                   │
-│  - Auto-renew Let's Encrypt certs via Cloudflare DNS challenge      │
-└────────┬──────────────────────────────────────┬─────────────────────┘
-         │                                      │
-┌────────▼──────────────┐              ┌───────▼──────────────┐
-│  Backend (Fastify)    │              │  Web Admin (Next.js)  │
-│  Port 3000            │              │  Port 3001            │
-│  Container: backend   │              │  Container: web-admin │
-└────────┬──────────────┘              └───────────────────────┘
-         │
-         │ TCP
-┌────────▼───────────────────────────────────────────────────────────┐
-│  Docker Compose private network (172.20.0.0/16)                     │
-│  - postgres:5432                                                    │
-│  - redis:6379                                                       │
-│  - minio:9000 (API), :9001 (console)                                │
-└────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Mobile[Flutter mobile] -->|HTTPS /api/attendance/v1/*| CF[Cloudflare Tunnel]
+    Browser[BO/admin browser] -->|HTTPS| CF
+    CF -->|HTTP origin :80| Caddy
+    Caddy -->|strip /api/attendance| Attendance[attendance-api :3000]
+    Caddy --> Web[web-admin :3002]
+    Web -->|same-origin rewrite| Attendance
+    Web -->|same-origin rewrite| Payroll[payroll-api :3001]
+    Payroll -->|/internal/attendance + key + tenantId| Attendance
+    Attendance --> PG[(PostgreSQL 16)]
+    Payroll --> PG
+    Attendance --> Redis[(Redis 7)]
+    Attendance --> MinIO[(MinIO)]
+    Storage[storage hostname] -->|Cloudflare → Caddy| MinIO
 ```
 
-**Why Cloudflare Tunnel:** Avoids opening ports on office router, no static IP needed, provides stable hostname even if ISP changes IP, free DDoS protection.
+Only the main application hostname and separate storage hostname are public.
+Payroll is reached by web-admin rewrites. The internal attendance endpoint stays
+on the private Compose network and requires `X-Internal-API-Key` plus `tenantId`,
+`employeeId`, and a bounded date range.
 
-## Storage
+## Host Baseline (Recommendation, Not Validation)
 
-### Database (PostgreSQL 16)
-- Default storage path `/var/lib/postgresql/data` (inside container, mounted to host `/data/postgres`)
-- Daily `pg_dump` to `/data/backups/postgres/` (host)
-- Daily rsync to backup VPS
-- WAL archiving enabled (point-in-time recovery)
-- Retention: 90 days daily backups, 12 months monthly backups
-
-### Object Storage (MinIO)
-- Bucket `attendance-photos/` for check-in photos
-- Bucket `reports/` for generated customer report PDFs
-- Lifecycle policy: photos older than 12 months move to cold storage bucket (manual setup Phase 6)
-- Daily bucket sync to backup VPS
-
-### File System Layout on Server
-```
-/data/
-├── postgres/         # Postgres data dir (mounted from container)
-├── minio/            # MinIO data dir (mounted from container)
-├── redis/            # Redis dump + AOF
-├── backups/
-│   ├── postgres/    # Daily pg_dump files
-│   ├── minio/       # Daily MinIO bucket snapshots
-│   └── configs/      # Snapshots of docker-compose.yml, .env, Caddy config
-└── logs/
-    ├── backend/
-    ├── web-admin/
-    └── caddy/
-```
-
-## Security
-
-| Concern | Mitigation |
+| Resource | Starting recommendation |
 | --- | --- |
-| TLS | All external traffic terminated at Cloudflare Tunnel with TLS 1.2+; internal traffic between Caddy and backend stays on private Docker network (no TLS for performance, but not exposed externally) |
-| Authentication | JWT access tokens (15 min TTL) + refresh tokens (30 days, httpOnly cookie); employees use phone+OTP or phone+password; admins use email+password+2FA (TOTP via Google Authenticator) |
-| Authorization | RBAC roles: `employee`, `supervisor`, `bo_admin`, `system_admin`; per-endpoint permission checks in Fastify middleware |
-| Password hashing | Argon2id (memory=64MB, iterations=3, parallelism=4) |
-| Secrets management | `.env` file on server, mode 600, never committed; for dev, `.env.example` checked in |
-| Rate limiting | Fastify rate-limit plugin: 100 req/min per IP for unauthenticated, 600 req/min per user for authenticated |
-| Audit logging | All admin actions (override attendance, payroll approve, user CRUD) logged to `audit_log` table with actor, action, target, timestamp, IP |
-| Photo privacy | Photos stored in MinIO with presigned URLs (5 min expiry); no public bucket access |
-| Database access | Postgres not exposed externally; only backend container can connect |
-| Firewall | UFW allow only SSH (from admin IP), deny all incoming otherwise |
-| Backup encryption | Optional: encrypt backup files with age/gpg before rsync to VPS |
+| OS | Ubuntu 22.04 LTS |
+| CPU / RAM | 4 vCPU / 16 GB |
+| Storage | 500 GB NVMe plus a separate backup target |
+| Power | UPS sized for a controlled shutdown |
+| Network | Stable outbound HTTPS; no inbound application ports required with the tunnel |
 
-## Observability
+Capacity figures are planning assumptions. The repository has not been load-tested
+for 200 concurrent users or measured against a P95 latency/availability SLO.
 
-- **Logs:** All containers log to stdout, collected by Docker to `/data/logs/<service>/` via json-file driver with rotation (max 10 MB × 5 files)
-- **Metrics:** Phase 2+ : Add Prometheus + Grafana (later, not MVP); for MVP, use Postgres slow query log + manual checks
-- **Alerts:** Phase 2+ : Simple health check endpoint `/health` polled by external uptime monitor (e.g., UptimeRobot free tier)
-- **Backup verification:** Weekly cron job sends Slack/Zalo notification with last backup timestamp + size; if no backup in 25 hours, alert
+## Windows Local / Controlled-UAT Profile
 
-## Non-Functional Requirements (NFRs)
+Windows 10/11 with Docker Desktop, WSL2, and Linux containers is a supported
+local or controlled-UAT host only. It does not replace the Ubuntu 22.04
+production/pilot baseline accepted in ADR-002.
 
-| NFR | Target | Notes |
-| --- | --- | --- |
-| Availability | 99% during business hours (7am-10pm VN time, Mon-Sun) | Acceptable for internal tool; downtime for nightly backups (30 min window 2-2:30am VN time) |
-| Latency | Mobile check-in < 2 sec end-to-end (P95) | Single on-prem server, low network latency |
-| Throughput | 200 concurrent users, 50 check-ins/min peak | Far below capacity (single Postgres can handle 1000+ TPS) |
-| Data durability | 99.99% (4 nines) | Daily backups + WAL archiving + off-site backup |
-| RTO (Recovery Time Objective) | 4 hours | Restore from backup if server dies; worst case is reinstall + restore from VPS backup |
-| RPO (Recovery Point Objective) | 24 hours | Daily backup; in worst case, lose 1 day of attendance |
-| Scalability | Vertical scale to 1000 users (still single server); horizontal scale deferred until Phase 6+ | Postgres + Redis + MinIO all support clustering if needed |
+The Windows profile merges `docker-compose.windows.yml` after the base Compose
+file. The override replaces Linux `/data` binds with stable Docker named volumes
+and binds Caddy, APIs, PostgreSQL, Redis, MinIO, and web admin to `127.0.0.1`.
+The guarded PowerShell script deploys only an exact reviewed SHA from canonical
+GitHub `main`, applies committed migrations, and then runs either the mandatory
+RBAC seed or an explicitly selected UAT demo seed.
 
-## Cost Estimate by Scale
+Seed-only Windows state may be owner-approved for `ResetSeedUat`; Git transports
+the seed scripts, not database files. This exception does not apply to production
+or pilot data. Public tunnel/firewall configuration, backup scheduling, host
+monitoring, capacity acceptance, and production Windows operations remain outside
+this profile.
 
-| Users | Servers | Monthly Cloud Cost | Notes |
-| --- | --- | --- | --- |
-| 200 (MVP) | 1× server | ~$0-10 | Current target |
-| 500 (Year 2) | 1× upgraded server (32 GB RAM) | ~$0-10 | Vertical scale |
-| 1000 (Year 3+) | 2× servers (app + DB split) | ~$20-50 | Add second server, Postgres replication |
-| 2000+ (SaaS) | Multi-server, Kubernetes | ~$200-500 | Out of scope for this epic |
+## Persistence and Backup
 
-## Disaster Recovery
+Compose mounts production data at `/data/postgres`, `/data/redis`, `/data/minio`,
+and `/data/caddy`. The repository includes a sample `pg_dump`/MinIO backup procedure
+and restore-drill instructions in the runbook, but does not install cron, configure
+WAL archiving, create off-site replication, or prove retention automatically.
 
-1. **Daily automated backup** to local external drive
-2. **Daily rsync** to backup VPS (Vultr Singapore $6/mo)
-3. **Weekly restore drill** (random day, pick latest backup, restore to test server, verify)
-4. **Runbook** in `3-technical/3.3-devops/server-steps.md` for:
-   - Server hardware failure → install new server, restore from VPS backup (~4 hours)
-   - Postgres corruption → restore from `pg_dump` (~30 min)
-   - Accidental data deletion → point-in-time recovery via WAL archive (~30 min)
-   - MinIO photo loss → restore from bucket snapshot (~1 hour for 100 GB)
+Before pilot, the operator must:
+
+1. Create and protect the backup destination.
+2. Install the backup schedule and choose/enforce retention.
+3. Encrypt and copy backups to the approved off-host target; same-host copies
+   alone do not satisfy disaster recovery.
+4. Run and record a restore drill.
+5. Verify the documented RTO 4h / RPO 24h assumptions against that drill.
+
+## Security Controls Shipped
+
+| Concern | Current control |
+| --- | --- |
+| External TLS | Cloudflare edge TLS; tunnel reaches Caddy over the local origin path |
+| Authentication | Argon2id passwords; employee SMS OTP; mandatory admin TOTP; JWT access; rotating hashed refresh-token families |
+| Authorization | Permission lookup, tenant predicates, and explicit audited `ProjectSupervisor` membership |
+| Secrets | Environment-only values; production runbook requires independent JWT/internal/TOTP secrets and mode-600 `.env` |
+| Rate limiting | Production Fastify instances enforce a global 100 requests/minute limit; auth adds atomic OTP/challenge controls |
+| Photos/reports | Private MinIO buckets and short-lived presigned URLs; report keys include tenant/project/report scope |
+| Audit | Implemented for attendance overrides, supervisor membership, payroll calculate/approve/override/export, and payroll-rule changes; not every CRUD/state transition or report generation currently emits `AuditLog` |
+| Network | Data services and APIs bind locally; internal API uses a shared key and tenant-bound query |
+
+Production also requires `SMS_MODE=speedsms`; startup rejects mock and unimplemented
+providers. Seed/demo credentials are forbidden on production and live pilot data.
+
+## Observability and Operations
+
+- Implemented: structured application stdout logs, `/health/live`, and dependency
+  readiness at `/health/ready`.
+- Operator-required before pilot: Docker log rotation/collection, a host-local
+  readiness monitor, alert routing, disk/backup monitoring, secret rotation, and
+  restore evidence.
+- Future only: a protected external readiness route/monitor, Prometheus/Grafana,
+  centralized log search, WAL/PITR, automated object lifecycle, and multi-host
+  high availability.
+
+## Validation Boundary
+
+Current local-candidate evidence covers seven fresh migrations, real
+PostgreSQL/Redis/MinIO integration, Attendance 13/13 plus Payroll 1/1 integration
+tests, 9/9 live Playwright scenarios, package and production image builds,
+production-only non-root closures for all three long-running images, real
+in-image Prisma/native-module checks, an isolated seven-migration target, both
+API readiness endpoints, web `/login`, image-based Playwright 9/9,
+Compose/Caddy configuration, and Android build. Commit `056a769` and
+[GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275)
+are historical baseline evidence; they do not validate the 2026-08-09 candidate.
+That candidate still requires exact-SHA review and a new green remote CI run
+before merge or deployment. iOS release signing and physical-device validation,
+production DNS/tunnel policy, backup/restore, capacity, and pilot behavior remain
+release gates.
 
 ## Related Documents
 
-- [System Design](design-standards/system-design.md) — C4 diagrams
-- [Domain Specs](architecture/domain-specs.md) — DDD entities and business rules
-- [API Contracts](architecture/api-contracts/) — OpenAPI specs
-- [Coding Standards](design-standards/coding-standards.md) — TypeScript/Flutter conventions
-- [Server Steps](../3.3-devops/server-steps.md) — On-prem deploy runbook (to be updated Phase 1)
-- [ADR-001: Tech Stack Choice](../../8-governance/decision-log/adr-001-tech-stack.md)
-- [ADR-002: On-Premise Hosting](../../8-governance/decision-log/adr-002-on-premise.md)
+- [System Design](design-standards/system-design.md)
+- [System Overview](architecture/system-overview.md)
+- [Domain Specs](architecture/domain-specs.md)
+- [OpenAPI Contract](architecture/api-contracts/openapi.yaml)
+- [Coding Standards](design-standards/coding-standards.md)
+- [On-Premise Runbook](../3.3-devops/server-steps.md)
+- [Windows Docker Local/UAT Runbook](../3.3-devops/windows-docker-deployment.md)

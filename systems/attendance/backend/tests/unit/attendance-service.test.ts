@@ -5,6 +5,8 @@ import {
   computeAttendanceStatus,
   parseShiftTime,
   buildShiftDateTime,
+  computeWorkedMinutes,
+  getVietnamDayBounds,
   assertCanCheckIn,
   assertCanCheckOut,
 } from '../../src/services/attendance-service.js'
@@ -23,11 +25,39 @@ describe('AttendanceService', () => {
   })
 
   describe('buildShiftDateTime', () => {
-    it('builds a Date with given hours/minutes', () => {
+    it('builds a UTC instant from Vietnam shift wall time', () => {
       const d = new Date('2026-07-16T00:00:00Z')
       const result = buildShiftDateTime(d, '14:30')
-      expect(result.getHours()).toBe(14)
-      expect(result.getMinutes()).toBe(30)
+      expect(result.toISOString()).toBe('2026-07-16T07:30:00.000Z')
+    })
+
+    it('advances overnight shift end to the next Vietnam calendar day', () => {
+      const d = new Date('2026-07-16T00:00:00Z')
+      expect(buildShiftDateTime(d, '06:00', true).toISOString()).toBe('2026-07-16T23:00:00.000Z')
+    })
+
+    it('returns Vietnam day bounds for early-morning Vietnam time', () => {
+      const bounds = getVietnamDayBounds(new Date('2026-07-16T17:30:00.000Z'))
+      expect(bounds.start.toISOString()).toBe('2026-07-16T17:00:00.000Z')
+      expect(bounds.end.toISOString()).toBe('2026-07-17T17:00:00.000Z')
+    })
+  })
+
+  describe('computeWorkedMinutes', () => {
+    it('persists elapsed work minus the unpaid break', () => {
+      expect(computeWorkedMinutes(
+        new Date('2026-07-16T23:00:00.000Z'),
+        new Date('2026-07-17T07:00:00.000Z'),
+        60,
+      )).toBe(420)
+    })
+
+    it('never produces a negative duration', () => {
+      expect(computeWorkedMinutes(
+        new Date('2026-07-17T07:00:00.000Z'),
+        new Date('2026-07-17T07:15:00.000Z'),
+        60,
+      )).toBe(0)
     })
   })
 

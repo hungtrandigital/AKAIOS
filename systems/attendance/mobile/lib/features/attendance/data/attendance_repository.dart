@@ -1,6 +1,15 @@
-// Attendance repository — check-in/out + today's assignment.
+// Attendance repository — check-in/out + today's assignments.
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/auth_storage.dart';
 import '../../../core/http_client.dart';
+
+final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
+  return AttendanceRepository(
+    http: HttpClient(authStorage: ref.read(authStorageProvider)),
+  );
+});
 
 class ShiftAssignment {
   final String id;
@@ -16,26 +25,56 @@ class ShiftAssignment {
   final String endTime;
   final DateTime date;
   final String? attendanceRecordId;
+  final String? attendanceStatus;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
+  final String? overrideById;
+  final String? overrideReason;
 
   ShiftAssignment({
     required this.id,
     required this.projectId,
     required this.projectName,
-    required this.projectAddress,
-    required this.projectLatitude,
-    required this.projectLongitude,
-    required this.geofenceRadiusMeters,
+    this.projectAddress = '',
+    this.projectLatitude,
+    this.projectLongitude,
+    this.geofenceRadiusMeters = 100,
     required this.shiftId,
     required this.shiftName,
     required this.startTime,
     required this.endTime,
     required this.date,
     this.attendanceRecordId,
+    this.attendanceStatus,
     this.checkInAt,
     this.checkOutAt,
+    this.overrideById,
+    this.overrideReason,
   });
+
+  bool get isSupervisorAssisted {
+    final actorId = overrideById?.trim();
+    final reason = overrideReason;
+    if (actorId == null || actorId.isEmpty || reason == null) return false;
+    return const {
+      'capture_unavailable',
+      'permission_blocked',
+      'device_failure',
+    }.any((code) => reason.startsWith('$code:'));
+  }
+
+  bool get isNonWorkingAttendance => const {
+        'absent',
+        'on_leave',
+        'holiday',
+      }.contains(attendanceStatus);
+
+  String get attendanceStatusLabel => switch (attendanceStatus) {
+        'absent' => 'Vắng mặt',
+        'on_leave' => 'Nghỉ phép',
+        'holiday' => 'Nghỉ lễ',
+        _ => 'Không cần chấm công',
+      };
 
   factory ShiftAssignment.fromJson(Map<String, dynamic> j) {
     final shift = j['shift'] as Map<String, dynamic>?;
@@ -46,47 +85,47 @@ class ShiftAssignment {
       projectId: (project?['id'] ?? j['projectId']) as String,
       projectName: (project?['name'] ?? '') as String,
       projectAddress: (project?['address'] ?? '') as String,
-      projectLatitude: _asDouble(project?['latitude']),
-      projectLongitude: _asDouble(project?['longitude']),
-      geofenceRadiusMeters: _asInt(project?['geofenceRadiusMeters']) ?? 100,
+      projectLatitude: _toDouble(project?['latitude']),
+      projectLongitude: _toDouble(project?['longitude']),
+      geofenceRadiusMeters:
+          (project?['geofenceRadiusMeters'] as num?)?.toInt() ?? 100,
       shiftId: (shift?['id'] ?? j['shiftId']) as String,
       shiftName: (shift?['name'] ?? '') as String,
       startTime: (shift?['startTime'] ?? '') as String,
       endTime: (shift?['endTime'] ?? '') as String,
       date: DateTime.parse(j['date'] as String),
       attendanceRecordId: record?['id'] as String?,
+      attendanceStatus: record?['status'] as String?,
       checkInAt: record?['checkInAt'] != null
           ? DateTime.parse(record!['checkInAt'] as String).toLocal()
           : null,
       checkOutAt: record?['checkOutAt'] != null
           ? DateTime.parse(record!['checkOutAt'] as String).toLocal()
           : null,
+      overrideById: record?['overrideById'] as String?,
+      overrideReason: record?['overrideReason'] as String?,
     );
   }
 }
 
-double? _asDouble(dynamic value) {
+double? _toDouble(Object? value) {
   if (value is num) return value.toDouble();
-  return double.tryParse(value?.toString() ?? '');
-}
-
-int? _asInt(dynamic value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return int.tryParse(value?.toString() ?? '');
+  return value is String ? double.tryParse(value) : null;
 }
 
 class AttendanceRepository {
   final HttpClient _http;
   AttendanceRepository({required HttpClient http}) : _http = http;
 
-  Future<ShiftAssignment?> getMyToday() async {
+  Future<List<ShiftAssignment>> getMyToday() async {
     try {
       final res = await _http.get('/v1/attendance/my-today');
-      if (res['id'] == null) return null; // no assignment
-      return ShiftAssignment.fromJson(res);
+      final data = res['data'] as List<dynamic>? ?? const [];
+      return data
+          .map((item) => ShiftAssignment.fromJson(item as Map<String, dynamic>))
+          .toList();
     } on ApiException catch (e) {
-      if (e.statusCode == 404) return null;
+      if (e.statusCode == 404) return [];
       rethrow;
     }
   }

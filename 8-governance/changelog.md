@@ -10,11 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Bilingual corporate website delivery with English routes under `/en`, locale-aware D1 content and leads, VI/EN translation groups in Content Studio, English seed content, language switching, SEO alternates, and bilingual sitemap coverage.
-- Canonical corporate website documentation covering the approved premium design direction, olive-lime style system, typography and motion rules, information architecture, CMS/content model, SEO strategy, three-path lead workflow, seed lifecycle, media governance, and service-incident handling model.
-- AKAIUNSAN corporate website initiative (`PRD-EPIC-003` / `PRD-SLICE-008`) with public brand guide, scalable content model, CMS, safe seed contract, media management, lead intake, and dedicated Docker/Cloudflare Tunnel delivery.
-- New `systems/corporate-website/` application surface for the external corporate channel.
-- Public review website deployed at https://akaiunsan.prismate.vn with D1/R2-compatible local persistence, password-protected Content Studio, generated category imagery, and SEO metadata.
+- **PRD-SLICE-003 corporate-aligned mobile profile:** Bundled licensed Manrope
+  and Be Vietnam Pro fonts and applied the corporate olive/forest/lime/paper
+  direction to Login, Today, and check-in/out without importing public-site hero
+  patterns into the field workflow.
+- **PRD-SLICE-003 debug Simulator attendance seam:** Added a default-off,
+  debug+iOS-Simulator-only simulated JPEG input for controlled Mac UAT. It is
+  visibly labeled, retains fresh GPS/JPEG/API/storage validation, and stays
+  unavailable in profile/release, Android, and physical-iPhone runs.
+- **PRD-SLICE-003 monthly project schedule/copy MVP:** Added an authorized
+  project/month roster, 1–31 day same-project copy preview and atomic idempotent
+  save, exact-duplicate blocking, explicitly acknowledged overlap/multi-shift
+  warnings with audit evidence, and multi-assignment employee Today behavior
+  across the API, web operations board, and Flutter client.
+- **CODE-TASK-006 Windows Git-to-UAT deployment:** Added a Windows 10/11 Docker Desktop/WSL2 Compose override with durable named volumes and loopback-only ports, guarded exact-SHA fresh-install/update/seed-sentinel-reset/operations automation, an AI-executable Windows runbook, active Caddy storage-host routing, maintenance-mode writer shutdown, and Linux/Windows CI configuration gates. Ubuntu remains the production/pilot baseline; tunnel, firewall, remote Docker and automatic deployment stay outside the Windows profile.
+- **PRD-SLICE-003 Prismate loading:** Added optimized Prismate logo derivatives for legacy and Android 12+ native launch, iOS launch, and a reusable reduced-motion-aware Flutter opacity/scale loader for bootstrap and async employee actions, without artificial delay. Native light/dark startup backgrounds remain white to avoid a transition flash.
+- **PRD-SLICE-003 employee mobile UX and camera fallback:** Added a branded, auth-state-driven Flutter splash; senior-friendly Login/Today/check flow; explicit camera/location/network recovery; and an operator-only manual attendance event with structured audit and BO-visible exception provenance.
+- **PRD-SLICE-003 BO shift planning:** Added a dated BO/supervisor operations board for shift templates, scoped assignments, status coverage, filters, and audited cancellation, with OpenAPI/domain contracts and focused browser/integration coverage.
+- **PRD-EPIC-002 remediation (`056a769`; immutable CI passed):** Added explicit audited
+  `ProjectSupervisor` membership, Redis-backed employee OTP challenges with SpeedSMS delivery,
+  encrypted admin TOTP enrollment, and native refresh-token support.
+- **PRD-EPIC-002 production bootstrap:** Added an idempotent production operator
+  provisioning command that creates the first system admin without running demo seeds and
+  hands off to the existing encrypted TOTP enrollment flow.
+- **PRD-EPIC-002 mobile delivery:** Added Android/iOS Flutter platform projects, secure refresh-token storage and single-flight refresh, required camera/location permissions, generated localization sources, CI analysis/tests, and Android APK artifact generation pinned to Flutter 3.24.5.
+- **PRD-EPIC-002 iOS local validation:** Added the CocoaPods integration files and lockfile, built and launched the Flutter client on an iOS 26.5 iPhone 17 Pro Simulator with Xcode 26.6, and verified employee password login through the loopback Attendance API. Release signing and physical-device validation remain pending.
+- **PRD-EPIC-002 code review:** Published the canonical 2026-07-17 review report with the frozen commit range, verification evidence, verdict, and `CODE-BUG-002..022` remediation backlog.
 - Operations domain structure: templates (hiring plan, onboarding, JD), tracking registry (OPS-TASK-XXX), metrics glossary, strategy, and changelog
 - Role-specific JD copies: Senior Backend Engineer, Product Manager with OPS linkage and parent epics
 - Hiring plans seeded and linked from registry (dates, owners, pipeline, metrics)
@@ -25,10 +46,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
-- Extended the premium motion system across all bilingual public routes with route-aware reveals, media reveals, staggered content, hover depth, scroll progress, and reduced-motion support.
-- Consolidated stakeholder website decisions into the Corporate Brand Guide and `systems/corporate-website/README.md`; fixed the strategic audience order at building/condominium, factory/industrial zone, then apartment.
-- Redesigned the corporate website public experience with a premium image-led hero, modular solution layout, modern Vietnamese-capable `Bricolage Grotesque` display typography, and an ESG operating-direction section covering environment, people, and governance.
-- Refreshed the corporate social preview and removed prominent public placeholder disclaimers from the internal review build while retaining source metadata in the CMS.
+- Employee mobile now leads each shift with explicit project/status context and
+  a large check-in/check-out action. Its compact large-text variant remains
+  usable at 200% scaling on 320×568 while GPS, fresh-camera evidence,
+  multi-assignment state, and supervisor recovery remain unchanged.
+- Employee Today now combines state, project, shift time, progress, and the next
+  action in one card; check-in/out adds a compact three-step header while
+  preserving the large-text and senior-friendly interaction gates.
+- Monthly schedule confirmation now uses opaque request/resource/conflict
+  fingerprints, mandatory re-review after concurrent changes, a consistent
+  project→membership→employee transaction lock order, and full problem-first
+  preview rendering. Payroll/customer reports fail closed for ambiguous
+  multi-attendance days, while mobile Today renders reconciled non-working
+  attendance as terminal.
+- Pilot/rollback guidance now requires a verified backup, server-first then
+  mobile rollout, adoption confirmation, and reconciliation of extra active
+  rows before any old-schema/app rollback.
+- The controlled-UAT aggregate seed now gives all five fixed demo employees an idempotent schedule on the current Vietnam date plus 13 following Mon–Sat dates and limits generated historical attendance to yesterday, leaving today's GPS/photo attendance flow open for manual UAT. Demo writes require an explicit process-local sentinel, reject reserved cross-tenant identity collisions, preserve existing attendance on reruns, and interpret historical shift times in Vietnam (`+07:00`).
+- The controlled Windows UAT flow now treats its current records as reproducible seed-only data: Git carries migrations and seed scripts, `ResetSeedUat` rebuilds disposable PostgreSQL only after explicit confirmation, and data-preserving updates require a verified PostgreSQL/MinIO checkpoint. The default payroll-rule seed is idempotent across reruns.
+- Camera cancellation now stays on the normal retry path, while confirmed permission, hardware, or plugin failures promote supervisor assistance and Today reconciliation. Employee camera-assisted badges now require structured reason-code and actor provenance instead of treating every BO override as a camera failure.
+- Employee self check-in/out now requires fresh in-memory GPS plus a newly captured JPEG before submit; the backend fully decodes it with 5 MB/16 MP ceilings and a 320×240 minimum instead of trusting magic bytes. Startup routing reads secure storage once, honors reduced motion, avoids Login/Today flash, and preserves credentials when refresh fails only because the network is unavailable. Device attestation/liveness remains explicitly outside MVP.
+- **Historical (superseded by the scheduling-conflicts fix below):** Shift
+  templates became tenant-owned, daily BO rosters became paginated with
+  full-filter status summaries, and employee selection became searchable. That
+  delivery temporarily enforced one non-cancelled assignment per
+  employee/business date while preserving cancelled history; the later fix
+  replaced this invariant with active employee/project/shift/date uniqueness.
+  Tenant-scoped demo seed verification and independent final code re-review both
+  passed for that historical delivery.
+- Added an opt-in, local/test-only four-digit admin second-factor verifier for
+  temporary UI testing. It is disabled by default, refuses non-development/test
+  environments, and leaves password, Redis challenge, attempt, session, and
+  refresh-token controls intact; staging and CI continue to require real TOTP.
+- Reconciled the PRD-EPIC-002 backlog, active plan, progress, work-item registry, risk register, deployment guidance, API/domain contracts, and system READMEs with remediation commit `056a769`, successful [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275), and the [SHA-pinned GO re-review](reviews/prd-epic-002-code-re-review-2026-07-19.md). The historical rejected review remains unchanged.
+- Corrected PRD-EPIC-002 lifecycle metadata and synchronized the active epic, product backlog, work-item registry, progress status, governance risks, and review navigation with the rejected review gate.
+- Archived the superseded `docs/review/REVIEW_PLAN.md` content under `archives/2026-07-17-prd-epic-002-review-plan/` and retained a redirect to the canonical plan/result.
 - Reframed the core agents in `0-agents/agents/` as the reusable leader layer for multi-project work: each core agent now preserves existing process ownership while explicitly pairing `agency-agents` specialists with matching local skills.
 - Registered the factory optimization initiative as `PRD-EPIC-001` / `PRD-SLICE-001` and added the active plan `3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md` plus matching registry/index updates.
 - Updated `0-agents/README.md` and `INDEX.md` so the stack description now reflects leader orchestration rather than only specialist routing.
@@ -49,12 +101,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
-- Replaced the font-built mobile wordmark with the approved full AKAIUNSAN logo lockup, using the olive brand color and consistent responsive proportions across the header and footer.
-- Fixed the bilingual mobile navigation so selecting any link closes the menu, with a route-change fallback for browser navigation.
+- **PRD-EPIC-002 production dependency security:** Remediated the pnpm
+  production audit from 43 findings (25 High, 15 Moderate, 3 Low) to zero by
+  upgrading Next.js, Fastify/plugins, and Sharp plus three documented transitive
+  compatibility overrides. Fastify 5 typing/runtime compatibility, Sharp JPEG
+  validation, fresh integration/E2E, and Node 20 Alpine builds pass. Both APIs
+  now ship pnpm production-only closures with an embedded generated Prisma
+  client, while the web ships Next.js standalone output and treats `@ak/shared`
+  as E2E-only. All three long-running images run non-root without the vulnerable
+  development-tool graph, broken symlinks, or unresolved declared dependencies;
+  the migration CLI remains isolated in a one-shot Compose target. Added an
+  independent exact-SHA Actions job to rebuild those four targets and enforce
+  the non-root/closure/native-library/web-login checks on the three long-running
+  images before merge; remote migration execution is not claimed. HPC
+  deployment remains separately gated.
+- **PRD-SLICE-003 calendar-stable browser gate:** Replaced a fixed July date in
+  the monthly scheduling E2E with a different valid date derived from the active
+  month. The focused regression and the complete 9/9 Playwright suite now pass
+  when the calendar advances beyond the month in which the test was authored.
+- **Demo operator credentials:** Controlled reruns now repair the documented
+  password hash and active status for all reserved demo identities, instead of
+  refreshing only employee passwords and leaving older Back Office hashes stale.
+  Web login now defaults to the compatible `ops@ak.local` UAT identity and lists
+  every named operator instead of pre-filling the base-development admin.
+- **PRD-SLICE-003 scheduling conflicts:** Replaced the former one-active-
+  assignment-per-employee/date database invariant with exact active
+  employee/project/shift/date uniqueness. Copy candidates now detect conflicts
+  against both persisted target schedules and each other, and request-scoped
+  locking makes concurrent idempotent retries replay safely.
+- **Attendance demo seed:** Replaced untyped assignment/attendance arrays, made historical outcomes deterministic and create-only, preserved existing UAT records, synchronized newly seeded assignment statuses, and corrected shift instants to Vietnam wall time.
+- **Shared MinIO startup:** Made bucket provisioning safe under parallel API/test startup by rechecking access after the explicit S3 already-created conflicts, while preserving fail-closed behavior for unrelated storage errors; added shared regression coverage to the root unit gate.
+- **PRD-SLICE-003 attendance UAT:** Hardened assignment overlap/concurrency, active-resource and supervisor-membership enforcement, hid cancelled assignments from employee Today, and corrected mobile attendance timestamps from UTC to the device timezone. Local employee/BO/supervisor UAT passes; physical-device camera validation remains pending because iOS Simulator has no camera stream.
+- **PRD-EPIC-002 remediation (working-tree review GO):** Implemented tenant/project-scoped
+  supervisor authorization, safe employee/report DTO boundaries, atomic attendance checkout
+  and override total recomputation, Vietnam calendar handling, geofence enforcement, and
+  bounded mobile photo/MinIO routing. Public attendance projections now expose only short-lived
+  presigned photo URLs, and Prisma `DATE` lookups use exact Vietnam work-date keys. Independent
+  attendance/auth/mobile review found no blockers.
+- **PRD-EPIC-002 payroll remediation:** Enforced payroll RBAC and tenant scope, serialized period calculation, re-read lines inside transactions, made money inputs decimal-safe, tracked explicit allowance overrides, fixed month-end and weekend/holiday rules, and kept BHXH/PIT out of MVP calculations. Independent payroll review found no blockers.
+- **PRD-EPIC-002 service boundary:** Replaced Payroll's direct Attendance-table read with
+  a tenant/date-scoped internal HTTP projection protected by a constant-time API-key check;
+  kept the route off the public Caddy surface and exempted it from the public request quota.
+  Payroll now returns safe 502/503 responses for invalid and unavailable Attendance dependencies.
+- **PRD-EPIC-002 browser gate:** Added five independent seeded TOTP admins and passed the live Playwright suite 7/7 on a fresh five-migration database. Added `E2E_TOTP_SECRET` to Turbo's `test:e2e` environment allowlist so Actions can execute authenticated scenarios.
+- **PRD-EPIC-002 deployment remediation:** Repaired lockfile-backed production builds, Compose/Caddy routing, migration orchestration, and Docker build context filtering; all three application images build locally, with the largest BuildKit application-context transfer under 0.7 MB after generated Next.js/mobile outputs are excluded. Release evidence must record resolved image IDs/digests and tag the exact release SHA because upstream base-image tags remain mutable.
+- **PRD-EPIC-002 CI remediation:** Corrected the Prisma schema path, added real unit/integration/E2E entry points, enforced ≥90% coverage over core attendance/payroll logic, and replaced skipped or incomplete Actions checks with independent quality, build, live-service integration, and Playwright jobs; remote execution was verified by [Actions run 29555194773](https://github.com/hungtrandigital/AKAIOS/actions/runs/29555194773).
+- **PRD-EPIC-002 database baseline:** Added and verified the immutable initial Prisma migration on a fresh PostgreSQL 16 database; added the production-safe `prisma:migrate:deploy` command.
+- **PRD-EPIC-002 seed orchestration:** Removed the duplicate `db:seed:all` key so attendance and RBAC seed stages are no longer silently omitted from the aggregate command.
+- **PRD-EPIC-002 documentation remediation:** Reconciled the canonical plan, status, domain model, OpenAPI 3.1 contract, runbook, ADRs, risk register, and system READMEs with the implemented boundaries and verified evidence; Docs Guardian returned GO for `CODE-BUG-022` on 2026-07-19.
 - Cleared remaining references to legacy numbered product foundation paths (plan/boost scaffolds) and added a redirect notice in the old backlog file to point to `product-backlog/backlog.md`.
 - **Structure:** Fixed `financial-modeling` skill to follow Agent Skills Spec (moved from `skills/financial-modeling.md` to `skills/financial-modeling/SKILL.md` with proper YAML frontmatter)
 - **Finance-director agent:** Enhanced to explicitly activate `financial-modeling` skill during all projection work (steps 3, 4, 5) and added mandatory skill usage pattern
 - **Cursor modes:** Added missing `/refactor` command to Cursor to match `0-agents/mode/refactor.md`
+
+### Security
+- Manual camera-failure attendance is restricted to active, explicitly scoped supervisors or system-admin break-glass with `attendance.override`; employees and BO cannot create it, supervisors cannot self-record, cross-tenant/project, wrong-date, future, and out-of-shift-support-window events fail closed, and compare-and-set record/assignment changes share a transaction with immutable audit. No synthetic photo/GPS is written.
+- The fixed local admin verifier is fail-closed outside explicit
+  `development|test`, never committed with a value, and mutually exclusive with
+  the real TOTP verifier to keep environment behavior deterministic. While it is
+  enabled, the API binds to loopback and rejects fixed-mode admin auth from an
+  effective non-loopback client address; the development web proxy also binds to
+  loopback so it cannot expose that path to the LAN.
+- **Remediation review GO; immutable CI passed:** Password verification, inactive-account enforcement,
+  mandatory admin TOTP, OTP abuse controls, refresh-token CAS rotation, and project membership
+  grant/revoke audit boundaries now have fresh-database integration coverage.
+- **Historical review findings:** The 2026-07-17 review confirmed password authentication bypass, payroll/attendance cross-tenant mutation, sensitive employee data disclosure, and spoofable OTP rate limiting. Those findings are fixed in `056a769`; all five jobs in [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) pass, and SHA-pinned re-review evidence records the replacement GO verdict without altering the historical report.
 
 ## [2.0.0] - 2025-12-14 (Factory AI 2.0)
 
@@ -117,9 +228,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - *Bug fixes and error corrections*
-
-### Security
-- *Security-related fixes and improvements*
 
 ---
 

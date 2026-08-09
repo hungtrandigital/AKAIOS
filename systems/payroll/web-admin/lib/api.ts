@@ -19,6 +19,18 @@ interface FetchOptions extends RequestInit {
   query?: Record<string, string | number | undefined>
 }
 
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 export async function apiFetch<T = any>(
   path: string,
   options: FetchOptions = {}
@@ -58,8 +70,15 @@ export async function apiFetch<T = any>(
   }
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`HTTP ${response.status}: ${text}`)
+    const data = await response.json().catch(() => null) as {
+      error?: { code?: string; message?: string; details?: Record<string, unknown> }
+    } | null
+    throw new ApiError(
+      response.status,
+      data?.error?.code ?? 'HTTP_ERROR',
+      data?.error?.message ?? `HTTP ${response.status}`,
+      data?.error?.details,
+    )
   }
 
   const contentType = response.headers.get('content-type') ?? ''
@@ -98,9 +117,21 @@ export async function apiLogin(email: string, password: string) {
     const data = await response.json().catch(() => ({}))
     throw new Error(data?.error?.message ?? 'Login failed')
   }
-  const data = await response.json()
-  if (data.accessToken) setToken(data.accessToken)
-  return data
+  return response.json()
+}
+
+export async function apiVerifyTwoFactor(totpCode: string) {
+  const response = await fetch('/api/attendance/auth/verify-2fa', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ totpCode }),
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data?.error?.message ?? 'Two-factor verification failed')
+  }
+  return response.json()
 }
 
 export async function apiLogout() {

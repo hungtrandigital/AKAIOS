@@ -6,22 +6,46 @@ import { prisma, ForbiddenError, NotFoundError } from '@ak/shared'
 import { requireAuth } from '../plugins/auth.js'
 import { requirePermission } from '@ak/shared'
 import { generateAndStoreReport } from '../services/reports/customer-report.js'
+import { getSupervisorProjectIds } from '../services/project-access.js'
+import { CalendarDateSchema } from '../schemas/calendar-date.js'
+
+const ReportRequestSchema = z.object({
+  projectId: z.string().uuid(),
+  from: CalendarDateSchema,
+  to: CalendarDateSchema,
+  format: z.enum(['pdf', 'csv']),
+}).refine((value) => value.from <= value.to, {
+  message: 'from must be on or before to',
+})
 
 export const reportRoutes: FastifyPluginAsync = async (app) => {
   // ===== GENERATE CUSTOMER REPORT =====
   app.post('/customer', { preHandler: [requireAuth, requirePermission('reports.generate')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
-    const body = z
-      .object({
-        projectId: z.string().uuid(),
-        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        format: z.enum(['pdf', 'csv']),
-      })
-      .parse(request.body)
+    const body = ReportRequestSchema.parse(request.body)
 
-    const project = await prisma.project.findUnique({ where: { id: body.projectId } })
-    if (!project || project.tenantId !== request.user.tenantId) {
+    const project = await prisma.project.findFirst({
+      where: {
+        id: body.projectId,
+        tenantId: request.user.tenantId,
+        deletedAt: null,
+        ...(request.user.role === 'supervisor'
+          ? {
+              supervisors: {
+                some: {
+                  userId: request.user.userId,
+                  supervisor: {
+                    tenantId: request.user.tenantId,
+                    role: 'supervisor',
+                    status: 'active',
+                  },
+                },
+              },
+            }
+          : {}),
+      },
+    })
+    if (!project) {
       throw new NotFoundError('Project', body.projectId)
     }
 
@@ -48,7 +72,7 @@ export const reportRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // ===== LIST REPORTS FOR PROJECT =====
-  app.get('/customer', { preHandler: requireAuth }, async (request) => {
+  app.get('/customer', { preHandler: [requireAuth, requirePermission('reports.view')] }, async (request) => {
     if (!request.user) throw new ForbiddenError()
     const q = z
       .object({
@@ -56,10 +80,16 @@ export const reportRoutes: FastifyPluginAsync = async (app) => {
       })
       .parse(request.query)
 
+    const supervisorProjectIds = request.user.role === 'supervisor'
+      ? await getSupervisorProjectIds(request.user.userId, request.user.tenantId)
+      : undefined
+
     const reports = await prisma.customerReport.findMany({
       where: {
         tenantId: request.user.tenantId,
-        ...(q.projectId ? { projectId: q.projectId } : {}),
+        ...(supervisorProjectIds
+          ? { projectId: { in: supervisorProjectIds, ...(q.projectId ? { equals: q.projectId } : {}) } }
+          : q.projectId ? { projectId: q.projectId } : {}),
       },
       include: { project: { select: { code: true, name: true, clientName: true } } },
       orderBy: { generatedAt: 'desc' },

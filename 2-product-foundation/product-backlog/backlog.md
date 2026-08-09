@@ -50,8 +50,8 @@ Standardize the factory's outer/core agents as the reusable leader layer for mul
 - [ ] Story 1 (PRD-SLICE-001): Standardize leader orchestration rules across all core agents
   - [ ] Task 1 (CODE-TASK-001): Add explicit leader-orchestration guidance without changing the existing workflow order
   - [ ] Task 2 (CODE-TASK-002): Align specialist-to-skill pairings with the real skill library in `0-agents/agents/skills/`
-- [ ] Story 2 (PRD-SLICE-002): Keep the current mode and workflow layer unchanged while improving agent depth
-- [ ] Story 3 (PRD-SLICE-003): Improve handoff quality so the factory can be reused across many projects
+  - [ ] Keep the current mode and workflow layer unchanged while improving agent depth
+  - [ ] Improve handoff quality so the factory can be reused across many projects
 
 **Related Documents:**
 - [Active Slice Plan](../../3-technical/3.2-implementation/plans/active/agent-leadership-orchestration.md)
@@ -74,10 +74,10 @@ type: epic
 domain: product
 status: in-progress
 created: 2026-07-16
-updated: 2026-07-16
+updated: 2026-07-18
 priority: high
 owner: @fullstack-engineer
-phases: [foundation, attendance, payroll, customer-report, pilot, scale-out]
+phases: [plan, code, review]
 related_domain_tasks:
   - PRD-SLICE-002
   - PRD-SLICE-003
@@ -114,6 +114,13 @@ Xây dựng 2 hệ thống: `attendance` (mobile app check-in/out theo ca tại 
 - [API Contracts](../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)
 - [Work-Item Registry](../../3-technical/3.2-implementation/status/work-items-registry.md)
 - [Systems README](../../systems/README.md)
+- [Code Review — 2026-07-17](../../8-governance/reviews/prd-epic-002-code-review-2026-07-17.md)
+- [Code Re-review — 2026-07-19](../../8-governance/reviews/prd-epic-002-code-re-review-2026-07-19.md)
+
+**Review and remediation status:**
+- The historical 2026-07-17 verdict was **REJECTED** with 4 Critical, 14 High, and 3 Medium findings (`CODE-BUG-002..022`).
+- All 21 findings are fixed in `056a769`. The SHA-pinned re-review returned **GO**, Docs Guardian returned **GO** for `CODE-BUG-022`, and [Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275) passes quality, build, integration, browser E2E, and Flutter/APK jobs.
+- The epic remains `in-progress`: operational, native iOS, and remaining `PRD-SLICE-003..005` acceptance gates are required before the 1–2 project pilot; pilot acceptance is required before scale-out.
 
 
 ### Epic 3: AKAIUNSAN Corporate Website and CMS

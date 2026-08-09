@@ -2,9 +2,20 @@
 # Save build time + reduce image size
 
 **/node_modules
+**/.pnpm-store
 **/dist
 **/.turbo
+**/.next
 **/coverage
+**/.dart_tool
+**/.gradle
+**/build
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/local.properties
+
+# Native mobile sources and build caches are not used by the Node images.
+systems/attendance/mobile/
 
 # Source control
 .git

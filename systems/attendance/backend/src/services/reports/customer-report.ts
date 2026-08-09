@@ -7,8 +7,9 @@
 // BR-CUST-004: CSV includes row-level detail for audit
 
 import PDFDocument from 'pdfkit'
-import { prisma } from '@ak/shared'
+import { BusinessRuleViolationError, prisma } from '@ak/shared'
 import { uploadObject, getPresignedUrl, MINIO_BUCKET_NAMES } from '@ak/shared'
+import { randomUUID } from 'node:crypto'
 
 export interface ReportPeriod {
   projectId: string
@@ -51,10 +52,11 @@ export interface CustomerReportData {
 export async function aggregateReportData(
   projectId: string,
   from: Date,
-  to: Date
+  to: Date,
+  tenantId: string
 ): Promise<CustomerReportData | null> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, tenantId, deletedAt: null },
     include: {
       shiftAssignments: {
         where: { date: { gte: from, lte: to } },
@@ -74,8 +76,8 @@ export async function aggregateReportData(
 
   let totalShifts = 0
   let totalCheckIns = 0
-  let totalPhotos = 0
   const uniqueEmployees = new Set<string>()
+  const workedEmployeeDays = new Set<string>()
 
   for (const assignment of project.shiftAssignments) {
     totalShifts++
@@ -103,12 +105,19 @@ export async function aggregateReportData(
     if (assignment.attendanceRecord) {
       const rec = assignment.attendanceRecord
       if (rec.checkInAt) {
+        const workedEmployeeDay = `${assignment.employeeId}:${dateKey}`
+        if (workedEmployeeDays.has(workedEmployeeDay)) {
+          throw new BusinessRuleViolationError(
+            'Multiple attended assignments for one employee/project/date must be reconciled before customer report generation',
+            { employeeId: assignment.employeeId, projectId, workDate: dateKey },
+          )
+        }
+        workedEmployeeDays.add(workedEmployeeDay)
         dayEntry.checkIns++
         totalCheckIns++
         empEntry.daysWorked++
         if (rec.checkInPhotoKey) {
           dayEntry.photos++
-          totalPhotos++
         }
       }
       if (rec.totalMinutesWorked) {
@@ -256,48 +265,6 @@ export function generateReportPdf(data: CustomerReportData): Promise<Buffer> {
 
     doc.y = y + 20
 
-    // === EMPLOYEE SUMMARY ===
-    if (doc.y > 650) doc.addPage()
-    doc.font('Helvetica-Bold').fontSize(12).text('CHI TIẾT THEO NHÂN VIÊN')
-    doc.moveDown(0.5)
-
-    const empTableTop = doc.y
-    const empCols = [70, 200, 110, 100]
-    x = 50
-    doc.font('Helvetica-Bold').fontSize(9)
-    ;['Mã NV', 'Họ tên', 'Số ngày công', 'Tổng giờ'].forEach((h, i) => {
-      doc.rect(x, empTableTop, empCols[i]!, rowHeight).fillAndStroke('#003366', '#000000')
-      doc.fillColor('#ffffff').text(h, x + 5, empTableTop + 5, {
-        width: empCols[i]! - 10,
-        align: 'center',
-      })
-      x += empCols[i]!
-    })
-    doc.fillColor('#000000')
-
-    y = empTableTop + rowHeight
-    doc.font('Helvetica').fontSize(9)
-    data.attendanceByEmployee.forEach((emp, idx) => {
-      if (idx % 2 === 1) {
-        doc.rect(50, y, empCols.reduce((s, w) => s + w, 0), rowHeight).fillColor('#f0f0f0').fill()
-      }
-      doc.fillColor('#000000')
-      let cx = 50
-      const cells = [emp.employeeCode, emp.employeeName, emp.daysWorked.toString(), emp.totalHours.toFixed(2)]
-      cells.forEach((c, i) => {
-        doc.text(c, cx + 5, y + 5, {
-          width: empCols[i]! - 10,
-          align: i < 2 ? 'left' : 'center',
-        })
-        cx += empCols[i]!
-      })
-      y += rowHeight
-      if (y > 720) {
-        doc.addPage()
-        y = 50
-      }
-    })
-
     // === FOOTER ===
     if (doc.y > 700) doc.addPage()
     doc.moveDown(2)
@@ -360,12 +327,13 @@ export async function generateAndStoreReport(
   generatedByUserId: string,
   tenantId: string
 ): Promise<{ reportId: string; downloadUrl: string; size: number }> {
-  const data = await aggregateReportData(projectId, from, to)
+  const data = await aggregateReportData(projectId, from, to, tenantId)
   if (!data) throw new Error(`Project ${projectId} not found`)
 
   const dateStr = from.toISOString().split('T')[0]
   const toStr = to.toISOString().split('T')[0]
-  const key = `customer-reports/${data.project.code}-${dateStr}-${toStr}.${format}`
+  const reportId = randomUUID()
+  const key = `${tenantId}/${projectId}/${reportId}/customer-report-${dateStr}-${toStr}.${format}`
   let buffer: Buffer
   let contentType: string
 
@@ -382,6 +350,7 @@ export async function generateAndStoreReport(
 
   const report = await prisma.customerReport.create({
     data: {
+      id: reportId,
       tenantId,
       projectId,
       periodFrom: from,

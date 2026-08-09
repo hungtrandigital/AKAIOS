@@ -1,8 +1,8 @@
 # AKAIUNSAN — Design System & Style Guide
 
-**Version:** v1.0
-**Last updated:** 2026-07-16
-**Source of truth:** [`systems/payroll/web-admin/app/globals.css`](../../systems/payroll/web-admin/app/globals.css)
+**Version:** v1.1
+**Last updated:** 2026-08-08
+**Source of truth:** [`systems/payroll/web-admin/app/globals.css`](../../systems/payroll/web-admin/app/globals.css) for web admin and [`systems/attendance/mobile/lib/main.dart`](../../systems/attendance/mobile/lib/main.dart) for employee mobile
 **Status:** Frozen — any change must be reflected here first
 
 This document is the single source of truth for AKAIUNSAN's UI design. **Future developers: read this before adding new screens or components.** The patterns below have been adapted from the Prismate-OS design language (see [`prismate-reference-main.css`](./prismate-reference-main.css) and [`prismate-reference-login.css`](./prismate-reference-login.css)) and refined for AKAIUNSAN.
@@ -48,11 +48,43 @@ The mark is a 14px-radius gradient rounded square (`#0289f7` → `#0070cc`) with
 - **Vietnamese-first** — UI strings in `vi-VN`, code in English
 - **No decorative animation** — motion is functional (loading, transitions) not aesthetic
 
+### Employee mobile profile
+
+The Flutter attendance client is a focused field-work profile inside AKAIOS. It
+inherits the corporate website's disciplined, human, operational character while
+remaining an internal tool. The web admin keeps the Inter/blue system documented
+below; mobile uses this bounded profile:
+
+- Display and heading: **Manrope**, bundled with the app for reliable offline use.
+- Body and controls: **Be Vietnam Pro**, bundled with the app for Vietnamese
+  legibility on iOS and Android.
+- Palette: olive `#6C7D22`, dark olive `#4F601A`, forest `#1B2512`, lime
+  `#C7DC50`, soft olive `#F0F2E4`, paper `#F9F8F3`, ink `#20251B`, muted
+  `#666B5A`, border `#DCDECD`, and corporate red `#D0202B` for errors.
+- The signature element is the large, explicit shift action. Editorial hierarchy
+  may shape the login, Today, and three-step attendance flow, but marketing hero
+  scale, image-led composition, parallax, and decorative motion do not enter the
+  employee workflow.
+- Employee accessibility wins over brand styling: body copy stays at least 16sp,
+  touch targets at least 48dp (52dp for primary controls), state never relies on
+  color alone, reduced motion remains supported, and every screen must work at
+  200% text scaling.
+- GPS, fresh-camera evidence, multi-assignment state, camera-failure recovery,
+  and explicit check-in/check-out labels are product controls and must not be
+  hidden or weakened for visual consistency.
+
+The [corporate brand guide](../../4-marketing/brand-guidelines.md) informs this
+profile, but this internal style contract takes precedence for product behavior
+and accessibility.
+
 ---
 
 ## 2. Design Tokens
 
-All tokens are CSS variables in `:root` of `globals.css`. Use them everywhere — **never hardcode** colors, fonts, or sizes.
+Web-admin tokens are CSS variables in `:root` of `globals.css`. Flutter exposes
+the employee-mobile palette through its app theme and shared presentation
+constants. Use the appropriate surface's tokens everywhere — **never introduce
+one-off colors, fonts, or sizes.**
 
 ### Color scale (Prismate adapted)
 
@@ -145,7 +177,10 @@ All ease curve: `cubic-bezier(0.4, 0, 0.2, 1)` (Material standard).
 --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
 ```
 
-Inter Variable loads from Google Fonts CDN in `globals.css`. Don't switch fonts — Inter is the brand font and matches Prismate's choice.
+Inter Variable loads from Google Fonts CDN in `globals.css`. For the web-admin
+profile, do not switch fonts: Inter is its product font and matches Prismate's
+choice. The employee-mobile profile intentionally uses the Manrope/Be Vietnam
+Pro pairing defined above.
 
 ### Scale
 

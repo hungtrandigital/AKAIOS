@@ -1,32 +1,33 @@
-# Caddy config for AKAIUNSAN — routes traffic to attendance-api + payroll-api + web-admin.
-# TLS terminated by Caddy itself (Let's Encrypt via HTTP-01 challenge).
-#
-# Phase 1: HTTP-only (for local dev with `localhost`).
-# Phase 5: Configure real domain (e.g., ak-tunnel.example.com) + DNS-01 challenge.
+# Caddy origin config for AKAIUNSAN. Cloudflare Tunnel terminates public TLS and
+# reaches this proxy on HTTP :80; the internal Attendance endpoint is never
+# exposed here. The storage hostname is explicit so stopping Caddy closes both
+# application and object-storage ingress during a deployment maintenance window.
 
-# ===== DEVELOPMENT (HTTP only) =====
-:80 {
-	# Next.js serves the UI and owns all /api/* rewrites in next.config.js.
-	# Keeping one proxy path avoids Caddy and Next applying conflicting rewrites.
-	reverse_proxy web-admin:3002 {
-		header_up X-Real-IP {remote_host}
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
-	}
+http://{$CADDY_STORAGE_HOST:storage.localhost} {
+	encode zstd gzip
+	reverse_proxy minio:9000
 }
 
-# ===== PRODUCTION (uncomment when ready) =====
-# ak-tunnel.example.com {
-#   encode zstd gzip
-#   reverse_proxy web-admin:3002
-# }
-#
-# attendance.ak-tunnel.example.com {
-#   encode zstd gzip
-#   reverse_proxy attendance-api:3000
-# }
-#
-# payroll.ak-tunnel.example.com {
-#   encode zstd gzip
-#   reverse_proxy payroll-api:3001
-# }
+# Application origin (HTTP only; Cloudflare owns public TLS).
+:80 {
+	# Mobile clients use /api/attendance/v1/* as a stable public prefix. Strip
+	# only /api/attendance so Fastify receives its canonical /v1/* route.
+	# Web-admin aliases such as /api/attendance/auth/* intentionally fall
+	# through to Next.js, whose rewrites map them to the correct backend route.
+	handle /api/attendance/v1/* {
+		uri strip_prefix /api/attendance
+		reverse_proxy attendance-api:3000 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+	# Web admin and its /api aliases (including payroll) are rewritten by Next.js.
+	handle {
+		reverse_proxy web-admin:3002 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+}

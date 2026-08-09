@@ -18,6 +18,7 @@ const DEFAULT_RULES: PayrollRuleSnapshot = {
   roundingMinutes: 15,
   workingHoursPerDay: 8,
   standardWorkingDaysPerMonth: 26,
+  taxMode: 'none',
 }
 
 /** Build attendance for the first N Mon-Sat dates of a month, skipping Sundays. */
