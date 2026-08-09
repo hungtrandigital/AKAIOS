@@ -15,6 +15,7 @@ permissions:
 
 env:
   CI: "true"
+  CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   JWT_SECRET: ci-test-secret-do-not-use-in-production
   INTERNAL_API_KEY: ci-test-internal-key-do-not-use-in-production
   DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
@@ -32,6 +33,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -78,6 +81,8 @@ jobs:
         working-directory: systems/corporate-website
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: actions/setup-node@v4
         with:
@@ -100,6 +105,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -124,12 +131,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      ATTENDANCE_IMAGE: akaios-ci/attendance:${{ github.sha }}
-      ATTENDANCE_MIGRATION_IMAGE: akaios-ci/attendance-migration:${{ github.sha }}
-      PAYROLL_IMAGE: akaios-ci/payroll:${{ github.sha }}
-      WEB_IMAGE: akaios-ci/web:${{ github.sha }}
+      ATTENDANCE_IMAGE: akaios-ci/attendance:${{ github.event.pull_request.head.sha || github.sha }}
+      ATTENDANCE_MIGRATION_IMAGE: akaios-ci/attendance-migration:${{ github.event.pull_request.head.sha || github.sha }}
+      PAYROLL_IMAGE: akaios-ci/payroll:${{ github.event.pull_request.head.sha || github.sha }}
+      WEB_IMAGE: akaios-ci/web:${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - name: Build production and migration images
         shell: bash
@@ -251,9 +260,7 @@ jobs:
           docker run --rm --entrypoint node "$ATTENDANCE_IMAGE" --eval '
             const { createRequire } = require("node:module");
             const appRequire = createRequire("/app/package.json");
-            const sharedRequire = createRequire(
-              "/app/node_modules/@ak/shared/package.json"
-            );
+            const sharedRequire = createRequire(appRequire.resolve("@ak/shared"));
             const argon2 = sharedRequire("argon2");
             const sharp = appRequire("sharp");
 
@@ -336,6 +343,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - name: Create non-secret validation environment
         run: |
@@ -377,6 +386,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - name: Parse guarded deployment script
         shell: pwsh
@@ -410,6 +421,8 @@ jobs:
         working-directory: systems/attendance/mobile
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: actions/setup-java@v4
         with:
@@ -486,6 +499,8 @@ jobs:
       RUN_INTEGRATION: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -565,6 +580,8 @@ jobs:
       E2E_NO_SERVER: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: pnpm/action-setup@v4
         with:
