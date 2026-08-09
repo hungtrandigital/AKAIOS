@@ -476,6 +476,12 @@ paths:
     post:
       tags: [shifts]
       summary: Assign shift to employee
+      description: |
+        Exact duplicate employee/project/shift/date assignments are rejected.
+        Temporal overlaps return `409` with `details.requiresConfirmation=true`
+        plus an opaque `conflictToken`. Confirmation must resubmit that token with
+        `confirmConflicts=true`; a changed request, resource, or conflict set returns
+        `409` with `details.reconfirmRequired=true` and the current warnings/token.
       requestBody:
         required: true
         content:
@@ -486,7 +492,58 @@ paths:
           description: Assigned
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ShiftAssignment' }
+              schema: { $ref: '#/components/schemas/ShiftAssignmentCreateResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /v1/shifts/assignments/copy-preview:
+    post:
+      tags: [shifts]
+      summary: Preview same-project schedule copy
+      description: |
+        Maps each non-cancelled source assignment to the target range by calendar-day
+        offset. The inclusive source range may contain at most 31 days. No data is
+        written. Supervisors are limited to projects with active membership.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShiftAssignmentCopyPreviewRequest' }
+      responses:
+        '200':
+          description: Deterministic copy preview
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShiftAssignmentCopyPreview' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/shifts/assignments/copy:
+    post:
+      tags: [shifts]
+      summary: Atomically copy a same-project schedule range
+      description: |
+        Requires the preview inputs plus a client-generated UUID idempotency key.
+        The opaque `previewToken` returned by copy-preview is mandatory; if any
+        source, target conflict, or relevant resource changes before save, the
+        API returns 409 with `repreviewRequired=true`.
+        Exact duplicates and invalid resources are hard failures. Soft temporal
+        conflicts require `confirmConflicts=true`. Only schedule fields are copied;
+        every target starts as `scheduled` without attendance. Replaying a completed
+        request returns the original assignments without writing duplicates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShiftAssignmentCopyRequest' }
+      responses:
+        '200':
+          description: Atomic copy result or idempotent replay
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShiftAssignmentCopyResult' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -529,16 +586,23 @@ paths:
   /v1/attendance/my-today:
     get:
       tags: [attendance]
-      summary: Current employee's assignment for today
+      summary: Current employee's assignments for today
+      description: |
+        New clients consume the complete `data` array. During the rolling mobile
+        upgrade window, the earliest assignment is also projected at the top
+        level so the previously shipped single-assignment client keeps working.
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/ShiftAssignmentWithAttendance'
-                  - $ref: '#/components/schemas/NoAssignmentToday'
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ShiftAssignmentWithAttendance' }
 
   /v1/attendance/check-in:
     post:
@@ -1418,6 +1482,118 @@ components:
         shiftId: { type: string, format: uuid }
         date: { type: string, format: date }
         notes: { type: string }
+        confirmConflicts:
+          type: boolean
+          default: false
+          description: Explicit acknowledgement of returned temporal conflict warnings.
+        conflictToken:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque fingerprint returned with a 409 warning and required when confirming it.
+
+    ScheduleConflictWarning:
+      type: object
+      required: [type, employeeId, date, shiftId, conflictCount, message]
+      properties:
+        type: { type: string, enum: [time_overlap, same_day_multiple_shift] }
+        employeeId: { type: string, format: uuid }
+        date: { type: string, format: date }
+        shiftId: { type: string, format: uuid }
+        conflictCount: { type: integer, minimum: 1 }
+        message: { type: string }
+
+    ShiftAssignmentCreateResult:
+      allOf:
+        - $ref: '#/components/schemas/ShiftAssignment'
+        - type: object
+          required: [warnings]
+          properties:
+            warnings:
+              type: array
+              items: { $ref: '#/components/schemas/ScheduleConflictWarning' }
+
+    ShiftAssignmentCopyPreviewRequest:
+      type: object
+      required: [projectId, sourceFrom, sourceTo, targetStart]
+      properties:
+        projectId: { type: string, format: uuid }
+        sourceFrom: { type: string, format: date }
+        sourceTo:
+          type: string
+          format: date
+          description: Inclusive and at most 30 calendar days after sourceFrom.
+        targetStart: { type: string, format: date }
+
+    ShiftAssignmentCopyRequest:
+      allOf:
+        - $ref: '#/components/schemas/ShiftAssignmentCopyPreviewRequest'
+        - type: object
+          required: [requestId, previewToken]
+          properties:
+            requestId: { type: string, format: uuid }
+            previewToken:
+              type: string
+              pattern: '^[0-9a-f]{64}$'
+              description: Opaque fingerprint returned by the matching preview.
+            confirmConflicts:
+              type: boolean
+              default: false
+
+    ShiftAssignmentCopyPreviewItem:
+      type: object
+      required: [sourceAssignmentId, sourceDate, targetDate, employee, shift, warnings, blockingReasons]
+      properties:
+        sourceAssignmentId: { type: string, format: uuid }
+        sourceDate: { type: string, format: date }
+        targetDate: { type: string, format: date }
+        employee: { $ref: '#/components/schemas/ShiftAssignmentEmployee' }
+        shift: { $ref: '#/components/schemas/Shift' }
+        notes: { type: [string, 'null'] }
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleConflictWarning' }
+        blockingReasons:
+          type: array
+          items:
+            type: string
+            enum: [exact_duplicate, employee_inactive, shift_inactive, outside_contract]
+
+    ShiftAssignmentCopyPreview:
+      type: object
+      required: [previewToken, projectId, sourceFrom, sourceTo, targetFrom, targetTo, items, summary]
+      properties:
+        previewToken:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Opaque fingerprint required unchanged by the copy request.
+        projectId: { type: string, format: uuid }
+        sourceFrom: { type: string, format: date }
+        sourceTo: { type: string, format: date }
+        targetFrom: { type: string, format: date }
+        targetTo: { type: string, format: date }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ShiftAssignmentCopyPreviewItem' }
+        summary:
+          type: object
+          required: [total, warningCount, blockingCount]
+          properties:
+            total: { type: integer, minimum: 0 }
+            warningCount: { type: integer, minimum: 0 }
+            blockingCount: { type: integer, minimum: 0 }
+
+    ShiftAssignmentCopyResult:
+      type: object
+      required: [requestId, replayed, assignments, warnings]
+      properties:
+        requestId: { type: string, format: uuid }
+        replayed: { type: boolean }
+        assignments:
+          type: array
+          items: { $ref: '#/components/schemas/ShiftAssignmentRoster' }
+        warnings:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleConflictWarning' }
 
     ShiftAssignmentCancel:
       type: object
@@ -1465,12 +1641,6 @@ components:
             attendanceRecord: { anyOf: [{ $ref: '#/components/schemas/AttendanceRecord' }, { type: 'null' }] }
             shift: { $ref: '#/components/schemas/Shift' }
             project: { $ref: '#/components/schemas/Project' }
-
-    NoAssignmentToday:
-      type: object
-      required: [message]
-      properties:
-        message: { type: string, enum: ['No assignment today'] }
 
     # ===== Attendance =====
     AttendanceRecord:
@@ -1551,12 +1721,25 @@ components:
 
     AttendanceOverride:
       type: object
+      description: |
+        Working statuses (`present`, `late`, `early_leave`, `half_day`) require
+        complete non-null timestamps with `checkOutAt` later than `checkInAt`.
+        Non-working statuses (`absent`, `on_leave`, `holiday`) require both
+        effective timestamps to be null. When reconciling a record that already
+        has timestamps to a non-working status, callers must explicitly send
+        both fields as null; omitting a field preserves its existing value.
       required: [reason, newStatus]
       properties:
         reason: { type: string, minLength: 10 }
         newStatus: { type: string, enum: [present, late, early_leave, half_day, absent, on_leave, holiday] }
-        checkInAt: { type: [string, 'null'], format: date-time }
-        checkOutAt: { type: [string, 'null'], format: date-time }
+        checkInAt:
+          type: [string, 'null']
+          format: date-time
+          description: Explicitly send null when clearing an existing timestamp.
+        checkOutAt:
+          type: [string, 'null']
+          format: date-time
+          description: Explicitly send null when clearing an existing timestamp.
 
     ManualAttendanceEvent:
       type: object

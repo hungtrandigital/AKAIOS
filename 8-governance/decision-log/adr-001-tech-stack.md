@@ -2,6 +2,8 @@
 
 **Status:** Accepted
 **Date:** 2026-07-16
+**Amended:** 2026-08-09 — security maintenance upgraded the chosen Next.js
+App Router implementation from 14 to 15 without changing the framework decision.
 **Decider:** @fullstack-engineer (proposed), @user (approved)
 **Related:** [Infrastructure](../../3-technical/3.1-system-foundation/infrastructure.md), [System Design](../../3-technical/3.1-system-foundation/design-standards/system-design.md)
 
@@ -38,11 +40,12 @@ Requirements: 200 blue-collar users on personal phones (mostly Android), 15 proj
 
 | Option | Verdict |
 | --- | --- |
-| **Next.js 14 (App Router)** (chosen) | Same TS ecosystem as backend, SSR for fast initial loads, easy Docker deploy, dev pool |
+| **Next.js 15 (App Router)** (chosen; upgraded from 14) | Same TS ecosystem as backend, SSR for fast initial loads, easy Docker deploy, dev pool |
 | Plain React + Vite | Less batteries-included (no API routes, no SSR) | |
 | Vue 3 + Nuxt | Smaller VN dev pool | |
 
-**Decision:** Next.js 14.
+**Decision:** Next.js 15 (the original Next.js 14 choice was upgraded in-place
+for production security fixes; App Router and React architecture are unchanged).
 
 ### Database
 
@@ -101,7 +104,7 @@ Adopt the stack:
 
 - Mobile: Flutter 3.24 (Dart 3.5)
 - Backend: Node.js 20 LTS + Fastify + TypeScript (strict mode)
-- Web admin: Next.js 14 (App Router) + TypeScript
+- Web admin: Next.js 15 (App Router) + TypeScript
 - Database: PostgreSQL 16
 - Cache / queue: Redis 7 + BullMQ
 - Object storage: MinIO (S3-compatible)

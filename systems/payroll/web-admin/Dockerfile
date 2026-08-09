@@ -2,7 +2,8 @@
 
 FROM node:20-alpine AS deps
 RUN apk add --no-cache openssl
-ENV PNPM_HOME="/pnpm" PATH="$PNPM_HOME:$PATH"
+ENV PNPM_HOME="/pnpm"
+ENV PATH="/pnpm:${PATH}"
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /repo
 
@@ -26,19 +27,19 @@ COPY systems/payroll/web-admin ./
 COPY systems/shared ./../../shared
 RUN pnpm build
 
-# Production runtime
+# Production runtime: Next's file tracer emits only the server closure.
 FROM node:20-alpine AS runtime
+RUN apk add --no-cache wget
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3002
 
-# Copy standalone output + shared
-COPY --from=build /repo/systems/payroll/web-admin/.next ./.next
-COPY --from=build /repo/systems/payroll/web-admin/public ./public
-COPY --from=build /repo/systems/payroll/web-admin/package.json ./
-COPY --from=build /repo/systems/payroll/web-admin/next.config.js ./
-COPY --from=build /repo/node_modules ./node_modules
+COPY --from=build /repo/systems/payroll/web-admin/.next/standalone ./
+COPY --from=build /repo/systems/payroll/web-admin/.next/static ./systems/payroll/web-admin/.next/static
+COPY --from=build /repo/systems/payroll/web-admin/public ./systems/payroll/web-admin/public
 
-RUN apk add --no-cache wget
 EXPOSE 3002
 USER node
-CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3002", "-H", "0.0.0.0"]
+WORKDIR /app/systems/payroll/web-admin
+CMD ["node", "server.js"]

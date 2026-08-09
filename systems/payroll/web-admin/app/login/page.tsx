@@ -10,7 +10,7 @@ import { apiLogin } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('admin@ak.local')
+  const [email, setEmail] = useState('ops@ak.local')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -119,9 +119,12 @@ export default function LoginPage() {
             fontSize: 'var(--font-size-xs)',
             color: 'var(--fg-muted)',
           }}>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Demo accounts (pwd: Demo@2026):</div>
-            <div>👑 <code>ceo@ak.local</code> &nbsp; 📋 <code>ops@ak.local</code></div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>UAT accounts (pwd: Demo@2026):</div>
+            <div>👑 <code>ceo@ak.local</code> &nbsp; ⚙️ <code>sysadmin@ak.local</code></div>
+            <div>📋 <code>ops@ak.local</code> &nbsp; 📋 <code>bo-senior@ak.local</code></div>
+            <div>📋 <code>bo-junior@ak.local</code></div>
             <div>👷 <code>sup-vincom@ak.local</code> &nbsp; 👷 <code>sup-bitexco@ak.local</code></div>
+            <div>👷 <code>sup-fv@ak.local</code></div>
           </div>
         </div>
       </div>

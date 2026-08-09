@@ -19,6 +19,18 @@ interface FetchOptions extends RequestInit {
   query?: Record<string, string | number | undefined>
 }
 
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 export async function apiFetch<T = any>(
   path: string,
   options: FetchOptions = {}
@@ -58,8 +70,15 @@ export async function apiFetch<T = any>(
   }
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`HTTP ${response.status}: ${text}`)
+    const data = await response.json().catch(() => null) as {
+      error?: { code?: string; message?: string; details?: Record<string, unknown> }
+    } | null
+    throw new ApiError(
+      response.status,
+      data?.error?.code ?? 'HTTP_ERROR',
+      data?.error?.message ?? `HTTP ${response.status}`,
+      data?.error?.details,
+    )
   }
 
   const contentType = response.headers.get('content-type') ?? ''

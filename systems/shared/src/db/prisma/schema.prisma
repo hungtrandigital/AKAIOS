@@ -89,6 +89,7 @@ enum AuditAction {
   // Attendance
   override_attendance
   create_shift_assignment
+  copy_shift_assignments
   cancel_shift_assignment
   grant_project_supervisor
   revoke_project_supervisor

@@ -104,7 +104,7 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
       throw new ForbiddenError('Employee account not active')
     }
 
-    const assignment = await prisma.shiftAssignment.findFirst({
+    const assignments = await prisma.shiftAssignment.findMany({
       where: {
         employeeId: employee.id,
         date: today,
@@ -112,15 +112,20 @@ export const attendanceRoutes: FastifyPluginAsync = async (app) => {
         project: { tenantId: request.user.tenantId },
       },
       include: { project: true, shift: true, attendanceRecord: true },
+      orderBy: [{ shift: { startTime: 'asc' } }, { assignedAt: 'asc' }],
     })
 
-    if (!assignment) return { message: 'No assignment today' }
-    return {
+    const data = await Promise.all(assignments.map(async (assignment) => ({
       ...assignment,
       attendanceRecord: assignment.attendanceRecord
         ? await toPublicAttendanceRecord(assignment.attendanceRecord)
         : null,
-    }
+    })))
+    // Rolling compatibility: the new client consumes `data`; the previously
+    // shipped client still sees the earliest assignment at the top level.
+    return data.length > 0
+      ? { ...data[0], data }
+      : { message: 'No assignment today', data }
   })
 
   // ===== CHECK-IN =====

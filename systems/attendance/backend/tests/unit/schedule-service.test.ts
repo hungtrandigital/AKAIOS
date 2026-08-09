@@ -3,6 +3,7 @@ import { BusinessRuleViolationError } from '@ak/shared'
 import {
   assertNotTooFarInPast,
   detectShiftConflict,
+  findScheduleConflicts,
   type ExistingAssignment,
 } from '../../src/services/schedule-service.js'
 
@@ -34,6 +35,15 @@ describe('detectShiftConflict', () => {
     const adjacent = { ...existing, shiftId: 'shift-adjacent', startTime: '14:00', endTime: '22:00' }
     expect(detectShiftConflict(overlapping, [existing])).toBe(true)
     expect(detectShiftConflict(adjacent, [existing])).toBe(true)
+  })
+
+  it('classifies overlap separately from another non-overlapping same-day shift', () => {
+    const overlapping = { ...existing, shiftId: 'shift-overlap', startTime: '13:00', endTime: '18:00' }
+    const adjacent = { ...existing, shiftId: 'shift-adjacent', startTime: '14:00', endTime: '22:00' }
+    expect(findScheduleConflicts(overlapping, [{ ...existing, id: 'existing-1' }]))
+      .toEqual([{ type: 'time_overlap', existingAssignmentId: 'existing-1' }])
+    expect(findScheduleConflicts(adjacent, [{ ...existing, id: 'existing-1' }]))
+      .toEqual([{ type: 'same_day_multiple_shift', existingAssignmentId: 'existing-1' }])
   })
 
   it('detects overlap between overnight shifts', () => {

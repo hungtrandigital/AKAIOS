@@ -75,9 +75,10 @@ describe.skipIf(skipIntegration)('Attendance concurrency (integration)', () => {
           method: 'GET', url: '/v1/attendance/my-today', headers,
         })
         expect(myToday.statusCode).toBe(200)
-        expect(myToday.json()).toHaveProperty('attendanceRecord')
-        expect(myToday.json().attendanceRecord).not.toHaveProperty('checkInPhotoKey')
-        expect(myToday.json().attendanceRecord.checkInPhotoUrl).toEqual(expect.any(String))
+        expect(myToday.json().data).toHaveLength(1)
+        expect(myToday.json().data[0]).toHaveProperty('attendanceRecord')
+        expect(myToday.json().data[0].attendanceRecord).not.toHaveProperty('checkInPhotoKey')
+        expect(myToday.json().data[0].attendanceRecord.checkInPhotoUrl).toEqual(expect.any(String))
 
         const checkout = () => f.app.inject({
           method: 'POST', url: '/v1/attendance/check-out', headers, payload,

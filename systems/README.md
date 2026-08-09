@@ -42,8 +42,10 @@ records during calculation.
 
 Local unit/coverage, fresh-service integration, live browser E2E, production
 package/image builds, Compose/Caddy checks, Flutter analysis/tests, and Android
-APK build pass. Native iOS compilation, immutable push/remote CI, production
-operations, remaining MVP slice acceptance, pilot, and scale-out remain pending.
+APK build pass. The 2026-08-09 dependency-security candidate is locally
+validated; exact-SHA review, new remote CI, merge, iOS release signing and
+physical-device validation, production operations, remaining MVP slice
+acceptance, pilot, and scale-out remain pending.
 
 ## Canonical Documentation
 

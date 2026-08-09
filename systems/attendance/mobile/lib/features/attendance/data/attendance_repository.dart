@@ -1,4 +1,4 @@
-// Attendance repository — check-in/out + today's assignment.
+// Attendance repository — check-in/out + today's assignments.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,6 +25,7 @@ class ShiftAssignment {
   final String endTime;
   final DateTime date;
   final String? attendanceRecordId;
+  final String? attendanceStatus;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
   final String? overrideById;
@@ -44,6 +45,7 @@ class ShiftAssignment {
     required this.endTime,
     required this.date,
     this.attendanceRecordId,
+    this.attendanceStatus,
     this.checkInAt,
     this.checkOutAt,
     this.overrideById,
@@ -60,6 +62,19 @@ class ShiftAssignment {
       'device_failure',
     }.any((code) => reason.startsWith('$code:'));
   }
+
+  bool get isNonWorkingAttendance => const {
+        'absent',
+        'on_leave',
+        'holiday',
+      }.contains(attendanceStatus);
+
+  String get attendanceStatusLabel => switch (attendanceStatus) {
+        'absent' => 'Vắng mặt',
+        'on_leave' => 'Nghỉ phép',
+        'holiday' => 'Nghỉ lễ',
+        _ => 'Không cần chấm công',
+      };
 
   factory ShiftAssignment.fromJson(Map<String, dynamic> j) {
     final shift = j['shift'] as Map<String, dynamic>?;
@@ -80,6 +95,7 @@ class ShiftAssignment {
       endTime: (shift?['endTime'] ?? '') as String,
       date: DateTime.parse(j['date'] as String),
       attendanceRecordId: record?['id'] as String?,
+      attendanceStatus: record?['status'] as String?,
       checkInAt: record?['checkInAt'] != null
           ? DateTime.parse(record!['checkInAt'] as String).toLocal()
           : null,
@@ -101,13 +117,15 @@ class AttendanceRepository {
   final HttpClient _http;
   AttendanceRepository({required HttpClient http}) : _http = http;
 
-  Future<ShiftAssignment?> getMyToday() async {
+  Future<List<ShiftAssignment>> getMyToday() async {
     try {
       final res = await _http.get('/v1/attendance/my-today');
-      if (res['id'] == null) return null; // no assignment
-      return ShiftAssignment.fromJson(res);
+      final data = res['data'] as List<dynamic>? ?? const [];
+      return data
+          .map((item) => ShiftAssignment.fromJson(item as Map<String, dynamic>))
+          .toList();
     } on ApiException catch (e) {
-      if (e.statusCode == 404) return null;
+      if (e.statusCode == 404) return [];
       rethrow;
     }
   }

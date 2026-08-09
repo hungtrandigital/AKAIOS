@@ -307,9 +307,12 @@ async function createDemoAccounts() {
         where: { phone: acc.phone },
         update: {
           email: acc.email ?? undefined,
-          passwordHash: acc.role === UserRole.employee ? passwordHash : undefined,
+          // Controlled-UAT seed is intentionally authoritative for every demo
+          // identity. Re-applying it must repair credentials left by an older
+          // seed version instead of only refreshing employee passwords.
+          passwordHash,
           role: acc.role,
-          status: acc.role === UserRole.employee ? 'active' : undefined,
+          status: 'active',
         },
         create: {
           tenantId: AK_TENANT_ID,
@@ -324,7 +327,7 @@ async function createDemoAccounts() {
         update: {
           fullName: acc.fullName,
           baseSalary: acc.baseSalary.toString(),
-          status: acc.role === UserRole.employee ? 'active' : undefined,
+          status: 'active',
         },
         create: {
           tenantId: AK_TENANT_ID,

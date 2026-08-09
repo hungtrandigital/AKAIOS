@@ -1,12 +1,17 @@
 # Attendance System
 
 **System Name:** `attendance`
-**Status:** Remediation/code gate complete; remaining MVP slice and pilot acceptance pending (PRD-EPIC-002)
+**Status:** Prior remediation gate complete; 2026-08-09 dependency-security candidate validated locally; exact-SHA CI, merge/deployment, remaining MVP slice, and pilot acceptance pending (PRD-EPIC-002)
 **Owner:** @fullstack-engineer
 
 ## Overview
 
 Hệ thống chấm công cho nhân viên vệ sinh AKAIUNSAN tại 15 dự án. Nhân viên check-in/out qua mobile app (Flutter) kèm GPS + ảnh chụp. Back Office theo dõi real-time, override khi cần. Hệ thống cũng sinh báo cáo PDF/CSV gửi khách hàng.
+
+The employee Flutter client uses the corporate-aligned mobile profile defined in
+`docs/style-system/STYLE_GUIDE.md`: Manrope/Be Vietnam Pro typography and the
+olive/forest/lime/paper palette, bounded by internal accessibility and attendance
+controls. The Back Office retains its Inter/blue internal product profile.
 
 ### Target Users
 
@@ -16,10 +21,25 @@ Hệ thống chấm công cho nhân viên vệ sinh AKAIUNSAN tại 15 dự án.
 
 The Projects and Employees web pages remain read-only. Tenant-scoped shift
 planning is available from the `Lịch ca` tab on the attendance operations board,
-with searchable employee selection, paginated rosters, and full-result status
-totals; project/employee mutation operations remain API/operator workflows for now.
+with a project/month roster, searchable employee selection, paginated full-range
+status totals, and same-project schedule copy with mandatory preview.
+Exact duplicate employee/project/shift/date rows remain blocked. Other temporal
+conflicts are shown as warnings and require explicit confirmation; confirmed
+conflicts use a request/resource fingerprint so changed warnings must be reviewed
+again, and copy preview shows every source→target mapping. Confirmed conflicts
+and copy provenance are audited. Project/employee mutation operations
+remain API/operator workflows for now.
+Payroll and customer-report generation fail closed with employee/date/assignment
+details when more than one assignment was actually attended on the same date;
+the current recovery path is the authorized attendance override API. A guided BO
+reconciliation screen is deferred and remains a pilot prerequisite.
+The mobile Today screen treats reconciled `absent`, `on_leave`, and `holiday`
+records as terminal non-working states and does not offer a dead check-in action.
 Employee self-attendance always requires geofence-valid GPS plus a new JPEG. The
-official mobile client exposes camera capture only; the API fully decodes the JPEG,
+official mobile client exposes camera capture only, except for a default-off,
+debug+iOS-Simulator-only UAT seam that replaces the camera input with a visibly
+labeled JPEG while retaining the normal GPS/API/storage checks. Profile/release,
+Android, and physical-iPhone paths remain camera-only. The API fully decodes the JPEG,
 enforces a 5 MB cap, a 16 MP decode ceiling, and a minimum 320×240 raster before
 storage. MVP does not include device attestation/liveness, so a direct API client
 cannot cryptographically prove camera origin or capture time.
@@ -153,4 +173,4 @@ attendance/
 
 ---
 
-*The remediation commit and remote CI gate pass. The 2026-07-20 local fixed-verifier exception remains an uncommitted working-tree change; mobile history and remaining slice/pilot acceptance still remain.*
+*The prior remediation commit passed its historical remote gate. The 2026-08-09 dependency-security candidate passes locally; exact-SHA review, new remote CI, merge, deployment, and remaining slice/pilot acceptance remain pending.*

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
   async rewrites() {
     const attendanceBase = process.env.ATTENDANCE_API_URL ?? 'http://localhost:3000'
     const payrollBase = process.env.PAYROLL_API_URL ?? 'http://localhost:3001'

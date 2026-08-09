@@ -28,9 +28,11 @@ class _FakeAttendanceRepository extends AttendanceRepository {
             http: HttpClient(authStorage: _FakeAuthStorage(() async => null)));
 
   ShiftAssignment? assignment;
+  List<ShiftAssignment>? assignmentList;
 
   @override
-  Future<ShiftAssignment?> getMyToday() async => assignment;
+  Future<List<ShiftAssignment>> getMyToday() async =>
+      assignmentList ?? (assignment == null ? [] : [assignment!]);
 }
 
 void main() {
@@ -70,6 +72,34 @@ void main() {
     expect(assignment.checkOutAt, DateTime.parse(checkOutUtc).toLocal());
     expect(assignment.checkInAt!.isUtc, isFalse);
     expect(assignment.checkOutAt!.isUtc, isFalse);
+  });
+
+  test('parses project geofence data from a Today assignment', () {
+    final assignment = ShiftAssignment.fromJson({
+      'id': 'assignment-1',
+      'projectId': 'project-1',
+      'shiftId': 'shift-1',
+      'date': '2026-08-08T00:00:00.000Z',
+      'project': {
+        'id': 'project-1',
+        'name': 'Tòa nhà Vincom Quận 1',
+        'address': '72 Lê Thánh Tôn',
+        'latitude': '10.7770000',
+        'longitude': 106.701,
+        'geofenceRadiusMeters': 50,
+      },
+      'shift': {
+        'id': 'shift-1',
+        'name': 'Ca sáng',
+        'startTime': '08:00',
+        'endTime': '12:00',
+      },
+    });
+
+    expect(assignment.projectAddress, '72 Lê Thánh Tôn');
+    expect(assignment.projectLatitude, 10.777);
+    expect(assignment.projectLongitude, 106.701);
+    expect(assignment.geofenceRadiusMeters, 50);
   });
 
   test('recognizes only supervisor-assisted camera events as manual', () {
@@ -115,6 +145,24 @@ void main() {
     expect(blankActor.isSupervisorAssisted, isFalse);
   });
 
+  test('parses non-working attendance as a terminal Today state', () {
+    final assignment = ShiftAssignment.fromJson({
+      'id': 'leave-assignment',
+      'projectId': 'project-id',
+      'shiftId': 'shift-id',
+      'date': '2026-07-20T00:00:00.000Z',
+      'attendanceRecord': {
+        'id': 'leave-record',
+        'status': 'on_leave',
+        'checkInAt': null,
+        'checkOutAt': null,
+      },
+    });
+
+    expect(assignment.isNonWorkingAttendance, isTrue);
+    expect(assignment.attendanceStatusLabel, 'Nghỉ phép');
+  });
+
   test('classifies camera permission and hardware failures without bypassing',
       () {
     expect(classifyCameraPlatformError('camera_access_denied'),
@@ -148,6 +196,54 @@ void main() {
     expect(hasJpegSignature([0xff, 0xd8, 0xff, 0xe0]), isTrue);
     expect(hasJpegSignature([0x89, 0x50, 0x4e, 0x47]), isFalse);
     expect(hasJpegSignature([]), isFalse);
+  });
+
+  test('UAT simulated camera is impossible outside debug builds', () {
+    expect(
+      allowsUatSimulatedCamera(
+        isDebug: true,
+        requested: true,
+        isIos: true,
+        isSimulator: true,
+      ),
+      isTrue,
+    );
+    expect(
+      allowsUatSimulatedCamera(
+        isDebug: false,
+        requested: true,
+        isIos: true,
+        isSimulator: true,
+      ),
+      isFalse,
+    );
+    expect(
+      allowsUatSimulatedCamera(
+        isDebug: true,
+        requested: false,
+        isIos: true,
+        isSimulator: true,
+      ),
+      isFalse,
+    );
+    expect(
+      allowsUatSimulatedCamera(
+        isDebug: true,
+        requested: true,
+        isIos: true,
+        isSimulator: false,
+      ),
+      isFalse,
+    );
+    expect(
+      allowsUatSimulatedCamera(
+        isDebug: true,
+        requested: true,
+        isIos: false,
+        isSimulator: true,
+      ),
+      isFalse,
+    );
   });
 
   test('keeps stored credentials on refresh network failure', () {
@@ -291,14 +387,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Dự án Bệnh viện Trung tâm'), findsOneWidget);
-    expect(tester.takeException(), isNull);
     await tester.scrollUntilVisible(
-      find.text('Check-in'),
+      find.text('Dự án Bệnh viện Trung tâm'),
       220,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Check-in'));
+    expect(find.text('Dự án Bệnh viện Trung tâm'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.drag(find.byType(ListView), const Offset(0, -1800),
+        warnIfMissed: false);
+    await tester.pumpAndSettle();
+    final checkInButton = find.byIcon(Icons.login);
+    await tester.tap(checkInButton);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Bước 3 · Xác nhận'),
@@ -320,6 +420,100 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ca hôm nay'), findsOneWidget);
     expect(find.text('Bước 3 · Xác nhận'), findsNothing);
+  });
+
+  testWidgets('supervisor help sheet keeps both actions reachable at 200% text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    final assignment = ShiftAssignment(
+      id: 'assignment-id',
+      projectId: 'project-id',
+      projectName: 'Dự án Bệnh viện Trung tâm',
+      shiftId: 'shift-id',
+      shiftName: 'Ca sáng',
+      startTime: '06:00',
+      endTime: '14:00',
+      date: DateTime(2026, 7, 20),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authStorageProvider
+              .overrideWithValue(_FakeAuthStorage(() async => 'token')),
+          attendanceRepositoryProvider.overrideWithValue(
+            _FakeAttendanceRepository(assignment),
+          ),
+        ],
+        child: const AKApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byType(ListView),
+      const Offset(0, -1800),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.login));
+    await tester.pumpAndSettle();
+
+    final helpButton = find.text('Không chụp được ảnh?');
+    await tester.scrollUntilVisible(
+      helpButton,
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(helpButton);
+    await tester.pumpAndSettle();
+    await tester.tap(helpButton);
+    await tester.pumpAndSettle();
+
+    Finder sheetScroll() => find
+        .descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+
+    final closeButton = find.text('Đóng');
+    await tester.scrollUntilVisible(
+      closeButton,
+      180,
+      scrollable: sheetScroll(),
+    );
+    expect(closeButton, findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(closeButton);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+
+    await tester.ensureVisible(helpButton);
+    await tester.pumpAndSettle();
+    await tester.tap(helpButton);
+    await tester.pumpAndSettle();
+    final recheckButton = find.text('Kiểm tra lại chấm công');
+    await tester.scrollUntilVisible(
+      recheckButton,
+      180,
+      scrollable: sheetScroll(),
+    );
+    await tester.tap(recheckButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(
+      find.textContaining('Chưa thấy bản ghi mới'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('employee can reconcile a supervisor manual event',
@@ -346,12 +540,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Check-in'),
-      220,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('Check-in'));
+    await tester.drag(find.byType(ListView), const Offset(0, -700),
+        warnIfMissed: false);
+    await tester.pumpAndSettle();
+    final checkInButton = find.byIcon(Icons.login);
+    await tester.tap(checkInButton);
     await tester.pumpAndSettle();
 
     repository.assignment = ShiftAssignment(
@@ -408,6 +601,106 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Đăng xuất'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Today exposes every assignment with an unambiguous action',
+      (tester) async {
+    final repository = _FakeAttendanceRepository(null)
+      ..assignmentList = [
+        ShiftAssignment(
+          id: 'morning',
+          projectId: 'project-1',
+          projectName: 'Dự án Một',
+          shiftId: 'shift-1',
+          shiftName: 'Ca sáng',
+          startTime: '06:00',
+          endTime: '14:00',
+          date: DateTime(2026, 7, 24),
+        ),
+        ShiftAssignment(
+          id: 'evening',
+          projectId: 'project-2',
+          projectName: 'Dự án Hai',
+          shiftId: 'shift-2',
+          shiftName: 'Ca chiều',
+          startTime: '14:00',
+          endTime: '22:00',
+          date: DateTime(2026, 7, 24),
+        ),
+      ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authStorageProvider
+              .overrideWithValue(_FakeAuthStorage(() async => 'token')),
+          attendanceRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const AKApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Hôm nay cô/chú có 2 ca'), findsOneWidget);
+    expect(find.text('Dự án Một'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Check-in · Ca sáng'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Check-in · Ca sáng'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Dự án Hai'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Dự án Hai'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Check-in · Ca chiều'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Check-in · Ca chiều'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Today does not offer check-in for reconciled non-working status',
+      (tester) async {
+    final repository = _FakeAttendanceRepository(
+      ShiftAssignment(
+        id: 'leave-assignment',
+        projectId: 'project-id',
+        projectName: 'Dự án Một',
+        shiftId: 'shift-id',
+        shiftName: 'Ca sáng',
+        startTime: '06:00',
+        endTime: '14:00',
+        date: DateTime(2026, 7, 24),
+        attendanceRecordId: 'leave-record',
+        attendanceStatus: 'on_leave',
+      ),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authStorageProvider
+              .overrideWithValue(_FakeAuthStorage(() async => 'token')),
+          attendanceRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const AKApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('NGHỈ PHÉP'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('không cần chấm công'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('không cần chấm công'), findsOneWidget);
+    expect(find.byIcon(Icons.login), findsNothing);
+    expect(find.byIcon(Icons.logout), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

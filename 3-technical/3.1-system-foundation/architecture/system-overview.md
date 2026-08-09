@@ -1,8 +1,8 @@
 # System Overview — AKAIUNSAN
 
-**Status:** Reconciled with the 2026-07-18 implementation tree
+**Status:** Reconciled with the 2026-08-09 local delivery candidate
 
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-08-09
 
 **Owner:** @system-architecture
 
@@ -37,7 +37,7 @@ flowchart LR
 - **Location:** [systems/payroll](../../../systems/payroll/README.md)
 - **Purpose:** Monthly period calculation, rule versions, audited line overrides,
   approval, paid/locked states, and XLSX export through the shared web admin.
-- **Runtime:** Fastify/TypeScript API plus Next.js 14 web admin.
+- **Runtime:** Fastify/TypeScript API plus Next.js 15 web admin.
 - **Attendance input:** `GET /internal/attendance` on Attendance with
   `X-Internal-API-Key` and required tenant/employee/date scope.
 
@@ -65,9 +65,14 @@ terminates public TLS and reaches Caddy on local HTTP. The main hostname serves
 web plus the mobile `/api/attendance/v1/*` prefix; a separate storage hostname
 routes presigned MinIO requests.
 
-Local image/configuration validation is complete, and remediation commit `056a769`
-passes all five remote CI jobs. The live server, tunnel policy, log rotation,
-backup schedule/restore drill, native iOS build, and pilot/scale-out are not yet
+Local candidate validation is complete, including fresh migrations, 9/9 live
+Playwright scenarios against the final container stack, production package and
+image builds, non-root production-only application closures, API readiness
+checks, and a web-container `/login` smoke test. Commit `056a769` and its five green
+remote jobs remain historical baseline evidence only; the 2026-08-09 candidate
+still requires an exact-SHA review and a new green remote CI run before merge.
+The live server, tunnel policy, log rotation, backup schedule/restore drill, iOS
+release signing and physical-device validation, and pilot/scale-out are not yet
 accepted.
 
 ## Future Systems

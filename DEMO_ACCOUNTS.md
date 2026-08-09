@@ -10,11 +10,12 @@ Demo@2026
 
 (Uniform across all demo accounts)
 
-## 👑 CEO / Executive
+## 👑 CEO / System Admin
 
 | Email | Name | Role | Use |
 | --- | --- | --- | --- |
 | `ceo@ak.local` | Trần Minh Quốc | `system_admin` | Full access + executive dashboard at `/executive` |
+| `sysadmin@ak.local` | Ngô Hệ Thống (Sysadmin) | `system_admin` | User, role, permission, and system configuration |
 
 ## 📋 Back Office (BO)
 
@@ -60,6 +61,11 @@ ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:all
 ```
 
 (From `/Users/hungtran/Projects/AKAIUNSAN` after `pnpm install && pnpm prisma:generate`.)
+
+Rerunning `db:seed:demo` reasserts the documented password hash and active
+user/employee status for these 13 reserved demo identities only. The seed still
+requires `ALLOW_DEMO_SEED=true`, preflights tenant/employee linkage collisions,
+and refuses to take ownership of a reserved phone/code that belongs elsewhere.
 
 ### Generated development accounts
 

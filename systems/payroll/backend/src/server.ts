@@ -42,16 +42,20 @@ export async function buildServer() {
 
   // Register before route plugins so encapsulated routes inherit the handler.
   app.setErrorHandler(function (error, request, reply) {
-    const e = error as Error & { statusCode?: number; code?: string }
+    const e = error as Error & {
+      statusCode?: number
+      code?: string
+      details?: Record<string, unknown>
+    }
     const validationError = error as Error & {
       issues?: unknown
       errors?: unknown
       aggregateErrors?: unknown
     }
     const isZodError = error instanceof ZodError
-      || error.name === 'ZodError'
-      || error.constructor?.name === 'ZodError'
-      || 'issues' in error
+      || e.name === 'ZodError'
+      || e.constructor?.name === 'ZodError'
+      || 'issues' in e
     if (isZodError) {
       const zodIssues = validationError.issues
         ?? validationError.errors
@@ -66,7 +70,11 @@ export async function buildServer() {
     }
     if (e.statusCode && e.statusCode < 500) {
       return reply.status(e.statusCode).send({
-        error: { code: e.code ?? 'ERROR', message: e.message },
+        error: {
+          code: e.code ?? 'ERROR',
+          message: e.message,
+          ...(e.details ? { details: e.details } : {}),
+        },
       })
     }
     if (

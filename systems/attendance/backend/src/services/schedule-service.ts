@@ -4,6 +4,7 @@ import { BusinessRuleViolationError } from '@ak/shared'
 import { getVietnamDateKey } from './attendance-service.js'
 
 export interface ExistingAssignment {
+  id?: string
   employeeId: string
   date: Date
   shiftId: string
@@ -12,22 +13,40 @@ export interface ExistingAssignment {
   isOvernight: boolean
 }
 
+export interface ScheduleConflict {
+  type: 'time_overlap' | 'same_day_multiple_shift'
+  existingAssignmentId?: string
+}
+
 /**
- * BR-ATT-006: Detect whether a new shift overlaps the employee's assignments,
- * including an overnight shift that crosses an adjacent calendar date.
- * Returns true if conflict found.
+ * BR-ATT-006: Find conflicts that require an explicit scheduler acknowledgement.
+ * Same-day non-overlapping shifts still warn; adjacent-day assignments warn only
+ * when their absolute time ranges overlap.
  */
-export function detectShiftConflict(
+export function findScheduleConflicts(
   newAssignment: { employeeId: string; date: Date; shiftId: string; startTime: string; endTime: string; isOvernight: boolean },
   existing: ExistingAssignment[]
-): boolean {
-  return existing.some((e) => {
-    if (e.employeeId !== newAssignment.employeeId) return false
-    if (sameBusinessDate(e.date, newAssignment.date)) return true
+): ScheduleConflict[] {
+  return existing.flatMap<ScheduleConflict>((e): ScheduleConflict[] => {
+    if (e.employeeId !== newAssignment.employeeId) return []
     const existingRange = toAbsoluteRange(e)
     const newRange = toAbsoluteRange(newAssignment)
-    return existingRange.start < newRange.end && newRange.start < existingRange.end
+    const overlaps = existingRange.start < newRange.end && newRange.start < existingRange.end
+    if (overlaps) {
+      return [{ type: 'time_overlap' as const, existingAssignmentId: e.id }]
+    }
+    if (sameBusinessDate(e.date, newAssignment.date)) {
+      return [{ type: 'same_day_multiple_shift' as const, existingAssignmentId: e.id }]
+    }
+    return []
   })
+}
+
+export function detectShiftConflict(
+  newAssignment: Parameters<typeof findScheduleConflicts>[0],
+  existing: ExistingAssignment[],
+): boolean {
+  return findScheduleConflicts(newAssignment, existing).length > 0
 }
 
 function sameBusinessDate(left: Date, right: Date): boolean {

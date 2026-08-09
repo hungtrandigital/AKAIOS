@@ -108,6 +108,9 @@ test.describe('Web admin auth + navigation', () => {
     let assignments: Array<Record<string, unknown>> = []
     let createPayload: Record<string, unknown> | undefined
     let cancelPayload: Record<string, unknown> | undefined
+    let copyPreviewPayload: Record<string, unknown> | undefined
+    let copyPayload: Record<string, unknown> | undefined
+    let monthlyQuery: URLSearchParams | undefined
 
     await page.route('**/api/attendance/projects**', (route) => route.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({ data: [project] }),
@@ -122,6 +125,7 @@ test.describe('Web admin auth + navigation', () => {
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [shift] }) })
       }
       if (request.method() === 'GET' && pathname.endsWith('/shifts/assignments')) {
+        monthlyQuery = new URL(request.url()).searchParams
         const summary = { scheduled: 0, checked_in: 0, checked_out: 0, completed: 0, missed: 0, cancelled: 0 }
         for (const assignment of assignments) summary[assignment.status as keyof typeof summary] += 1
         return route.fulfill({
@@ -134,8 +138,86 @@ test.describe('Web admin auth + navigation', () => {
           }),
         })
       }
+      if (request.method() === 'POST' && pathname.endsWith('/shifts/assignments/copy-preview')) {
+        copyPreviewPayload = request.postDataJSON()
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            previewToken: 'a'.repeat(64),
+            projectId: project.id,
+            sourceFrom: copyPreviewPayload?.sourceFrom,
+            sourceTo: copyPreviewPayload?.sourceTo,
+            targetFrom: copyPreviewPayload?.targetStart,
+            targetTo: copyPreviewPayload?.targetStart,
+            items: [
+              ...Array.from({ length: 21 }, (_, index) => ({
+                sourceAssignmentId: `safe-${index}`,
+                sourceDate: copyPreviewPayload?.sourceFrom,
+                targetDate: copyPreviewPayload?.targetStart,
+                employee,
+                shift,
+                notes: null,
+                warnings: [],
+                blockingReasons: [],
+              })),
+              {
+                sourceAssignmentId: 'warning-after-first-page',
+                sourceDate: copyPreviewPayload?.sourceFrom,
+                targetDate: copyPreviewPayload?.targetStart,
+                employee,
+                shift,
+                notes: 'Sảnh chính',
+                warnings: [{
+                  type: 'same_day_multiple_shift',
+                  employeeId: employee.id,
+                  date: copyPreviewPayload?.targetStart,
+                  shiftId: shift.id,
+                  conflictCount: 2,
+                  message: 'Nhân viên đã có một ca khác trong ngày.',
+                }],
+                blockingReasons: [],
+              },
+            ],
+            summary: { total: 22, warningCount: 1, blockingCount: 0 },
+          }),
+        })
+      }
+      if (request.method() === 'POST' && pathname.endsWith('/shifts/assignments/copy')) {
+        copyPayload = request.postDataJSON()
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ assignments: [{ id: 'copied-assignment' }] }),
+        })
+      }
       if (request.method() === 'POST' && pathname.endsWith('/shifts/assignments')) {
         createPayload = request.postDataJSON()
+        if (createPayload?.notes === 'Cảnh báo stale' && !createPayload?.confirmConflicts) {
+          await new Promise((resolve) => setTimeout(resolve, 150))
+          return route.fulfill({
+            status: 409,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              error: {
+                code: 'CONFLICT',
+                message: 'Schedule conflict requires confirmation',
+                details: {
+                  requiresConfirmation: true,
+                  conflictToken: 'b'.repeat(64),
+                  warnings: [{
+                    type: 'same_day_multiple_shift',
+                    employeeId: employee.id,
+                    date: createPayload?.date,
+                    shiftId: shift.id,
+                    conflictCount: 1,
+                    message: 'Nhân viên đã có một ca khác trong ngày.',
+                  }],
+                },
+              },
+            }),
+          })
+        }
         const assignment = {
           id: '40000000-0000-4000-8000-000000000004',
           date: `${createPayload?.date}T00:00:00.000Z`,
@@ -153,7 +235,9 @@ test.describe('Web admin auth + navigation', () => {
     })
 
     await page.getByRole('tab', { name: 'Lịch ca' }).click()
-    await expect(page.getByRole('heading', { name: 'Kế hoạch ca làm việc' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Lịch dự án theo tháng' })).toBeVisible()
+    await expect.poll(() => monthlyQuery?.get('projectId')).toBe(project.id)
+    await expect.poll(() => monthlyQuery?.get('from')?.endsWith('-01')).toBe(true)
     await page.getByLabel('Nhân viên phân ca').selectOption(employee.id)
     await page.getByLabel('Dự án phân ca').selectOption(project.id)
     await page.getByLabel('Khung giờ phân ca').selectOption(shift.id)
@@ -172,6 +256,39 @@ test.describe('Web admin auth + navigation', () => {
     await expect.poll(() => cancelPayload?.reason).toBe('Nhân viên đổi lịch trực theo điều phối')
     await expect(page.locator('.schedule-table')).toContainText('Đã hủy')
     await expect(page.getByRole('button', { name: 'Hủy ca' })).toHaveCount(0)
+
+    await page.getByLabel('Nhân viên phân ca').selectOption(employee.id)
+    await page.getByLabel('Dự án phân ca').selectOption(project.id)
+    await page.getByLabel('Khung giờ phân ca').selectOption(shift.id)
+    await page.getByLabel('Ghi chú phân ca').fill('Cảnh báo stale')
+    await page.getByRole('button', { name: 'Xếp ca' }).click()
+    await expect(page.getByLabel('Ngày làm việc')).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Vẫn lưu lịch' })).toBeVisible()
+    const selectedMonthStart = monthlyQuery?.get('from')
+    expect(selectedMonthStart).toMatch(/^\d{4}-\d{2}-01$/)
+    const currentScheduleDate = await page.getByLabel('Ngày làm việc').inputValue()
+    const alternateScheduleDate = currentScheduleDate === selectedMonthStart
+      ? `${selectedMonthStart!.slice(0, -2)}02`
+      : selectedMonthStart!
+    await page.getByLabel('Ngày làm việc').fill(alternateScheduleDate)
+    await expect(page.getByRole('button', { name: 'Vẫn lưu lịch' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Xếp ca' }).click()
+    await expect(page.getByRole('button', { name: 'Vẫn lưu lịch' })).toBeVisible()
+    await page.getByRole('button', { name: 'Vẫn lưu lịch' }).click()
+    await expect.poll(() => createPayload?.conflictToken).toBe('b'.repeat(64))
+    await expect.poll(() => createPayload?.confirmConflicts).toBe(true)
+
+    await page.getByRole('button', { name: 'Xem trước copy' }).click()
+    await expect.poll(() => copyPreviewPayload?.projectId).toBe(project.id)
+    await expect(page.getByText('Có lịch trùng thời gian hoặc nhân viên có nhiều ca trong ngày.')).toBeVisible()
+    await expect(page.getByText('Nhân viên đã có một ca khác trong ngày. (2)')).toBeVisible()
+    await expect(page.getByText('Đang hiển thị đầy đủ 22 lịch; lịch có cảnh báo hoặc bị chặn được đưa lên đầu.')).toBeVisible()
+    await expect(page.getByText('Hợp lệ')).toHaveCount(21)
+    await page.getByRole('button', { name: 'Xác nhận cảnh báo và copy' }).click()
+    await expect.poll(() => copyPayload?.confirmConflicts).toBe(true)
+    await expect.poll(() => copyPayload?.previewToken).toBe('a'.repeat(64))
+    await expect.poll(() => typeof copyPayload?.requestId).toBe('string')
+    await expect(page.getByText('Đã copy 1 lịch và lưu audit.')).toBeVisible()
   })
 
   test('system admin can record and see an audited manual attendance exception', async ({ page }) => {

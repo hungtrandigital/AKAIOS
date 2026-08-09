@@ -7,7 +7,7 @@
 // BR-CUST-004: CSV includes row-level detail for audit
 
 import PDFDocument from 'pdfkit'
-import { prisma } from '@ak/shared'
+import { BusinessRuleViolationError, prisma } from '@ak/shared'
 import { uploadObject, getPresignedUrl, MINIO_BUCKET_NAMES } from '@ak/shared'
 import { randomUUID } from 'node:crypto'
 
@@ -77,6 +77,7 @@ export async function aggregateReportData(
   let totalShifts = 0
   let totalCheckIns = 0
   const uniqueEmployees = new Set<string>()
+  const workedEmployeeDays = new Set<string>()
 
   for (const assignment of project.shiftAssignments) {
     totalShifts++
@@ -104,6 +105,14 @@ export async function aggregateReportData(
     if (assignment.attendanceRecord) {
       const rec = assignment.attendanceRecord
       if (rec.checkInAt) {
+        const workedEmployeeDay = `${assignment.employeeId}:${dateKey}`
+        if (workedEmployeeDays.has(workedEmployeeDay)) {
+          throw new BusinessRuleViolationError(
+            'Multiple attended assignments for one employee/project/date must be reconciled before customer report generation',
+            { employeeId: assignment.employeeId, projectId, workDate: dateKey },
+          )
+        }
+        workedEmployeeDays.add(workedEmployeeDay)
         dayEntry.checkIns++
         totalCheckIns++
         empEntry.daysWorked++

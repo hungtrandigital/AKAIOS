@@ -2,7 +2,178 @@
 
 ## Current Status
 
-**Last Updated:** 2026-07-21 (Windows Git-to-UAT automation, seed-only rebuild, and remote CI validated; Windows-host execution pending)
+**Last Updated:** 2026-08-09 (production dependency audit remediated locally; remote CI/merge and HPC routing update pending)
+
+## Production Dependency Security Remediation — 2026-08-09
+
+- The root pnpm production audit baseline of 43 findings (25 High, 15 Moderate,
+  3 Low, 0 Critical) is remediated to `No known vulnerabilities found` across
+  359 production dependencies. The four pnpm workspaces now resolve Next.js
+  15.5.23, Fastify 5.11.3, Sharp 0.35.0, patched Fastify plugins and safe
+  transitive fast-uri, find-my-way, PostCSS, nanoid, UUID, and brace-expansion
+  versions.
+- Three documented cross-range overrides are intentionally required because the
+  direct parents have not published compatible ranges: Next.js → PostCSS
+  8.5.23, Next.js → Sharp 0.35.0, and ExcelJS → UUID 11.1.1. Other transitive
+  remediations remain lockfile-resolved inside their parents' declared ranges.
+  The Node runtime floor is now 20.9.0 to match Sharp 0.35.
+- Fastify 5 compatibility keeps an unauthenticated request decorator undefined
+  and narrows unknown handler errors before reading Zod metadata. Sharp 0.35's
+  current export map is paired with a TypeScript-only path to its bundled
+  declarations; JPEG decode/boundary tests execute the real native module.
+- Runtime-closure review exposed that the original images copied the unpruned
+  workspace graph, including development-only test and lint tools, and that the
+  web package declared `@ak/shared` even though only Playwright imports it. The
+  web dependency is now development-only; each API uses `pnpm deploy --prod`
+  with a Prisma client generated inside its isolated closure, while Next.js
+  emits a traced standalone server. The one-shot Compose migration service uses
+  an explicit `migration` target so Prisma CLI and build tooling are absent from
+  every long-running application image.
+- All three Node 20 Alpine application images build and run as UID 1000. Their
+  filesystems contain none of Vitest, Vite, ESLint, TypeScript-ESLint, TSX,
+  Turbo, Prisma CLI, or Playwright; no broken or absolute dependency symlink
+  remains. In-image checks execute real Prisma queries from both APIs, Argon2
+  hash/verify, Sharp JPEG output, and ExcelJS output. The dedicated migration
+  target applies all seven migrations to an empty database; the final
+  image-based PostgreSQL/Redis/MinIO stack passes both readiness endpoints,
+  web `/login`, and Playwright 9/9. Next's standalone trace retains only its
+  required TypeScript runtime files, not the development dependency graph.
+- GitHub Actions now has an independent exact-SHA container-runtime job that
+  builds the three production images plus the one-shot migration target. For
+  the three long-running images it enforces non-root execution, pruned and
+  relocatable dependency closures, Argon2/Sharp/ExcelJS runtime smokes, and web
+  `/login` HTTP 200. Migration execution remains local evidence; this job only
+  proves that target builds. Its first remote run remains a pre-merge gate.
+- Final local gates pass on the remediated graph: frozen-lockfile install, lint
+  (0 errors), typecheck, 170/170 unit tests, coverage above 90%, all production
+  package builds, seven fresh migrations, Attendance 13/13 plus Payroll 1/1
+  integration tests, and Playwright 9/9 against both production processes and
+  the final container stack. React 18.3.1 remains a deliberate
+  minimal-compatibility choice accepted by the installed Next.js peer range and
+  verified by the complete production build/browser suite; a React 19 migration
+  is not bundled into this audit-only batch.
+- The separate corporate-website npm audit is outside the 43-finding pnpm batch
+  and remains a distinct release risk. This remediation does not authorize HPC
+  deployment; remote CI and exact-SHA review must pass before merge or rollout.
+
+## Android UAT Package and HPC Route Readiness — 2026-08-09
+
+- Installed a minimal local Android build toolchain (OpenJDK 17, SDK/build-tools
+  34 and accepted licenses), cleaned stale Docker-generated Flutter artifacts,
+  and built the employee app as an installable debug APK with
+  `API_BASE_URL=https://akaios.prismate.vn/api/attendance`.
+- The 114,236,964-byte package identifies as `vn.akaiunsan.ak_attendance_mobile` version
+  `0.1.0+1`, targets Android 34 with minSdk 21, includes Internet/GPS/camera
+  permissions, verifies under the Android debug certificate, and has SHA-256
+  `33a9a8fb2cf64493702db647138f94b4baa1b8e97a2b1b8c71c2e527b5ca4b55`.
+  It installed and launched on a Google APIs Android emulator without a fatal
+  runtime error; Login rendered with the corporate-aligned fonts and layout.
+- The public host itself returns HTTPS 200, but its mobile path is not ready:
+  `GET /api/attendance/v1/attendance/my-today` reaches the backend as
+  `/v1/attendance/v1/attendance/my-today` and returns 404. Read-only remote
+  inspection found the clean HPC checkout on
+  `agent/akaiunsan-corporate-website` at `cbb3a96`; that release predates the
+  guarded Windows update script and active Caddy prefix handling. The supported
+  HPC update must wait for a reviewed, clean release SHA containing the routing
+  and mobile changes. Do not treat this APK as live-UAT-ready until the same
+  request returns authenticated 401 rather than route 404.
+- Current-worktree gates pass without cached execution: root lint/typecheck,
+  Shared 2/2, Attendance 56/56 and Payroll 112/112 unit tests, core coverage,
+  all production package builds, seven migrations on fresh PostgreSQL, Attendance
+  13/13 plus Payroll 1/1 integration tests, and Playwright 9/9. The browser gate
+  exposed and fixed a calendar-dependent fixture that used a July date after the
+  monthly UI had advanced to August; it now selects a different valid date inside
+  the active month. Flutter format/analyze, 22/22 tests, APK signature/archive
+  verification, emulator install and cold launch also pass. The 43-finding root
+  production audit recorded at this point was subsequently remediated by the
+  dependency-security batch above. The separate corporate website audit still
+  reports four High affected packages (not four advisories): `nanoid`, `next`,
+  `postcss`, and `sharp`; it remains separate from the Android APK and pnpm batch.
+
+## Corporate-aligned Employee Mobile UI — 2026-08-08
+
+- Merged the latest corporate/mobile work from
+  `akaios/agent/akaiunsan-corporate-website` while retaining the existing
+  authentication, multi-assignment, camera-failure, simulated-camera UAT, and
+  schedule/payroll changes in the working tree. The merge also adds the corporate
+  website workspace and its independent CI gate.
+- Revamped Login, Today, and the check-in/out sequence with the bounded employee
+  mobile profile: Manrope headings, Be Vietnam Pro body/control text, corporate
+  olive/forest/lime/paper colors, clearer editorial hierarchy, and a large
+  explicit action for each shift. Marketing hero scale and decorative website
+  effects remain excluded from the operational workflow.
+- Bundled the required font weights and their upstream SIL OFL licenses for
+  offline iOS/Android rendering. Mobile remains scroll-safe at 200% text on a
+  320×568 viewport and preserves ≥52dp primary actions, explicit status, GPS,
+  fresh-camera evidence, and supervisor-recovery controls.
+- Local gates pass: Flutter analyze and 22/22 tests; corporate website lint
+  (one pre-existing `<img>` warning), TypeScript, build, and 3/3 tests; root
+  lint/typecheck and 170/170 Shared/Attendance/Payroll unit tests. Physical-device
+  camera UAT and release signing remain pending.
+
+## Mobile Attendance UAT UX and Demo Seed Repair — 2026-08-07
+
+- The reserved demo-account seed now reasserts the documented `Demo@2026`
+  password and active status for all 13 named demo identities on every controlled
+  rerun. The rerun created no duplicate schedules; API first-factor login passed
+  for all eight named CEO/BO/supervisor operators. Web login now defaults to
+  `ops@ak.local` and lists the complete named operator set, removing the prior
+  `admin@ak.local`/`Demo@2026` mismatch.
+- Employee Today now places shift state, project, work time, two-point progress,
+  and the next check action in one card. Check-in/out adds a compact three-step
+  header, explicit UAT provenance, and maintains the 200% text-scale gate.
+- A default-off `UAT_SIMULATED_CAMERA=true` seam replaces only camera capture in
+  a debug iOS Simulator build. Profile/release, Android, and physical-iPhone runs
+  stay camera-only and fail closed. Simulator check-in/out completed through fresh
+  project GPS, full JPEG validation, MinIO storage, and the normal API; PostgreSQL
+  shows `checked_out` with both photo keys. This is data-path evidence, not
+  physical-camera or pilot acceptance.
+- Local gates pass: Flutter analyze, 20/20 Flutter tests, iOS Simulator debug
+  build/launch, and Shared lint/typecheck. Physical-device GPS/camera UAT remains
+  mandatory before release or pilot acceptance.
+
+## Monthly Project Schedule and Copy MVP — 2026-07-24
+
+- Added the project/month roster to the attendance operations board, including
+  employee, work date, shift, status, notes, monthly filters, and the existing
+  guarded create/cancel actions.
+- Added same-project schedule copy for a 1–31 day source range with mandatory
+  preview. Calendar offsets and notes are retained, while attendance, status, and
+  historical audit data are never cloned.
+- Exact active employee/project/shift/date duplicates remain hard-blocked.
+  Overlapping time ranges and multiple non-overlapping shifts in one day are
+  warnings only, but save/copy requires explicit acknowledgement and writes the
+  conflict evidence to immutable audit. Opaque fingerprints bind acknowledgement
+  to the exact request, resource snapshot, and conflict set; concurrent changes
+  force BO to review again.
+- Copy is atomic and request-idempotent, including concurrent retries and
+  mismatched request UUID rejection. Candidate assignments are checked against
+  both existing target rows and one another before commit. Create/copy/cancel use
+  a consistent project→membership→employee lock order plus tenant-scoped row
+  locks, and the preview UI shows every mapping with problem rows first.
+- Employee Today now returns and renders every non-cancelled assignment for the
+  Vietnam work date, with a separate attendance state and action for each.
+  Reconciled non-working records are terminal and never show a dead check-in action.
+- Payroll and customer reporting group day-level units and fail closed with
+  assignment IDs when multiple assignments were actually attended on one date,
+  so BO must reconcile rather than receive guessed OT or duplicated days.
+- Local verification passes: all seven migrations on an isolated PostgreSQL
+  database; Attendance 56/56 unit tests and 13/13 full integration tests,
+  including resource-fingerprint, concurrent-copy, cancel-lock, and
+  mismatched-replay regressions; 100% statements/lines/functions and 97.59%
+  branches across covered core services; Payroll typecheck and 112/112 unit
+  tests; Flutter analyze plus 19/19 tests; web lint/typecheck/production build;
+  focused Chromium scheduling/copy E2E; OpenAPI YAML parse; and a real
+  seeded smoke request returning 15 active projects and 293 monthly assignments
+  for the selected project.
+- A loopback-only demo runs against the isolated database on ports 3200–3202.
+  The existing services and legacy local database were left untouched. This is
+  local working-tree evidence; no commit, push, deployment, remote CI, or pilot
+  acceptance was performed.
+- Pilot still requires a verified backup, server-first/mobile-second coordinated
+  rollout, client-adoption confirmation, and a guided BO reconciliation surface
+  (or explicit product-owner deferral). Rolling downgrade is unsafe after
+  confirmed multi-shift data exists.
 
 ## Windows Docker Git-to-UAT Deployment — 2026-07-21
 

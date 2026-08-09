@@ -28,8 +28,12 @@ const ATTENDANCE_STATUSES = new Set<AggregatedAttendanceRecord['status']>([
 ])
 
 export interface AggregatedAttendanceRecord {
+  shiftAssignmentId: string
+  employeeId: string
   date: Date
   status: 'present' | 'late' | 'early_leave' | 'half_day' | 'absent' | 'on_leave' | 'holiday'
+  checkInAt: Date | null
+  checkOutAt: Date | null
   totalWorkMinutes: number
   overtimeMinutes: number
   lateMinutes: number
@@ -110,14 +114,25 @@ function parseWorkDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date
 }
 
+function parseNullableInstant(value: unknown): Date | null | undefined {
+  if (value === null) return null
+  if (typeof value !== 'string') return undefined
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
 function mapRecord(value: unknown): AggregatedAttendanceRecord {
   if (!isObject(value)) {
     throw new DomainError('ATTENDANCE_API_ERROR', 'Attendance API returned an invalid record', 502)
   }
   const r = value as unknown as AttendanceApiRecord
   const date = parseWorkDate(r.workDate)
+  const checkInAt = parseNullableInstant(r.checkInAt)
+  const checkOutAt = parseNullableInstant(r.checkOutAt)
   if (
     !date
+    || checkInAt === undefined
+    || checkOutAt === undefined
     || typeof r.id !== 'string'
     || typeof r.shiftAssignmentId !== 'string'
     || typeof r.employeeId !== 'string'
@@ -129,8 +144,12 @@ function mapRecord(value: unknown): AggregatedAttendanceRecord {
     throw new DomainError('ATTENDANCE_API_ERROR', 'Attendance API returned an invalid record', 502)
   }
   return {
+    shiftAssignmentId: r.shiftAssignmentId,
+    employeeId: r.employeeId,
     date,
     status: r.status as AggregatedAttendanceRecord['status'],
+    checkInAt,
+    checkOutAt,
     totalWorkMinutes: r.totalMinutesWorked ?? 0,
     overtimeMinutes: r.overtimeMinutes ?? 0,
     lateMinutes: r.lateMinutes ?? 0,

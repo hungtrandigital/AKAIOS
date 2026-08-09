@@ -14,7 +14,7 @@
 AKAIUNSAN runs as a single-host Docker Compose stack. The stack includes:
 - `attendance-api` (Fastify + Prisma) — port 3000
 - `payroll-api` (Fastify + Prisma) — port 3001
-- `web-admin` (Next.js 14) — port 3002
+- `web-admin` (Next.js 15) — port 3002
 - `postgres` (PostgreSQL 16) — port 5432 (localhost only)
 - `redis` (Redis 7) — port 6379 (localhost only)
 - `minio` (MinIO/S3) — port 9000 (API), 9001 (console)

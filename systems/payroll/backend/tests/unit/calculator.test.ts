@@ -452,6 +452,57 @@ describe('Payroll Engine — BR-PAY rules', () => {
       expect(totals.overtimeHolidayMinutes).toBe(540)
     })
 
+    it('counts one workday when another same-day assignment is absent', () => {
+      const date = new Date('2026-07-13T00:00:00.000Z')
+      const totals = aggregateAttendance([
+        makeAttendance(date, 'present', 480),
+        makeAttendance(date, 'absent', 0),
+      ])
+
+      expect(totals).toMatchObject({
+        daysWorked: 1,
+        absentDays: 0,
+        workdayUnits: 1,
+        totalWorkMinutes: 480,
+      })
+    })
+
+    it('does not reclassify worked minutes from a same-day non-working holiday record', () => {
+      const date = new Date('2026-07-13T00:00:00.000Z')
+      const totals = aggregateAttendance([
+        makeAttendance(date, 'present', 480, 60),
+        makeAttendance(date, 'holiday', 0),
+      ])
+
+      expect(totals).toMatchObject({
+        daysWorked: 1,
+        workdayUnits: 1,
+        totalWorkMinutes: 480,
+        overtimeWeekdayMinutes: 60,
+        overtimeHolidayMinutes: 0,
+      })
+    })
+
+    it('fails closed when more than one assignment was worked on a business date', () => {
+      const date = new Date('2026-07-13T00:00:00.000Z')
+      expect(() => aggregateAttendance([
+        {
+          ...makeAttendance(date, 'present', 480),
+          employeeId: 'employee-1',
+          shiftAssignmentId: 'assignment-1',
+          checkInAt: new Date('2026-07-13T01:00:00.000Z'),
+          checkOutAt: new Date('2026-07-13T09:00:00.000Z'),
+        },
+        {
+          ...makeAttendance(date, 'present', 480),
+          employeeId: 'employee-1',
+          shiftAssignmentId: 'assignment-2',
+          checkInAt: new Date('2026-07-13T09:00:00.000Z'),
+          checkOutAt: new Date('2026-07-13T17:00:00.000Z'),
+        },
+      ])).toThrow('must be reconciled')
+    })
+
     it('handles empty array', () => {
       const totals = aggregateAttendance([])
       expect(totals.daysWorked).toBe(0)

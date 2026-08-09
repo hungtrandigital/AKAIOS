@@ -3,7 +3,8 @@
 
 FROM node:20-alpine AS base
 RUN apk add --no-cache openssl
-ENV PNPM_HOME="/pnpm" PATH="$PNPM_HOME:$PATH"
+ENV PNPM_HOME="/pnpm"
+ENV PATH="/pnpm:${PATH}"
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /repo
 
@@ -18,25 +19,33 @@ FROM deps AS build
 RUN pnpm prisma:generate
 RUN pnpm --filter @ak/shared build
 RUN pnpm --filter @ak/attendance-api build
+RUN pnpm --filter @ak/attendance-api deploy --prod /prod/attendance
 
-# Stage 3: Production runtime. Keep the pnpm workspace layout so generated
-# Prisma engines and workspace links resolve exactly as they did at build time.
-FROM base AS runtime
+# Generate Prisma Client inside the isolated production closure. The CLI comes
+# from the build workspace only and is not copied into the API runtime image.
+WORKDIR /prod/attendance/node_modules/@ak/shared
+RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true \
+    /repo/systems/shared/node_modules/.bin/prisma generate \
+    --schema=src/db/prisma/schema.prisma
+RUN rm /prod/attendance/node_modules/.pnpm/node_modules/@ak/attendance-api
+
+# Compose uses this explicit target for the one-shot migration service. It keeps
+# migration tooling out of the long-running API image.
+FROM build AS migration
 WORKDIR /repo
 ENV NODE_ENV=production
+USER node
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
-COPY --from=build /repo/node_modules ./node_modules
-COPY --from=build /repo/systems/shared/package.json ./systems/shared/package.json
-COPY --from=build /repo/systems/shared/node_modules ./systems/shared/node_modules
-COPY --from=build /repo/systems/shared/dist ./systems/shared/dist
-COPY --from=build /repo/systems/shared/src ./systems/shared/src
-COPY --from=build /repo/systems/attendance/backend/package.json ./systems/attendance/backend/package.json
-COPY --from=build /repo/systems/attendance/backend/node_modules ./systems/attendance/backend/node_modules
-COPY --from=build /repo/systems/attendance/backend/dist ./systems/attendance/backend/dist
+# Stage 3: Production runtime containing only the deployed production closure.
+FROM node:20-alpine AS runtime
+RUN apk add --no-cache openssl wget
+WORKDIR /app
+ENV NODE_ENV=production
 
-RUN apk add --no-cache wget
+COPY --from=build /prod/attendance/package.json ./package.json
+COPY --from=build /prod/attendance/node_modules ./node_modules
+COPY --from=build /prod/attendance/dist ./dist
 
 EXPOSE 3000
 USER node
-CMD ["node", "systems/attendance/backend/dist/server.js"]
+CMD ["node", "dist/server.js"]

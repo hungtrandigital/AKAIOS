@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **PRD-SLICE-003 corporate-aligned mobile profile:** Bundled licensed Manrope
+  and Be Vietnam Pro fonts and applied the corporate olive/forest/lime/paper
+  direction to Login, Today, and check-in/out without importing public-site hero
+  patterns into the field workflow.
+- **PRD-SLICE-003 debug Simulator attendance seam:** Added a default-off,
+  debug+iOS-Simulator-only simulated JPEG input for controlled Mac UAT. It is
+  visibly labeled, retains fresh GPS/JPEG/API/storage validation, and stays
+  unavailable in profile/release, Android, and physical-iPhone runs.
+- **PRD-SLICE-003 monthly project schedule/copy MVP:** Added an authorized
+  project/month roster, 1–31 day same-project copy preview and atomic idempotent
+  save, exact-duplicate blocking, explicitly acknowledged overlap/multi-shift
+  warnings with audit evidence, and multi-assignment employee Today behavior
+  across the API, web operations board, and Flutter client.
 - **CODE-TASK-006 Windows Git-to-UAT deployment:** Added a Windows 10/11 Docker Desktop/WSL2 Compose override with durable named volumes and loopback-only ports, guarded exact-SHA fresh-install/update/seed-sentinel-reset/operations automation, an AI-executable Windows runbook, active Caddy storage-host routing, maintenance-mode writer shutdown, and Linux/Windows CI configuration gates. Ubuntu remains the production/pilot baseline; tunnel, firewall, remote Docker and automatic deployment stay outside the Windows profile.
 - **PRD-SLICE-003 Prismate loading:** Added optimized Prismate logo derivatives for legacy and Android 12+ native launch, iOS launch, and a reusable reduced-motion-aware Flutter opacity/scale loader for bootstrap and async employee actions, without artificial delay. Native light/dark startup backgrounds remain white to avoid a transition flash.
 - **PRD-SLICE-003 employee mobile UX and camera fallback:** Added a branded, auth-state-driven Flutter splash; senior-friendly Login/Today/check flow; explicit camera/location/network recovery; and an operator-only manual attendance event with structured audit and BO-visible exception provenance.
@@ -33,16 +46,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cursor IDE setup:** Updated `IDE-SETUP/cursor` README and `.cursor/settings.json` with standardized install steps, rules paths, Prettier formatter, and whitespace hygiene
 
 ### Changed
+- Employee mobile now leads each shift with explicit project/status context and
+  a large check-in/check-out action. Its compact large-text variant remains
+  usable at 200% scaling on 320×568 while GPS, fresh-camera evidence,
+  multi-assignment state, and supervisor recovery remain unchanged.
+- Employee Today now combines state, project, shift time, progress, and the next
+  action in one card; check-in/out adds a compact three-step header while
+  preserving the large-text and senior-friendly interaction gates.
+- Monthly schedule confirmation now uses opaque request/resource/conflict
+  fingerprints, mandatory re-review after concurrent changes, a consistent
+  project→membership→employee transaction lock order, and full problem-first
+  preview rendering. Payroll/customer reports fail closed for ambiguous
+  multi-attendance days, while mobile Today renders reconciled non-working
+  attendance as terminal.
+- Pilot/rollback guidance now requires a verified backup, server-first then
+  mobile rollout, adoption confirmation, and reconciliation of extra active
+  rows before any old-schema/app rollback.
 - The controlled-UAT aggregate seed now gives all five fixed demo employees an idempotent schedule on the current Vietnam date plus 13 following Mon–Sat dates and limits generated historical attendance to yesterday, leaving today's GPS/photo attendance flow open for manual UAT. Demo writes require an explicit process-local sentinel, reject reserved cross-tenant identity collisions, preserve existing attendance on reruns, and interpret historical shift times in Vietnam (`+07:00`).
 - The controlled Windows UAT flow now treats its current records as reproducible seed-only data: Git carries migrations and seed scripts, `ResetSeedUat` rebuilds disposable PostgreSQL only after explicit confirmation, and data-preserving updates require a verified PostgreSQL/MinIO checkpoint. The default payroll-rule seed is idempotent across reruns.
 - Camera cancellation now stays on the normal retry path, while confirmed permission, hardware, or plugin failures promote supervisor assistance and Today reconciliation. Employee camera-assisted badges now require structured reason-code and actor provenance instead of treating every BO override as a camera failure.
 - Employee self check-in/out now requires fresh in-memory GPS plus a newly captured JPEG before submit; the backend fully decodes it with 5 MB/16 MP ceilings and a 320×240 minimum instead of trusting magic bytes. Startup routing reads secure storage once, honors reduced motion, avoids Login/Today flash, and preserves credentials when refresh fails only because the network is unavailable. Device attestation/liveness remains explicitly outside MVP.
-- Shift templates are now tenant-owned, daily BO rosters are paginated with
-  full-filter status summaries, and employee selection is searchable. The
-  database migration expands the former global catalog per tenant and enforces
-  one non-cancelled assignment per employee/business date while preserving
-  cancelled history. Tenant-scoped demo seed verification and independent final
-  code re-review both pass.
+- **Historical (superseded by the scheduling-conflicts fix below):** Shift
+  templates became tenant-owned, daily BO rosters became paginated with
+  full-filter status summaries, and employee selection became searchable. That
+  delivery temporarily enforced one non-cancelled assignment per
+  employee/business date while preserving cancelled history; the later fix
+  replaced this invariant with active employee/project/shift/date uniqueness.
+  Tenant-scoped demo seed verification and independent final code re-review both
+  passed for that historical delivery.
 - Added an opt-in, local/test-only four-digit admin second-factor verifier for
   temporary UI testing. It is disabled by default, refuses non-development/test
   environments, and leaves password, Redis challenge, attempt, session, and
@@ -70,6 +101,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed leftover upstream repo metadata from `0-agents/agents/agency-agents/` (`.git/`, `.github/`, `.gitattributes`, `.gitignore`, `CONTRIBUTING.md`) and added a root `.gitignore` to keep `.DS_Store` and nested vendor Git metadata out of the repository going forward.
 
 ### Fixed
+- **PRD-EPIC-002 production dependency security:** Remediated the pnpm
+  production audit from 43 findings (25 High, 15 Moderate, 3 Low) to zero by
+  upgrading Next.js, Fastify/plugins, and Sharp plus three documented transitive
+  compatibility overrides. Fastify 5 typing/runtime compatibility, Sharp JPEG
+  validation, fresh integration/E2E, and Node 20 Alpine builds pass. Both APIs
+  now ship pnpm production-only closures with an embedded generated Prisma
+  client, while the web ships Next.js standalone output and treats `@ak/shared`
+  as E2E-only. All three long-running images run non-root without the vulnerable
+  development-tool graph, broken symlinks, or unresolved declared dependencies;
+  the migration CLI remains isolated in a one-shot Compose target. Added an
+  independent exact-SHA Actions job to rebuild those four targets and enforce
+  the non-root/closure/native-library/web-login checks on the three long-running
+  images before merge; remote migration execution is not claimed. HPC
+  deployment remains separately gated.
+- **PRD-SLICE-003 calendar-stable browser gate:** Replaced a fixed July date in
+  the monthly scheduling E2E with a different valid date derived from the active
+  month. The focused regression and the complete 9/9 Playwright suite now pass
+  when the calendar advances beyond the month in which the test was authored.
+- **Demo operator credentials:** Controlled reruns now repair the documented
+  password hash and active status for all reserved demo identities, instead of
+  refreshing only employee passwords and leaving older Back Office hashes stale.
+  Web login now defaults to the compatible `ops@ak.local` UAT identity and lists
+  every named operator instead of pre-filling the base-development admin.
+- **PRD-SLICE-003 scheduling conflicts:** Replaced the former one-active-
+  assignment-per-employee/date database invariant with exact active
+  employee/project/shift/date uniqueness. Copy candidates now detect conflicts
+  against both persisted target schedules and each other, and request-scoped
+  locking makes concurrent idempotent retries replay safely.
 - **Attendance demo seed:** Replaced untyped assignment/attendance arrays, made historical outcomes deterministic and create-only, preserved existing UAT records, synchronized newly seeded assignment statuses, and corrected shift instants to Vietnam wall time.
 - **Shared MinIO startup:** Made bucket provisioning safe under parallel API/test startup by rechecking access after the explicit S3 already-created conflicts, while preserving fail-closed behavior for unrelated storage errors; added shared regression coverage to the root unit gate.
 - **PRD-SLICE-003 attendance UAT:** Hardened assignment overlap/concurrency, active-resource and supervisor-membership enforcement, hid cancelled assignments from employee Today, and corrected mobile attendance timestamps from UTC to the device timezone. Local employee/BO/supervisor UAT passes; physical-device camera validation remains pending because iOS Simulator has no camera stream.

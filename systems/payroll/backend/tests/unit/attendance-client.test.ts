@@ -46,6 +46,38 @@ describe('attendance HTTP client', () => {
     )).rejects.toMatchObject({ code: 'ATTENDANCE_API_UNAVAILABLE', statusCode: 503 })
   })
 
+  it('preserves worked assignment identifiers and attendance timestamps', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [{
+          id: 'record',
+          shiftAssignmentId: 'assignment',
+          employeeId: EMPLOYEE_ID,
+          workDate: '2026-07-13',
+          checkInAt: '2026-07-13T01:00:00.000Z',
+          checkOutAt: '2026-07-13T09:00:00.000Z',
+          totalMinutesWorked: 480,
+          overtimeMinutes: 0,
+          lateMinutes: 0,
+          status: 'present',
+        }],
+      }),
+    }))
+
+    const [record] = await fetchAttendanceForPeriod(
+      TENANT_ID, EMPLOYEE_ID, new Date('2026-07-01'), new Date('2026-08-01'),
+    )
+
+    expect(record).toMatchObject({
+      shiftAssignmentId: 'assignment',
+      employeeId: EMPLOYEE_ID,
+      checkInAt: new Date('2026-07-13T01:00:00.000Z'),
+      checkOutAt: new Date('2026-07-13T09:00:00.000Z'),
+    })
+  })
+
   it('distinguishes authentication, authorization, and upstream failures', async () => {
     for (const [status, code, statusCode] of [
       [401, 'UNAUTHORIZED', 401],

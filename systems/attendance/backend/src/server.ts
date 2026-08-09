@@ -15,6 +15,7 @@ import { attendanceRoutes } from './routes/attendance.js'
 import { projectRoutes } from './routes/projects.js'
 import { employeeRoutes } from './routes/employees.js'
 import { shiftRoutes } from './routes/shifts.js'
+import { scheduleCopyRoutes } from './routes/schedule-copy.js'
 import { reportRoutes } from './routes/reports.js'
 import { rbacRoutes } from './routes/rbac.js'
 import { internalAttendanceRoutes } from './routes/internal.js'
@@ -60,16 +61,20 @@ export async function buildServer() {
 
   // Register before route plugins so encapsulated routes inherit the handler.
   app.setErrorHandler(function (error, request, reply) {
-    const e = error as Error & { statusCode?: number; code?: string }
+    const e = error as Error & {
+      statusCode?: number
+      code?: string
+      details?: Record<string, unknown>
+    }
     const validationError = error as Error & {
       issues?: unknown
       errors?: unknown
       aggregateErrors?: unknown
     }
     const isZodError = error instanceof ZodError
-      || error.name === 'ZodError'
-      || error.constructor?.name === 'ZodError'
-      || 'issues' in error
+      || e.name === 'ZodError'
+      || e.constructor?.name === 'ZodError'
+      || 'issues' in e
     if (isZodError) {
       const zodIssues = validationError.issues
         ?? validationError.errors
@@ -84,7 +89,11 @@ export async function buildServer() {
     }
     if (e.statusCode && e.statusCode < 500) {
       return reply.status(e.statusCode).send({
-        error: { code: e.code ?? 'ERROR', message: e.message },
+        error: {
+          code: e.code ?? 'ERROR',
+          message: e.message,
+          ...(e.details ? { details: e.details } : {}),
+        },
       })
     }
     request.log.error({ err: error }, 'Unhandled error')
@@ -105,7 +114,8 @@ export async function buildServer() {
   await app.register(attendanceRoutes, { prefix: '/v1/attendance' })
   await app.register(projectRoutes, { prefix: '/v1/projects' })
   await app.register(employeeRoutes, { prefix: '/v1/employees' })
-  await app.register(shiftRoutes, { prefix: '/v1/shifts' })
+  await app.register(shiftRoutes(config.jwtSecret), { prefix: '/v1/shifts' })
+  await app.register(scheduleCopyRoutes(config.jwtSecret), { prefix: '/v1/shifts' })
   await app.register(reportRoutes, { prefix: '/v1/reports' })
   await app.register(rbacRoutes, { prefix: '/v1/rbac' })
   await app.register(internalAttendanceRoutes(config.internalApiKey), { prefix: '/internal' })

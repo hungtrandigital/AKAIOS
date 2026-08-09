@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/api'
+import { ApiError, apiFetch } from '@/lib/api'
 import { TopNav } from '@/components/TopNav'
 import { useAuth } from '@/components/AuthProvider'
 import { AttendanceOverrideModal } from '@/components/AttendanceOverrideModal'
@@ -71,6 +71,44 @@ interface AssignmentResponse {
   summary: Record<ShiftAssignment['status'], number>
 }
 
+interface ScheduleWarning {
+  type: 'time_overlap' | 'same_day_multiple_shift'
+  employeeId: string
+  date: string
+  shiftId: string
+  conflictCount: number
+  message: string
+}
+
+interface CopyPreviewItem {
+  sourceAssignmentId: string
+  sourceDate: string
+  targetDate: string
+  employee: Employee
+  shift: Shift
+  notes: string | null
+  warnings: ScheduleWarning[]
+  blockingReasons: string[]
+}
+
+interface CopyPreview {
+  previewToken: string
+  projectId: string
+  sourceFrom: string
+  sourceTo: string
+  targetFrom: string
+  targetTo: string
+  items: CopyPreviewItem[]
+  summary: { total: number; warningCount: number; blockingCount: number }
+}
+
+const COPY_BLOCKER_LABELS: Record<string, string> = {
+  exact_duplicate: 'Trùng hoàn toàn với lịch hiện có.',
+  employee_inactive: 'Nhân viên không còn hoạt động.',
+  shift_inactive: 'Khung giờ không còn hoạt động.',
+  outside_contract: 'Ngày đích nằm ngoài thời hạn dự án.',
+}
+
 const ATTENDANCE_STATUS: Record<string, { label: string; cls: string }> = {
   present: { label: 'Đúng giờ', cls: 'badge-success' },
   late: { label: 'Đi trễ', cls: 'badge-warning' },
@@ -96,12 +134,41 @@ function timeLabel(value: string | null | undefined) {
 }
 
 function readableError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return 'Tài khoản không có quyền thao tác với lịch ca này.'
+    if (error.status === 404) return 'Không tìm thấy nhân viên, dự án hoặc ca trong phạm vi được phép.'
+    if (error.status === 409) return error.message
+    if (error.status === 422) return 'Không thể thực hiện vì dữ liệu lịch không còn hợp lệ.'
+    return error.message
+  }
   const message = error instanceof Error ? error.message : String(error)
   if (message.includes('409')) return 'Nhân viên đã có ca trùng hoặc lịch này đã tồn tại.'
   if (message.includes('422')) return 'Không thể thực hiện vì ca đã phát sinh điểm danh hoặc không còn hợp lệ.'
   if (message.includes('403')) return 'Tài khoản không có quyền thao tác với lịch ca này.'
   if (message.includes('404')) return 'Không tìm thấy nhân viên, dự án hoặc ca trong phạm vi được phép.'
   return message
+}
+
+function monthBounds(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const last = new Date(Date.UTC(year!, monthNumber!, 0)).getUTCDate()
+  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` }
+}
+
+function previousMonthBounds(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const previous = new Date(Date.UTC(year!, monthNumber! - 2, 1))
+  const key = `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, '0')}`
+  return monthBounds(key)
+}
+
+function dateLabel(value: string) {
+  return new Date(value).toLocaleDateString('vi-VN', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+  })
 }
 
 export default function AttendancePage() {
@@ -117,6 +184,7 @@ export default function AttendancePage() {
   const [attendanceFilter, setAttendanceFilter] = useState('')
 
   const [scheduleDate, setScheduleDate] = useState(today)
+  const [scheduleMonth, setScheduleMonth] = useState(today.slice(0, 7))
   const [projectFilter, setProjectFilter] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -126,6 +194,13 @@ export default function AttendancePage() {
   const [assignmentProjectId, setAssignmentProjectId] = useState('')
   const [assignmentShiftId, setAssignmentShiftId] = useState('')
   const [assignmentNotes, setAssignmentNotes] = useState('')
+  const [assignmentWarnings, setAssignmentWarnings] = useState<ScheduleWarning[]>([])
+  const [assignmentConflictToken, setAssignmentConflictToken] = useState('')
+  const initialPreviousMonth = previousMonthBounds(today.slice(0, 7))
+  const [copySourceFrom, setCopySourceFrom] = useState(initialPreviousMonth.from)
+  const [copySourceTo, setCopySourceTo] = useState(initialPreviousMonth.to)
+  const [copyTargetStart, setCopyTargetStart] = useState(`${today.slice(0, 7)}-01`)
+  const [copyRequestId, setCopyRequestId] = useState('')
   const [cancelTarget, setCancelTarget] = useState<ShiftAssignment | null>(null)
   const [cancelReason, setCancelReason] = useState('')
   const [manualTarget, setManualTarget] = useState<ShiftAssignment | null>(null)
@@ -149,6 +224,7 @@ export default function AttendancePage() {
   const manualDialogRef = useRef<HTMLFormElement>(null)
   const manualReasonRef = useRef<HTMLTextAreaElement>(null)
   const manualReturnFocusRef = useRef<HTMLButtonElement | null>(null)
+  const selectedMonth = useMemo(() => monthBounds(scheduleMonth), [scheduleMonth])
 
   const attendanceQuery = useQuery({
     queryKey: ['attendance', today],
@@ -176,24 +252,24 @@ export default function AttendancePage() {
     enabled: canSchedule && activeTab === 'schedule',
   })
   const assignmentsQuery = useQuery({
-    queryKey: ['shift-assignments', scheduleDate, projectFilter, employeeFilter, statusFilter, schedulePage],
+    queryKey: ['shift-assignments', scheduleMonth, projectFilter, employeeFilter, statusFilter, schedulePage],
     queryFn: () => apiFetch<AssignmentResponse>('/attendance/shifts/assignments', {
       query: {
-        from: scheduleDate,
-        to: scheduleDate,
-        projectId: projectFilter || undefined,
+        from: selectedMonth.from,
+        to: selectedMonth.to,
+        projectId: projectFilter,
         employeeId: employeeFilter || undefined,
         status: statusFilter || undefined,
         page: schedulePage,
         limit: 50,
       },
     }),
-    enabled: canSchedule && activeTab === 'schedule',
+    enabled: canSchedule && activeTab === 'schedule' && Boolean(projectFilter),
     refetchInterval: activeTab === 'schedule' ? 30_000 : false,
   })
 
   const createAssignment = useMutation({
-    mutationFn: () => apiFetch<ShiftAssignment>('/attendance/shifts/assignments', {
+    mutationFn: (confirmConflicts: boolean) => apiFetch<ShiftAssignment & { warnings?: ScheduleWarning[] }>('/attendance/shifts/assignments', {
       method: 'POST',
       body: JSON.stringify({
         employeeId: assignmentEmployeeId,
@@ -201,15 +277,87 @@ export default function AttendancePage() {
         shiftId: assignmentShiftId,
         date: scheduleDate,
         notes: assignmentNotes.trim() || undefined,
+        confirmConflicts,
+        conflictToken: confirmConflicts ? assignmentConflictToken : undefined,
       }),
     }),
-    onSuccess: async () => {
-      setNotice({ type: 'success', text: 'Đã xếp ca và ghi nhận lịch sử thao tác.' })
+    onSuccess: async (assignment) => {
+      const warningText = assignment.warnings?.length
+        ? ' Ca có xung đột đã được xác nhận và lưu audit.'
+        : ''
+      setNotice({ type: 'success', text: `Đã xếp ca và ghi nhận lịch sử thao tác.${warningText}` })
       setAssignmentEmployeeId('')
       setAssignmentNotes('')
+      setAssignmentWarnings([])
+      setAssignmentConflictToken('')
       await queryClient.invalidateQueries({ queryKey: ['shift-assignments'] })
     },
+    onError: (error) => {
+      if (
+        error instanceof ApiError
+        && (error.details?.requiresConfirmation || error.details?.reconfirmRequired)
+      ) {
+        setAssignmentWarnings((error.details.warnings as ScheduleWarning[] | undefined) ?? [])
+        setAssignmentConflictToken(
+          typeof error.details.conflictToken === 'string' ? error.details.conflictToken : '',
+        )
+        setNotice({
+          type: 'error',
+          text: error.details.reconfirmRequired
+            ? 'Lịch đã thay đổi trong lúc xác nhận. Vui lòng kiểm tra trạng thái mới rồi thao tác lại.'
+            : 'Lịch có xung đột. Kiểm tra cảnh báo và xác nhận nếu vẫn muốn lưu.',
+        })
+        return
+      }
+      setNotice({ type: 'error', text: readableError(error) })
+    },
+  })
+
+  const copyPreview = useMutation({
+    mutationFn: () => apiFetch<CopyPreview>('/attendance/shifts/assignments/copy-preview', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId: projectFilter,
+        sourceFrom: copySourceFrom,
+        sourceTo: copySourceTo,
+        targetStart: copyTargetStart,
+      }),
+    }),
+    onSuccess: () => {
+      setCopyRequestId(crypto.randomUUID())
+      setNotice(null)
+    },
     onError: (error) => setNotice({ type: 'error', text: readableError(error) }),
+  })
+
+  const copySchedule = useMutation({
+    mutationFn: (confirmConflicts: boolean) => apiFetch<{ assignments: ShiftAssignment[] }>('/attendance/shifts/assignments/copy', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId: projectFilter,
+        sourceFrom: copySourceFrom,
+        sourceTo: copySourceTo,
+        targetStart: copyTargetStart,
+        requestId: copyRequestId,
+        previewToken: copyPreview.data!.previewToken,
+        confirmConflicts,
+      }),
+    }),
+    onSuccess: async (result) => {
+      setNotice({ type: 'success', text: `Đã copy ${result.assignments.length} lịch và lưu audit.` })
+      copyPreview.reset()
+      setCopyRequestId('')
+      await queryClient.invalidateQueries({ queryKey: ['shift-assignments'] })
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.details?.repreviewRequired) {
+        copyPreview.reset()
+        setCopyRequestId('')
+        setNotice({ type: 'error', text: 'Lịch đã thay đổi sau khi xem trước. Vui lòng xem trước lại trước khi copy.' })
+        return
+      }
+      setNotice({ type: 'error', text: readableError(error) })
+    },
   })
 
   const createTemplate = useMutation({
@@ -282,6 +430,20 @@ export default function AttendancePage() {
   })
 
   const assignments = useMemo(() => assignmentsQuery.data?.data ?? [], [assignmentsQuery.data?.data])
+  const copyProblemItems = useMemo(
+    () => (copyPreview.data?.items ?? []).filter((item) => (
+      item.warnings.length > 0 || item.blockingReasons.length > 0
+    )),
+    [copyPreview.data?.items],
+  )
+  const visibleCopyPreviewItems = useMemo(
+    () => [...(copyPreview.data?.items ?? [])].sort((a, b) => {
+      const aHasProblem = a.warnings.length > 0 || a.blockingReasons.length > 0
+      const bHasProblem = b.warnings.length > 0 || b.blockingReasons.length > 0
+      return Number(bHasProblem) - Number(aHasProblem)
+    }),
+    [copyPreview.data?.items],
+  )
   const assignmentSummary = assignmentsQuery.data?.summary
   const coverage = {
     total: assignmentsQuery.data?.pagination.total ?? 0,
@@ -290,6 +452,30 @@ export default function AttendancePage() {
     completed: (assignmentSummary?.checked_out ?? 0) + (assignmentSummary?.completed ?? 0),
     cancelled: assignmentSummary?.cancelled ?? 0,
   }
+
+  useEffect(() => {
+    const firstProject = projectsQuery.data?.data?.[0]
+    if (!firstProject || projectFilter) return
+    setProjectFilter(firstProject.id)
+    setAssignmentProjectId(firstProject.id)
+  }, [projectFilter, projectsQuery.data?.data])
+
+  useEffect(() => {
+    const previous = previousMonthBounds(scheduleMonth)
+    setCopySourceFrom(previous.from)
+    setCopySourceTo(previous.to)
+    setCopyTargetStart(`${scheduleMonth}-01`)
+    setScheduleDate((current) => current.startsWith(`${scheduleMonth}-`)
+      ? current
+      : `${scheduleMonth}-01`)
+    setSchedulePage(1)
+    setAssignmentWarnings([])
+    setAssignmentConflictToken('')
+    copyPreview.reset()
+    setCopyRequestId('')
+  // Reset copy inputs only when the selected operating month changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleMonth])
 
   useEffect(() => {
     if (!cancelTarget) return
@@ -375,7 +561,9 @@ export default function AttendancePage() {
   function submitAssignment(event: FormEvent) {
     event.preventDefault()
     setNotice(null)
-    createAssignment.mutate()
+    setAssignmentWarnings([])
+    setAssignmentConflictToken('')
+    createAssignment.mutate(false)
   }
 
   function submitTemplate(event: FormEvent) {
@@ -525,13 +713,29 @@ export default function AttendancePage() {
             <div className="schedule-heading">
               <div>
                 <p className="schedule-eyebrow">Điều phối nhân sự</p>
-                <h1 className="page-title">Kế hoạch ca làm việc</h1>
-                <p className="page-subtitle">Xếp ca theo ngày, theo dõi tiến độ điểm danh và xử lý thay đổi có lưu vết.</p>
+                <h1 className="page-title">Lịch dự án theo tháng</h1>
+                <p className="page-subtitle">Xem lịch cả tháng, copy lịch có xem trước và xác nhận cảnh báo xung đột.</p>
               </div>
-              <label className="date-control">
-                <span>Ngày làm việc</span>
-                <input aria-label="Ngày làm việc" type="date" value={scheduleDate} onChange={(event) => { setScheduleDate(event.target.value); setSchedulePage(1) }} />
-              </label>
+              <div className="month-project-controls">
+                <label className="date-control">
+                  <span>Dự án</span>
+                  <select aria-label="Dự án xem lịch tháng" disabled={createAssignment.isPending} value={projectFilter} onChange={(event) => {
+                    setProjectFilter(event.target.value)
+                    setAssignmentProjectId(event.target.value)
+                    setAssignmentWarnings([])
+                    setAssignmentConflictToken('')
+                    setSchedulePage(1)
+                    copyPreview.reset()
+                  }}>
+                    <option value="">Chọn dự án</option>
+                    {(projectsQuery.data?.data ?? []).map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}
+                  </select>
+                </label>
+                <label className="date-control">
+                  <span>Tháng</span>
+                  <input aria-label="Tháng xem lịch dự án" disabled={createAssignment.isPending} type="month" value={scheduleMonth} onChange={(event) => setScheduleMonth(event.target.value)} />
+                </label>
+              </div>
             </div>
 
             <div className="coverage-rail" aria-label="Tổng quan lịch ca">
@@ -550,60 +754,172 @@ export default function AttendancePage() {
                   <div className="page-card-head">
                     <div>
                       <h2 className="page-card-title">Phân ca mới</h2>
-                      <p className="card-description">Lịch trùng giờ sẽ được hệ thống chặn tự động.</p>
+                      <p className="card-description">Lịch trùng hoàn toàn bị chặn; xung đột khác sẽ cảnh báo để xác nhận.</p>
                     </div>
                     <span className="badge badge-info">{scheduleDate}</span>
                   </div>
                   <form className="page-card-body assignment-form" onSubmit={submitAssignment}>
+                    <label className="form-group">
+                      <span className="form-label">Ngày làm việc</span>
+                      <input
+                        aria-label="Ngày làm việc"
+                        required
+                        type="date"
+                        min={selectedMonth.from}
+                        max={selectedMonth.to}
+                        disabled={createAssignment.isPending}
+                        value={scheduleDate}
+                        onChange={(event) => {
+                          setScheduleDate(event.target.value)
+                          setAssignmentWarnings([])
+                          setAssignmentConflictToken('')
+                        }}
+                      />
+                    </label>
                     <label className="form-group">
                       <span className="form-label">Nhân viên</span>
                       <input
                         aria-label="Tìm nhân viên để phân ca"
                         type="search"
                         placeholder="Tìm theo mã hoặc họ tên..."
+                        disabled={createAssignment.isPending}
                         value={employeeSearch}
                         onChange={(event) => setEmployeeSearch(event.target.value)}
                       />
-                      <select aria-label="Nhân viên phân ca" required value={assignmentEmployeeId} onChange={(event) => setAssignmentEmployeeId(event.target.value)}>
+                      <select aria-label="Nhân viên phân ca" required disabled={createAssignment.isPending} value={assignmentEmployeeId} onChange={(event) => {
+                        setAssignmentEmployeeId(event.target.value)
+                        setAssignmentWarnings([])
+                        setAssignmentConflictToken('')
+                      }}>
                         <option value="">Chọn nhân viên</option>
                         {(employeesQuery.data?.data ?? []).map((employee) => <option key={employee.id} value={employee.id}>{employee.employeeCode} · {employee.fullName}</option>)}
                       </select>
                     </label>
                     <label className="form-group">
                       <span className="form-label">Dự án</span>
-                      <select aria-label="Dự án phân ca" required value={assignmentProjectId} onChange={(event) => setAssignmentProjectId(event.target.value)}>
+                      <select aria-label="Dự án phân ca" required disabled={createAssignment.isPending} value={assignmentProjectId} onChange={(event) => {
+                        setAssignmentProjectId(event.target.value)
+                        setAssignmentWarnings([])
+                        setAssignmentConflictToken('')
+                      }}>
                         <option value="">Chọn dự án</option>
                         {(projectsQuery.data?.data ?? []).map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}
                       </select>
                     </label>
                     <label className="form-group">
                       <span className="form-label">Khung giờ</span>
-                      <select aria-label="Khung giờ phân ca" required value={assignmentShiftId} onChange={(event) => setAssignmentShiftId(event.target.value)}>
+                      <select aria-label="Khung giờ phân ca" required disabled={createAssignment.isPending} value={assignmentShiftId} onChange={(event) => {
+                        setAssignmentShiftId(event.target.value)
+                        setAssignmentWarnings([])
+                        setAssignmentConflictToken('')
+                      }}>
                         <option value="">Chọn ca</option>
                         {(shiftsQuery.data?.data ?? []).map((shift) => <option key={shift.id} value={shift.id}>{shift.name} · {shift.startTime}–{shift.endTime}</option>)}
                       </select>
                     </label>
                     <label className="form-group assignment-notes">
                       <span className="form-label">Ghi chú</span>
-                      <input aria-label="Ghi chú phân ca" type="text" maxLength={500} placeholder="Vị trí trực, bàn giao..." value={assignmentNotes} onChange={(event) => setAssignmentNotes(event.target.value)} />
+                      <input aria-label="Ghi chú phân ca" disabled={createAssignment.isPending} type="text" maxLength={500} placeholder="Vị trí trực, bàn giao..." value={assignmentNotes} onChange={(event) => {
+                        setAssignmentNotes(event.target.value)
+                        setAssignmentWarnings([])
+                        setAssignmentConflictToken('')
+                      }} />
                     </label>
                     <button className="btn btn-primary assignment-submit" type="submit" disabled={createAssignment.isPending || !assignmentEmployeeId || !assignmentProjectId || !assignmentShiftId}>
                       {createAssignment.isPending ? 'Đang xếp ca...' : 'Xếp ca'}
                     </button>
                   </form>
+                  {assignmentWarnings.length > 0 && (
+                    <div className="page-card-body schedule-warning-box" role="alert">
+                      <strong>Cảnh báo xung đột</strong>
+                      <ul>{assignmentWarnings.map((warning, index) => <li key={`${warning.type}-${index}`}>{warning.message}</li>)}</ul>
+                      <div className="table-actions">
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => {
+                          setAssignmentWarnings([])
+                          setAssignmentConflictToken('')
+                        }}>Quay lại</button>
+                        <button type="button" className="btn btn-warning btn-sm" disabled={createAssignment.isPending} onClick={() => createAssignment.mutate(true)}>Vẫn lưu lịch</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="page-card">
+                  <div className="page-card-head">
+                    <div>
+                      <h2 className="page-card-title">Copy lịch</h2>
+                      <p className="card-description">Copy lịch trong cùng dự án; dữ liệu chấm công và trạng thái cũ không được copy.</p>
+                    </div>
+                  </div>
+                  <form className="page-card-body copy-schedule-form" onSubmit={(event) => { event.preventDefault(); copyPreview.mutate() }}>
+                    <label className="form-group"><span className="form-label">Từ ngày</span><input aria-label="Ngày nguồn bắt đầu" required type="date" value={copySourceFrom} onChange={(event) => { setCopySourceFrom(event.target.value); copyPreview.reset() }} /></label>
+                    <label className="form-group"><span className="form-label">Đến ngày</span><input aria-label="Ngày nguồn kết thúc" required type="date" value={copySourceTo} onChange={(event) => { setCopySourceTo(event.target.value); copyPreview.reset() }} /></label>
+                    <label className="form-group"><span className="form-label">Ngày đích bắt đầu</span><input aria-label="Ngày đích bắt đầu" required type="date" value={copyTargetStart} onChange={(event) => { setCopyTargetStart(event.target.value); copyPreview.reset() }} /></label>
+                    <button type="submit" className="btn btn-secondary" disabled={!projectFilter || copyPreview.isPending}>{copyPreview.isPending ? 'Đang kiểm tra...' : 'Xem trước copy'}</button>
+                  </form>
+                  {copyPreview.error && <div className="page-card-body"><div className="alert alert-error" role="alert">{readableError(copyPreview.error)}</div></div>}
+                  {copyPreview.data && (
+                    <div className="page-card-body copy-preview">
+                      <div className="coverage-rail compact-coverage">
+                        <div><span>Sẽ copy</span><strong>{copyPreview.data.summary.total}</strong></div>
+                        <div><span>Cảnh báo</span><strong>{copyPreview.data.summary.warningCount}</strong></div>
+                        <div><span>Bị chặn</span><strong>{copyPreview.data.summary.blockingCount}</strong></div>
+                      </div>
+                      {copyPreview.data.summary.warningCount > 0 && <div className="alert alert-warning">Có lịch trùng thời gian hoặc nhân viên có nhiều ca trong ngày. Có thể tiếp tục sau khi xác nhận.</div>}
+                      {copyPreview.data.summary.blockingCount > 0 && <div className="alert alert-error">Có lịch trùng hoàn toàn hoặc dữ liệu không còn hợp lệ. Cần xử lý trước khi copy.</div>}
+                      {copyPreview.data.items.length === 0 ? (
+                        <div className="schedule-empty"><span>Khoảng nguồn chưa có lịch để copy.</span></div>
+                      ) : (
+                        <div className="table-wrap-borderless">
+                          <table className="table compact-copy-table">
+                            <thead><tr><th>Nhân viên</th><th>Ngày nguồn</th><th>Ngày đích</th><th>Ca</th><th>Kết quả</th></tr></thead>
+                            <tbody>
+                              {visibleCopyPreviewItems.map((item) => (
+                                <tr key={item.sourceAssignmentId}>
+                                  <td>{item.employee.employeeCode} · {item.employee.fullName}</td>
+                                  <td>{dateLabel(item.sourceDate)}</td>
+                                  <td>{dateLabel(item.targetDate)}</td>
+                                  <td>{item.shift.name}</td>
+                                  <td>
+                                    {item.blockingReasons.length > 0 ? (
+                                      <ul className="copy-issue-list">
+                                        {item.blockingReasons.map((reason) => <li key={reason}><span className="badge badge-danger">Bị chặn</span> {COPY_BLOCKER_LABELS[reason] ?? reason}</li>)}
+                                      </ul>
+                                    ) : item.warnings.length > 0 ? (
+                                      <ul className="copy-issue-list">
+                                        {item.warnings.map((warning) => <li key={warning.type}><span className="badge badge-warning">Cảnh báo</span> {warning.message} ({warning.conflictCount})</li>)}
+                                      </ul>
+                                    ) : <span className="badge badge-success">Hợp lệ</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <p className="form-help">
+                            Đang hiển thị đầy đủ {copyPreview.data.items.length} lịch
+                            {copyProblemItems.length > 0 ? '; lịch có cảnh báo hoặc bị chặn được đưa lên đầu.' : '.'}
+                          </p>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={copySchedule.isPending || copyPreview.data.summary.total === 0 || copyPreview.data.summary.blockingCount > 0}
+                        onClick={() => copySchedule.mutate(copyPreview.data!.summary.warningCount > 0)}
+                      >
+                        {copySchedule.isPending ? 'Đang copy...' : copyPreview.data.summary.warningCount > 0 ? 'Xác nhận cảnh báo và copy' : 'Xác nhận copy'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="page-card">
                   <div className="page-card-head roster-head">
                     <div>
-                      <h2 className="page-card-title">Danh sách ca trong ngày</h2>
-                      <p className="card-description">Hiển thị cả lịch đã hủy để phục vụ đối soát.</p>
+                      <h2 className="page-card-title">Danh sách ca trong tháng</h2>
+                      <p className="card-description">{selectedMonth.from} → {selectedMonth.to} · Hiển thị cả lịch đã hủy để đối soát.</p>
                     </div>
                     <div className="roster-filters">
-                      <select aria-label="Lọc lịch theo dự án" value={projectFilter} onChange={(event) => { setProjectFilter(event.target.value); setSchedulePage(1) }}>
-                        <option value="">Mọi dự án</option>
-                        {(projectsQuery.data?.data ?? []).map((project) => <option key={project.id} value={project.id}>{project.code}</option>)}
-                      </select>
                       <select aria-label="Lọc lịch theo nhân viên" value={employeeFilter} onChange={(event) => { setEmployeeFilter(event.target.value); setSchedulePage(1) }}>
                         <option value="">Mọi nhân viên</option>
                         {(employeesQuery.data?.data ?? []).map((employee) => <option key={employee.id} value={employee.id}>{employee.employeeCode}</option>)}
@@ -622,15 +938,16 @@ export default function AttendancePage() {
                     <div className="page-card-body"><div className="alert alert-error" role="alert">Không thể tải dữ liệu lịch ca. Vui lòng kiểm tra quyền tài khoản và thử lại.</div></div>
                   )}
                   {!assignmentsQuery.isLoading && !assignmentsQuery.error && assignments.length === 0 && (
-                    <div className="schedule-empty"><span>Ngày này chưa có lịch ca.</span><small>Chọn nhân viên, dự án và khung giờ ở phía trên để bắt đầu.</small></div>
+                    <div className="schedule-empty"><span>Tháng này chưa có lịch ca.</span><small>Chọn ngày, nhân viên và khung giờ ở phía trên để bắt đầu.</small></div>
                   )}
                   {assignments.length > 0 && (
                     <div className="table-wrap-borderless">
                       <table className="table schedule-table">
-                        <thead><tr><th>Nhân viên</th><th>Dự án</th><th>Khung giờ</th><th>Điểm danh</th><th>Trạng thái</th><th>Ghi chú</th><th aria-label="Thao tác" /></tr></thead>
+                        <thead><tr><th>Ngày</th><th>Nhân viên</th><th>Dự án</th><th>Khung giờ</th><th>Điểm danh</th><th>Trạng thái</th><th>Ghi chú</th><th aria-label="Thao tác" /></tr></thead>
                         <tbody>
                           {assignments.map((assignment) => (
                             <tr key={assignment.id} className={assignment.status === 'cancelled' ? 'cancelled-row' : ''}>
+                              <td><strong>{dateLabel(assignment.date)}</strong></td>
                               <td><strong>{assignment.employee.fullName}</strong><small>{assignment.employee.employeeCode}</small></td>
                               <td><strong>{assignment.project.code}</strong><small>{assignment.project.name}</small></td>
                               <td><span className="shift-dot" style={{ background: assignment.shift.color ?? '#999' }} />{assignment.shift.name}<small>{assignment.shift.startTime}–{assignment.shift.endTime}{assignment.shift.isOvernight ? ' · qua đêm' : ''}</small></td>

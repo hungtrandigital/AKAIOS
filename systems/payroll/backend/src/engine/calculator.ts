@@ -59,6 +59,8 @@ export interface PayrollRuleSnapshot {
 }
 
 export interface AttendanceRecord {
+  shiftAssignmentId?: string
+  employeeId?: string
   date: Date
   status:
     | 'present'
@@ -68,6 +70,8 @@ export interface AttendanceRecord {
     | 'absent'
     | 'on_leave'
     | 'holiday'
+  checkInAt?: Date | null
+  checkOutAt?: Date | null
   totalWorkMinutes: number      // 0 if absent
   overtimeMinutes: number       // already-rounded in attendance service
   lateMinutes: number           // 0 if not late
@@ -120,7 +124,7 @@ export interface CalculatedLine {
  * Returns aggregated counts.
  */
 export function aggregateAttendance(
-  attendance: AttendanceRecord[]
+  attendance: AttendanceRecord[],
 ): {
   daysWorked: number
   daysOnLeave: number
@@ -142,34 +146,52 @@ export function aggregateAttendance(
   let overtimeHolidayMinutes = 0
   let lateMinutes = 0
 
-  for (const r of attendance) {
-    if (r.status === 'absent') {
-      absentDays++
+  for (const [workDate, dayRecords] of groupAttendanceByDate(attendance)) {
+    const payableRecords = dayRecords.filter((record) => (
+      record.status !== 'absent' && record.status !== 'on_leave'
+    ))
+    if (payableRecords.length === 0) {
+      if (dayRecords.some(({ status }) => status === 'on_leave')) {
+        daysOnLeave++
+      } else {
+        absentDays++
+      }
       continue
     }
-    if (r.status === 'on_leave') {
-      daysOnLeave++
-      continue
-    }
-    daysWorked++
-    // `daysWorked` is the integer attendance-day count persisted for display.
-    // Monthly proration uses explicit workday units so half-days are not overpaid;
-    // a holiday is one paid standard day even when no work timestamps exist.
-    workdayUnits += r.status === 'half_day' ? 0.5 : 1
-    totalWorkMinutes += r.totalWorkMinutes
-    lateMinutes += r.lateMinutes
 
-    // Holiday check uses BOTH status AND actual date (engine agnostic to input quality)
-    if (r.status === 'holiday' || isHoliday(r.date)) {
+    assertSingleWorkedAssignment(workDate, payableRecords)
+    daysWorked++
+    workdayUnits += Math.min(1, payableRecords.reduce(
+      (units, record) => units + (record.status === 'half_day' ? 0.5 : 1),
+      0,
+    ))
+    const dayWorkMinutes = payableRecords.reduce(
+      (minutes, record) => minutes + record.totalWorkMinutes,
+      0,
+    )
+    totalWorkMinutes += dayWorkMinutes
+    lateMinutes += payableRecords.reduce(
+      (minutes, record) => minutes + record.lateMinutes,
+      0,
+    )
+
+    // OT category follows the Vietnam calendar date. A separate terminal
+    // `holiday` record can represent paid non-working time and must never
+    // reclassify minutes worked by another assignment on a non-holiday date.
+    if (isHoliday(payableRecords[0]!.date)) {
       // totalWorkMinutes already includes the overtime portion. On a holiday,
       // every worked minute receives the holiday multiplier exactly once.
-      overtimeHolidayMinutes += r.totalWorkMinutes
-    } else if (r.isWeekend) {
+      overtimeHolidayMinutes += dayWorkMinutes
+    } else if (payableRecords[0]!.isWeekend) {
       // totalWorkMinutes already includes the overtime portion. Adding
       // overtimeMinutes again would double-count the tail of the shift.
-      overtimeWeekendMinutes += r.totalWorkMinutes
+      overtimeWeekendMinutes += dayWorkMinutes
     } else {
-      overtimeWeekdayMinutes += r.overtimeMinutes
+      const recordOvertime = payableRecords.reduce(
+        (minutes, record) => minutes + record.overtimeMinutes,
+        0,
+      )
+      overtimeWeekdayMinutes += recordOvertime
     }
   }
 
@@ -183,6 +205,36 @@ export function aggregateAttendance(
     overtimeWeekendMinutes,
     overtimeHolidayMinutes,
     lateMinutes,
+  }
+}
+
+function groupAttendanceByDate(attendance: AttendanceRecord[]): Map<string, AttendanceRecord[]> {
+  const grouped = new Map<string, AttendanceRecord[]>()
+  for (const record of attendance) {
+    const key = record.date.toISOString().slice(0, 10)
+    grouped.set(key, [...(grouped.get(key) ?? []), record])
+  }
+  return grouped
+}
+
+function assertSingleWorkedAssignment(
+  workDate: string,
+  records: AttendanceRecord[],
+): void {
+  const worked = records.filter((record) => (
+    record.totalWorkMinutes > 0 || record.checkInAt || record.checkOutAt
+  ))
+  if (worked.length > 1) {
+    throw new BusinessRuleViolationError(
+      'Multiple worked assignments on one business date must be reconciled before payroll calculation',
+      {
+        workDate,
+        employeeId: worked.find(({ employeeId }) => employeeId)?.employeeId,
+        shiftAssignmentIds: worked
+          .map(({ shiftAssignmentId }) => shiftAssignmentId)
+          .filter((id): id is string => Boolean(id)),
+      },
+    )
   }
 }
 
@@ -361,9 +413,10 @@ export function calculateLine(
   const otHolidayAmount = overtimeAmount(roundedOT.holiday, rules.otHolidayMultiplier)
 
   // 5. BR-PAY-004: Late penalty
-  const lateMinutesByDay = attendance
-    .filter((r) => r.status !== 'absent' && r.status !== 'on_leave')
-    .map((r) => r.lateMinutes)
+  const lateMinutesByDay = [...groupAttendanceByDate(attendance).values()]
+    .map((records) => records
+      .filter((record) => record.status !== 'absent' && record.status !== 'on_leave')
+      .reduce((minutes, record) => minutes + record.lateMinutes, 0))
   const latePenalty = computeLatePenalty(
     lateMinutesByDay,
     rules.latePenaltyPerMinute,

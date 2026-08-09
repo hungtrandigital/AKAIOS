@@ -128,19 +128,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: _LoginBrand(),
-                    ),
-                    const SizedBox(height: 32),
-                    Text('Chào cô/chú!',
-                        style: Theme.of(context).textTheme.headlineMedium),
-                    const SizedBox(height: 8),
+                    const _LoginHero(),
+                    const SizedBox(height: 24),
+                    Text('Đăng nhập',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 6),
                     Text(
                       'Đăng nhập để xem ca làm và chấm công hôm nay.',
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: _phoneCtrl,
                       decoration: InputDecoration(
@@ -260,45 +257,99 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-class _LoginBrand extends StatelessWidget {
-  const _LoginBrand();
+class _LoginHero extends StatelessWidget {
+  const _LoginHero();
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 12,
-      runSpacing: 8,
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0289F7), Color(0xFF0070CC)],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B2512),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFC7DC50),
+              borderRadius: BorderRadius.circular(99),
             ),
-            borderRadius: BorderRadius.circular(12),
+            child: const Text(
+              'AKAIOS · CHẤM CÔNG',
+              style: TextStyle(
+                color: Color(0xFF1B2512),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .7,
+              ),
+            ),
           ),
-          child: const Text(
-            'AK',
-            style: TextStyle(
+          const SizedBox(height: 22),
+          Text(
+            'Chào cô/chú!',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontSize: 34,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Xem đúng ca. Chấm đúng nơi. Ghi nhận rõ ràng.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: const Color(0xFFE7EAD9),
+                ),
+          ),
+          const SizedBox(height: 18),
+          const Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _LoginProof(icon: Icons.schedule_rounded, label: 'Đúng ca'),
+              _LoginProof(icon: Icons.location_on_outlined, label: 'Đúng nơi'),
+              _LoginProof(icon: Icons.camera_alt_outlined, label: 'Đủ ảnh'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoginProof extends StatelessWidget {
+  const _LoginProof({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(.14)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          Icon(icon, color: const Color(0xFFC7DC50), size: 17),
+          Text(
+            label,
+            style: const TextStyle(
               color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        ),
-        const Text(
-          'AKAIUNSAN',
-          style: TextStyle(
-            color: Color(0xFF17202A),
-            fontSize: 21,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -.4,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -334,14 +385,14 @@ class _MessagePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isError ? const Color(0xFFB42318) : const Color(0xFF176B3A);
+    final color = isError ? const Color(0xFFD0202B) : const Color(0xFF4F601A);
     return Semantics(
       liveRegion: true,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isError ? const Color(0xFFFFF1F0) : const Color(0xFFECFDF3),
-          borderRadius: BorderRadius.circular(16),
+          color: isError ? const Color(0xFFFFF0F1) : const Color(0xFFF0F2E4),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withOpacity(.28)),
         ),
         child: Row(

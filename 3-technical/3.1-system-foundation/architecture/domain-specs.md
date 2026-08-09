@@ -310,7 +310,16 @@ CustomerReportGenerated:
 3. **Missing check-out (BR-ATT-003):** Nếu NV check-in nhưng quên check-out, cuối ngày supervisor có thể manual add check-out time. Hệ thống không tự động set check-out = endOfDay.
 4. **Double check-in prevention (BR-ATT-004):** Nếu `AttendanceRecord.checkInAt` đã có cho assignment này, API reject check-in lần 2. Tương tự cho check-out.
 5. **Photo required (BR-ATT-005):** Employee self check-in/out luôn yêu cầu ảnh JPEG mới chụp trong official client, tối đa 5 MB; không có ảnh, ảnh thư viện hoặc placeholder → reject. Server phải giải mã đầy đủ JPEG, giới hạn tối đa 16 MP và tối thiểu 320×240, không chỉ tin magic bytes. Camera lỗi không làm yếu GPS/photo policy của employee endpoint. MVP chưa có device attestation/liveness, nên freshness/camera origin là client control chứ không phải bằng chứng mật mã cho direct API caller.
-6. **Schedule conflict (BR-ATT-006):** MVP chỉ cho phép một assignment không-cancelled cho mỗi nhân viên trong một business date vì mobile Today xử lý một ca. API reject ca thứ hai cùng ngày kể cả liền kề; đồng thời kiểm tra ngày trước/sau để chặn overlap qua đêm.
+6. **Schedule conflict and acknowledgement (BR-ATT-006):** Một
+   employee/project/shift/date không-cancelled trùng hoàn toàn luôn bị reject.
+   Một ca khác của cùng nhân viên có thời gian chồng với ca cùng ngày hoặc ca qua
+   đêm ở ngày liền kề là soft conflict: API trả warning và chỉ lưu khi scheduler
+   được phân quyền gửi xác nhận rõ ràng. Warning trả một opaque fingerprint gắn
+   với đúng request, tài nguyên ca và tập conflict hiện tại; xác nhận phải gửi
+   lại fingerprint đó, và phải review lại nếu dữ liệu đã thay đổi. Assignment đã
+   xác nhận vẫn là lịch thật,
+   phải có audit chứa actor và conflict evidence, và mobile Today phải hiển thị
+   tất cả assignment không-cancelled trong business date để nhân viên chọn đúng ca.
 7. **Project geofence required (BR-ATT-007):** Project phải có latitude/longitude + radius trước khi cho check-in.
 8. **Past date check-in (BR-ATT-008):** NV không được check-in cho assignment quá 7 ngày trước ngày Việt Nam hiện tại. Operator manual event cũng tuân theo cửa sổ này và không nhận thời điểm tương lai.
 9. **Holiday override (BR-ATT-009):** Nếu assignment date là ngày lễ VN và status = `present` → tính lương OT holiday (3x).
@@ -318,6 +327,30 @@ CustomerReportGenerated:
 11. **Shift cancellation audit (BR-ATT-011):** BO/admin chỉ được hủy assignment còn ở trạng thái `scheduled` và chưa có attendance; supervisor chỉ được hủy trong dự án có membership đang hiệu lực. Lý do hủy từ 10–500 ký tự, actor và trạng thái trước/sau phải được ghi audit atomically. Đổi lịch được thực hiện theo chuỗi hủy lịch cũ rồi tạo lịch mới.
 12. **Tenant-owned shift catalog (BR-ATT-012):** Mỗi `Shift` thuộc đúng một tenant; list/create template và assignment lookup luôn predicate tenant. Tên ca unique trong tenant nhưng có thể trùng giữa các tenant.
 13. **Camera-failure manual event (BR-ATT-013):** Khi không thể chụp ảnh, employee không được bypass. Chỉ supervisor active có membership đúng project hoặc system admin break-glass, với `attendance.override`, mới tạo `check_in|check_out` thủ công cho assignment còn hợp lệ. Supervisor không được tự ghi cho chính mình. Reason code chỉ nhận `capture_unavailable|permission_blocked|device_failure`; note tối thiểu 10 ký tự. Event time phải thuộc business date của assignment (checkout ca qua đêm có thể ở ngày kế tiếp) và nằm trong support window từ 4 giờ trước scheduled start đến 12 giờ sau scheduled end. Event không giả lập GPS/photo, lưu actor/reason/time trong override provenance, đổi record + assignment bằng compare-and-set và ghi `override_attendance` audit trong cùng transaction. BO chỉ review ngoại lệ, không tạo event.
+14. **Monthly project schedule and copy (BR-ATT-014):** Monthly view là
+    projection của `ShiftAssignment` theo một authorized project và khoảng ngày
+    đầu/cuối tháng Việt Nam, không tạo aggregate kế hoạch mới. Copy nhận một
+    source range tối đa 31 ngày và một target start trong cùng project, giữ nguyên
+    day offset, employee, shift và notes; target luôn bắt đầu ở `scheduled` và
+    không copy attendance, cancellation state hoặc audit cũ. Preview là bắt buộc.
+    Preview trả opaque fingerprint của source rows, target mapping, resources và
+    conflicts; bulk save bắt buộc gửi lại fingerprint đó và phải yêu cầu preview
+    mới nếu dữ liệu thay đổi. UI phải cho BO xem đầy đủ mọi source→target mapping,
+    đưa warning/blocker lên trước nhưng không ẩn các dòng hợp lệ. Bulk save atomic,
+    dùng client UUID idempotency key,
+    hard-fail nếu có exact duplicate/invalid resource/contract breach, và yêu cầu
+    xác nhận nếu có soft conflict theo BR-ATT-006. Một audit cấp request lưu
+    source, target, created IDs, stable result snapshot, actor và conflict
+    acknowledgement; replay chỉ trả snapshot ban đầu, không chiếu trạng thái hay
+    attendance đã thay đổi sau đó.
+    Vì MVP chưa định nghĩa break/OT xuyên nhiều ca, payroll phải gom paid-day,
+    meal allowance và late-cap theo unique Vietnam business date nhưng fail closed
+    nếu có hơn một assignment đã thực sự làm trong cùng ngày. Customer report
+    cũng fail closed nếu một employee/project/date có nhiều assignment đã check-in,
+    để BO reconcile thay vì xuất trùng ngày/giờ.
+    Attendance đã reconcile thành `absent|on_leave|holiday` là trạng thái terminal
+    không làm việc trên mobile Today, kể cả assignment kỹ thuật vẫn mang trạng
+    thái cũ; client không được hiển thị nút check-in cho record này.
 
 ### 3. Payroll Bounded Context
 
@@ -497,9 +530,13 @@ PayrollLineOverridden:
    monthly: proratedBase = baseSalary × (workdayUnits / standardWorkingDaysPerMonth)
    hourly:  proratedBase = hourlyRate × regularWorkMinutes / 60
    ```
-   `workdayUnits`: normal/holiday = 1, half-day = 0.5, absent/on_leave = 0;
+   `workdayUnits`: normal/holiday = 1, half-day = 0.5, absent/on_leave = 0,
+   evaluated once per unique Vietnam business date and capped at 1 for that date;
    monthly units are capped at the configured standard. `daysWorked` remains an
-   integer display/persistence count. Hourly employees require a positive
+   integer unique-date display/persistence count. If more than one assignment has
+   worked attendance on the same date, calculation returns an actionable
+   reconciliation error with employee, date, and assignment IDs; MVP does not
+   infer cross-shift breaks or OT. Hourly employees require a positive
    `hourlyRate` at Employee create/update and again at calculation.
 
 2. **OT calculation (BR-PAY-002):**
@@ -516,13 +553,14 @@ PayrollLineOverridden:
    ```
    latePenalty = sum(min(recordLateMinutes × latePenaltyPerMinute, maxLatePenaltyPerDay))
    ```
-   Cap được áp riêng cho từng attendance record/ngày rồi mới cộng. Chỉ áp dụng
-   nếu rule bật; default OFF ở MVP (BO xử lý thủ công).
+   Các record trong cùng business date được cộng late minutes rồi cap đúng một
+   lần cho ngày đó. Chỉ áp dụng nếu rule bật; default OFF ở MVP (BO xử lý thủ công).
 
 5. **Allowances (BR-PAY-005):**
    ```
    totalAllowances = mealAllowancePerDay × workdayUnits + phoneAllowance (nếu có)
    ```
+   Meal allowance dùng unique-date workday units, không tăng theo số assignment.
 
 6. **Gross calculation (BR-PAY-006):**
    ```

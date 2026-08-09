@@ -62,7 +62,9 @@ describe.skipIf(skipIntegration)('Supervisor data scope (integration)', () => {
         payload: { contractEndDate: '2025-12-31' },
       })).statusCode).toBe(400)
 
-      const { generateAndStoreReport } = await import('../../src/services/reports/customer-report.js')
+      const { aggregateReportData, generateAndStoreReport } = await import(
+        '../../src/services/reports/customer-report.js'
+      )
       const teamReport = await generateAndStoreReport(
         f.teamProject.id, f.assignmentDate, f.assignmentDate, 'pdf',
         f.supervisor.user.id, f.tenantA.id,
@@ -90,6 +92,65 @@ describe.skipIf(skipIntegration)('Supervisor data scope (integration)', () => {
       })
       expect(filteredOutside.statusCode).toBe(200)
       expect(filteredOutside.json().data).toHaveLength(0)
+
+      const duplicateWorkShift = await prisma.shift.create({
+        data: {
+          tenantId: f.tenantA.id,
+          name: `Report guard ${f.dateKey}`,
+          startTime: '12:00',
+          endTime: '20:00',
+          breakMinutes: 60,
+        },
+      })
+      f.shiftIds.push(duplicateWorkShift.id)
+      const duplicateWorkAssignment = await prisma.shiftAssignment.create({
+        data: {
+          employeeId: f.teamMember.employee.id,
+          projectId: f.teamProject.id,
+          shiftId: duplicateWorkShift.id,
+          date: f.assignmentDate,
+          assignedById: f.admin.id,
+        },
+      })
+      const oneAttendedControl = await aggregateReportData(
+        f.teamProject.id,
+        f.assignmentDate,
+        f.assignmentDate,
+        f.tenantA.id,
+      )
+      expect(oneAttendedControl?.attendanceByEmployee.find(
+        ({ employeeCode }) => employeeCode === f.teamMember.employee.employeeCode,
+      )?.daysWorked).toBe(1)
+      await prisma.attendanceRecord.create({
+        data: {
+          shiftAssignmentId: duplicateWorkAssignment.id,
+          employeeId: f.teamMember.employee.id,
+          projectId: f.teamProject.id,
+          checkInAt: new Date(),
+          status: 'present',
+        },
+      })
+      const reportCountBeforeGuard = await prisma.customerReport.count({
+        where: { tenantId: f.tenantA.id, projectId: f.teamProject.id },
+      })
+      await expect(generateAndStoreReport(
+        f.teamProject.id,
+        f.assignmentDate,
+        f.assignmentDate,
+        'csv',
+        f.admin.id,
+        f.tenantA.id,
+      )).rejects.toMatchObject({
+        code: 'BUSINESS_RULE_VIOLATION',
+        details: {
+          employeeId: f.teamMember.employee.id,
+          projectId: f.teamProject.id,
+          workDate: f.dateKey,
+        },
+      })
+      expect(await prisma.customerReport.count({
+        where: { tenantId: f.tenantA.id, projectId: f.teamProject.id },
+      })).toBe(reportCountBeforeGuard)
 
       expect((await f.app.inject({
         method: 'GET',
@@ -227,7 +288,7 @@ describe.skipIf(skipIntegration)('Supervisor data scope (integration)', () => {
           payload: assignmentPayload({ shiftId: overlapB.id, date: dateAfter(3) }),
         }),
       ])
-      expect(concurrentCreates.map((response) => response.statusCode).sort()).toEqual([200, 422])
+      expect(concurrentCreates.map((response) => response.statusCode).sort()).toEqual([200, 409])
 
       await prisma.employee.update({ where: { id: f.mobileMember.employee.id }, data: { status: 'inactive' } })
       expect((await f.app.inject({
@@ -397,7 +458,7 @@ describe.skipIf(skipIntegration)('Supervisor data scope (integration)', () => {
         method: 'GET', url: '/v1/attendance/my-today', headers: mobileHeaders,
       })
       expect(mobileToday.statusCode).toBe(200)
-      expect(mobileToday.json()).toEqual({ message: 'No assignment today' })
+      expect(mobileToday.json()).toEqual({ message: 'No assignment today', data: [] })
     } finally {
       await f.cleanup()
     }

@@ -2,7 +2,7 @@
 
 **Status:** Implemented repository topology; production operations and pilot evidence pending
 
-**Last Updated:** 2026-07-21
+**Last Updated:** 2026-08-09
 
 **Owner:** @system-architecture + @devops
 
@@ -21,12 +21,12 @@ server, backup schedule, restore drill, load test, or pilot has been accepted ye
 | --- | --- | --- |
 | Attendance API | Node 20, Fastify, TypeScript | `127.0.0.1:3000`; auth, attendance, projects, reports, internal attendance projection |
 | Payroll API | Node 20, Fastify, TypeScript | `127.0.0.1:3001`; synchronous transactional payroll and XLSX export |
-| Web admin | Next.js 14 | `127.0.0.1:3002`; same-origin rewrites to both APIs |
+| Web admin | Next.js 15 | `127.0.0.1:3002`; same-origin rewrites to both APIs |
 | PostgreSQL | PostgreSQL 16 | `127.0.0.1:5432`; shared physical schema and durable refresh-token records |
 | Redis | Redis 7 | `127.0.0.1:6379`; OTP/TOTP challenge state, abuse controls, and readiness checks—not payroll jobs |
 | MinIO | pinned MinIO release | `127.0.0.1:9000/9001`; private photos and generated reports |
 | Caddy | Caddy 2 | origin reverse proxy; public TLS terminates at Cloudflare Tunnel |
-| Mobile | Flutter 3.24.5 | Android debug APK validated; iOS native build/signing pending |
+| Mobile | Flutter 3.24.5 | Android debug APK validated; iOS release signing and physical-device validation pending |
 
 There is no BullMQ worker, Redis event bus, Prometheus/Grafana stack, centralized
 log collector, automatic retention worker, or offline mobile queue in the MVP.
@@ -132,12 +132,19 @@ providers. Seed/demo credentials are forbidden on production and live pilot data
 
 ## Validation Boundary
 
-Local evidence covers fresh migrations, real PostgreSQL/Redis/MinIO integration,
-7/7 live Playwright scenarios, package and production image builds, Compose/Caddy
-configuration, and Android build. Commit `056a769` passes all five jobs in
-[GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275),
-including APK build/upload. Native iOS, production DNS/tunnel policy,
-backup/restore, capacity, and pilot behavior remain release gates.
+Current local-candidate evidence covers seven fresh migrations, real
+PostgreSQL/Redis/MinIO integration, Attendance 13/13 plus Payroll 1/1 integration
+tests, 9/9 live Playwright scenarios, package and production image builds,
+production-only non-root closures for all three long-running images, real
+in-image Prisma/native-module checks, an isolated seven-migration target, both
+API readiness endpoints, web `/login`, image-based Playwright 9/9,
+Compose/Caddy configuration, and Android build. Commit `056a769` and
+[GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275)
+are historical baseline evidence; they do not validate the 2026-08-09 candidate.
+That candidate still requires exact-SHA review and a new green remote CI run
+before merge or deployment. iOS release signing and physical-device validation,
+production DNS/tunnel policy, backup/restore, capacity, and pilot behavior remain
+release gates.
 
 ## Related Documents
 

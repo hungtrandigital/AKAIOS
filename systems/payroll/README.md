@@ -1,7 +1,7 @@
 # Payroll System
 
 **System Name:** `payroll`
-**Status:** Remediation/code gate complete; remaining MVP slice and pilot acceptance pending (PRD-EPIC-002)
+**Status:** Prior remediation gate complete; 2026-08-09 dependency-security candidate validated locally; remote CI, exact-SHA merge, and pilot acceptance pending (PRD-EPIC-002)
 **Owner:** @fullstack-engineer
 
 ## Overview
@@ -31,7 +31,7 @@ audit-log view remain web-slice work; backend capability does not imply a shippe
 | ORM | Prisma 5 (shared with attendance) |
 | Database | PostgreSQL 16 (shared with attendance) |
 | Cache | Redis 7 (shared runtime infrastructure); payroll calculation is transactional in the API |
-| Web admin | Next.js 14 (App Router) + TypeScript |
+| Web admin | Next.js 15 (App Router) + TypeScript |
 | Tests | Vitest against fresh real services + Playwright through web admin |
 | Auth | Admin password + TOTP, JWT access, and rotating refresh token (shared with attendance) |
 
@@ -93,7 +93,7 @@ payroll/
 │   │   ├── unit/
 │   │   └── integration/
 │   └── package.json
-├── web-admin/                # Next.js 14
+├── web-admin/                # Next.js 15
 │   ├── app/                  # login/2fa, attendance, payroll, projects, employees, RBAC
 │   ├── components/
 │   ├── e2e/
@@ -156,4 +156,4 @@ For each active employee:
 
 ---
 
-*The review-remediation gate passes locally as of 2026-07-18. Remaining slice/pilot acceptance, commit, remote CI, and live evidence remain.*
+*The 2026-08-09 dependency-security candidate passes its local gates. Exact-SHA review, new remote CI, merge, deployment, and remaining slice/pilot acceptance remain pending.*

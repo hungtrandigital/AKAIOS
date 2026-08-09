@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { prisma } from '@ak/shared'
+import { issueAccessToken, prisma } from '@ak/shared'
 import { createScopeFixture, skipIntegration } from './scope-fixture.js'
 
 describe.skipIf(skipIntegration)('Supervisor membership and overrides (integration)', () => {
@@ -127,6 +127,22 @@ describe.skipIf(skipIntegration)('Supervisor membership and overrides (integrati
         expect(absent.statusCode).toBe(200)
         expect(absent.json()).toMatchObject({
           status: 'absent', checkInAt: null, checkOutAt: null, totalMinutesWorked: 0,
+        })
+        const teamMemberToken = issueAccessToken({
+          userId: f.teamMember.user.id,
+          tenantId: f.tenantA.id,
+          role: 'employee',
+        }).token
+        const reconciledToday = await f.app.inject({
+          method: 'GET',
+          url: '/v1/attendance/my-today',
+          headers: auth(teamMemberToken),
+        })
+        expect(reconciledToday.statusCode).toBe(200)
+        expect(reconciledToday.json().data[0].attendanceRecord).toMatchObject({
+          status: 'absent',
+          checkInAt: null,
+          checkOutAt: null,
         })
         expect(await prisma.auditLog.count({
           where: { tenantId: f.tenantA.id, entityId: f.teamRecord.id, action: 'override_attendance' },

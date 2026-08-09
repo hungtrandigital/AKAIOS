@@ -4,7 +4,7 @@
 
 ## Status
 
-The repository contains Android and iOS Flutter scaffolds plus the MVP employee flow: Prismate-branded native/Flutter loading, auth bootstrap, password/OTP login, refresh-token rotation, today's assignment, GPS validation input, live camera capture, and check-in/out. The UI is Vietnamese-first, scroll-safe at 200% text scaling, and uses large touch targets for an older field workforce. Flutter analysis and 16/16 tests pass. An iOS debug build runs on an iPhone 17 Pro Simulator with Xcode 26.6 and CocoaPods 1.17.0; local UAT confirms the native-to-Flutter launch transition, Login layout, assignment display, geofence coordinates, and final check-in/out state with device-local timestamps. A prior Android debug APK gate passed, but the latest branding resource change could not be repackaged on this Mac because it has no Android SDK. The Simulator has no camera stream, so photo upload was verified through the public API while the UI was verified to fail closed without a photo. History, offline queue, push notifications, physical-device camera validation, and release signing remain outside this remediation batch.
+The repository contains Android and iOS Flutter scaffolds plus the MVP employee flow: Prismate-branded native/Flutter loading, auth bootstrap, password/OTP login, refresh-token rotation, all of today's assignments, GPS validation input, live camera capture, and check-in/out. Each assignment has one compact card with its state, project, time, progress, and next action; reconciled `absent`, `on_leave`, and `holiday` records are terminal. Check-in/out uses a clear three-step header and remains scroll-safe at 200% text scaling for an older field workforce. Flutter analysis and 22/22 tests pass. A debug iPhone 17 Pro Simulator build completed the normal GPS/JPEG/API/MinIO check-in and check-out path through the explicit simulator seam below. This does not validate camera hardware. History, offline queue, push notifications, physical-device camera validation, and release signing remain outside this remediation batch.
 
 ## Project structure
 
@@ -13,10 +13,11 @@ The repository contains Android and iOS Flutter scaffolds plus the MVP employee 
 | `android/` | Gradle project, permissions, debug-only local HTTP allowance |
 | `ios/` | Xcode project, camera/location descriptions, localhost ATS exception |
 | `assets/branding/` | Optimized app-ready derivative of the canonical Prismate logo |
+| `assets/fonts/` | Offline Manrope and Be Vietnam Pro bundle with upstream SIL OFL licenses |
 | `lib/main.dart` | Stable auth-aware GoRouter, branded splash/theme, and localization setup |
 | `lib/core/` | API URL, secure token storage, Dio auth/refresh client, reusable Prismate loader |
 | `lib/features/auth/` | Password and OTP login plus logout |
-| `lib/features/attendance/` | Today's assignment and check-in/out flows |
+| `lib/features/attendance/` | Today's assignments and independent check-in/out flows |
 | `lib/l10n/` | Vietnamese/English ARB files and generated localization sources |
 | `test/` | Mobile unit/smoke tests |
 
@@ -39,8 +40,39 @@ cd ios && pod install && cd ..
 
 The CI `Flutter mobile` job repeats these checks and builds an Android debug APK artifact.
 
+### Latest Android UAT artifact
+
+On 2026-08-09, the current worktree built and launched on a Google APIs Android
+emulator using:
+
+```bash
+flutter build apk --debug \
+  --dart-define=API_BASE_URL=https://akaios.prismate.vn/api/attendance
+```
+
+The ignored local artifact is
+`build/app/outputs/flutter-apk/app-debug.apk` (114,236,964 bytes; about 109 MiB), package
+`vn.akaiunsan.ak_attendance_mobile`, version `0.1.0+1`, minSdk 21, targetSdk 34,
+SHA-256 `33a9a8fb2cf64493702db647138f94b4baa1b8e97a2b1b8c71c2e527b5ca4b55`.
+It is signed only with the Android debug certificate and is for controlled
+device testing, not distribution.
+
+The public host currently serves the application but still routes the mobile
+prefix through the old web rewrite, producing backend path
+`/v1/attendance/v1/...` and HTTP 404. Update the HPC to a reviewed release that
+contains the committed Caddy prefix handling before testing Login against this
+APK; the unauthenticated `my-today` smoke request should then return 401, not 404.
+
 ## Brand and loading
 
+- The employee product UI uses the bounded corporate profile from the internal
+  style guide: Manrope headings, Be Vietnam Pro body/control text, olive/forest/
+  lime/paper colors, and one prominent shift action. Marketing hero scale,
+  image-led layouts, parallax, and decorative motion are intentionally excluded.
+- Login, Today, and check-in/out preserve ≥16sp body text, ≥52dp primary actions,
+  200% text scaling, explicit shift/project status, GPS, fresh-camera, and
+  camera-failure recovery. The web Back Office keeps its existing Inter/blue
+  profile; this mobile theme does not replace it.
 - The canonical source stays at `shared/assets/Prismate Brand Assets/LOGO/Prismate_Black@5x.png`; the mobile bundle uses the optimized 1200×464 derivative at `assets/branding/prismate_logo_black.png`.
 - Android and iOS show a static density-appropriate Prismate mark before Flutter draws its first frame. Android includes both the legacy launch background and an Android 12+ system-splash-safe square derivative; light and dark system modes share the white startup background. Flutter then uses the same mark with a gentle opacity/scale pulse for real bootstrap, login, Today, location, camera, submit, and reconciliation work.
 - The animation stops when reduced motion is requested. Loading is tied to actual async state; the app never delays navigation only to keep the logo visible.
@@ -56,23 +88,31 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 # iOS simulator uses the localhost-only ATS exception
 flutter run --dart-define=API_BASE_URL=http://localhost:3000
 
+# Debug iOS Simulator UAT only: opt in to a visibly labeled simulated JPEG.
+flutter run \
+  --dart-define=API_BASE_URL=http://localhost:3000 \
+  --dart-define=UAT_SIMULATED_CAMERA=true
+
 # Physical devices and production builds should use HTTPS through Caddy
-flutter run --dart-define=API_BASE_URL=https://ak-tunnel.example.com/api/attendance
+flutter run --dart-define=API_BASE_URL=https://akaios.prismate.vn/api/attendance
 ```
 
 Android cleartext traffic is enabled only for debug builds. Release Android and physical-device iOS testing should use HTTPS.
+`UAT_SIMULATED_CAMERA` defaults to false. The app additionally requires a debug
+build and an iOS Simulator runtime, so profile/release, Android, and physical
+iPhone runs ignore the flag and keep the camera path fail closed.
 
 ## Build and signing
 
 ```bash
 flutter build apk --debug \
-  --dart-define=API_BASE_URL=https://ak-tunnel.example.com/api/attendance
+  --dart-define=API_BASE_URL=https://akaios.prismate.vn/api/attendance
 
 flutter build apk --release \
-  --dart-define=API_BASE_URL=https://ak-tunnel.example.com/api/attendance
+  --dart-define=API_BASE_URL=https://akaios.prismate.vn/api/attendance
 
 flutter build ipa --release \
-  --dart-define=API_BASE_URL=https://ak-tunnel.example.com/api/attendance
+  --dart-define=API_BASE_URL=https://akaios.prismate.vn/api/attendance
 ```
 
 Android releases are never signed with Flutter's shared debug key. Supply an ignored `android/key.properties` file and keep the keystore outside Git:
@@ -95,6 +135,9 @@ iOS debug compilation and launch are validated on the iOS 26.5 Simulator with Xc
 - Normal states keep a quiet `Không chụp được ảnh?` help link. Confirmed camera permission/hardware/plugin failures instead show the prominent `Nhờ giám sát hỗ trợ` recovery panel and `Kiểm tra lại chấm công`. The supervisor/system-admin web flow creates a manual exception with actor, camera-failure reason code, bounded assignment time, override provenance, and atomic audit; the employee never calls that endpoint. The employee manual badge appears only for that structured assisted-camera provenance, not every general BO override.
 - Camera-only capture and the two-minute freshness check are official-client controls. Device attestation/liveness is outside MVP, so the backend does not claim cryptographic proof that an arbitrary direct API caller used a live camera.
 - iOS Simulator reports `Camera not available`; use a physical device for the release GPS/camera acceptance pass.
+- For controlled local data-path testing only, the opt-in debug Simulator seam
+  writes a labeled 320×240 JPEG and still requires fresh GPS, JPEG decode,
+  upload/storage, and normal attendance validation. It is not camera evidence.
 
 ## Architecture
 
@@ -106,6 +149,8 @@ iOS debug compilation and launch are validated on the iOS 26.5 Simulator with Xc
 
 ## Related documents
 
+- [Internal UI style contract](../../../docs/style-system/STYLE_GUIDE.md) — authoritative for product behavior and accessibility
+- [Corporate brand guide](../../../4-marketing/brand-guidelines.md) — visual reference; the internal style contract takes precedence
 - [System Architecture](../docs/architecture.md)
 - [Domain Specs](../../../3-technical/3.1-system-foundation/architecture/domain-specs.md)
 - [API Contracts](../../../3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml)

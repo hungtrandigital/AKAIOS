@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,20 @@ import '../data/attendance_repository.dart';
 
 const maxAttendancePhotoBytes = 5 * 1024 * 1024;
 const evidenceFreshness = Duration(minutes: 2);
+const _uatSimulatedCameraRequested = bool.fromEnvironment(
+  'UAT_SIMULATED_CAMERA',
+  defaultValue: false,
+);
+const _uatFixtureJpegBase64 =
+    '/9j/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyYVFSZPNS01T09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0//wAARCADwAUADASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAT/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAb/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCMBWpQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//2Q==';
+
+bool allowsUatSimulatedCamera({
+  required bool isDebug,
+  required bool requested,
+  required bool isIos,
+  required bool isSimulator,
+}) =>
+    isDebug && requested && isIos && isSimulator;
 
 enum CaptureFlowState {
   idle,
@@ -73,14 +88,16 @@ bool hasJpegSignature(List<int> bytes) =>
     bytes[2] == 0xff;
 
 bool hasRecordedAttendanceEvent(
-  ShiftAssignment? assignment,
+  List<ShiftAssignment> assignments,
   String shiftAssignmentId,
   bool isCheckOut,
 ) {
-  if (assignment?.id != shiftAssignmentId) return false;
+  final matching = assignments.where((item) => item.id == shiftAssignmentId);
+  if (matching.isEmpty) return false;
+  final assignment = matching.first;
   return isCheckOut
-      ? assignment?.checkOutAt != null
-      : assignment?.checkInAt != null;
+      ? assignment.checkOutAt != null
+      : assignment.checkInAt != null;
 }
 
 class CheckScreen extends ConsumerStatefulWidget {
@@ -106,6 +123,15 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
   String? _message;
   bool _canOpenAppSettings = false;
   bool _canOpenLocationSettings = false;
+  bool _usingUatSimulatedPhoto = false;
+
+  bool get _uatSimulatedCameraEnabled => allowsUatSimulatedCamera(
+        isDebug: kDebugMode,
+        requested: _uatSimulatedCameraRequested,
+        isIos: Platform.isIOS,
+        isSimulator: Platform.environment.containsKey('SIMULATOR_UDID') ||
+            Platform.environment.containsKey('SIMULATOR_DEVICE_NAME'),
+      );
 
   bool get _busy => const {
         CaptureFlowState.acquiringLocation,
@@ -201,6 +227,7 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
     final previousPhoto = _photo;
     _photo = null;
     _photoCapturedAt = null;
+    _usingUatSimulatedPhoto = false;
     setState(() {
       _flow = CaptureFlowState.capturingPhoto;
       _message = null;
@@ -285,6 +312,48 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
     } catch (_) {
       await _deletePhoto(pendingPhoto);
       _applyCameraFailure(CameraFailureKind.failure);
+    }
+  }
+
+  Future<void> _useUatSimulatedPhoto() async {
+    if (!_uatSimulatedCameraEnabled || _position == null || _busy) return;
+    final previousPhoto = _photo;
+    setState(() {
+      _photo = null;
+      _photoCapturedAt = null;
+      _usingUatSimulatedPhoto = false;
+      _flow = CaptureFlowState.capturingPhoto;
+      _message = null;
+    });
+    await _deletePhoto(previousPhoto);
+
+    File? fixture;
+    try {
+      fixture = File(
+        '${Directory.systemTemp.path}/akaiunsan-uat-${DateTime.now().microsecondsSinceEpoch}.jpg',
+      );
+      await fixture.writeAsBytes(base64Decode(_uatFixtureJpegBase64),
+          flush: true);
+      final photo = XFile(fixture.path, mimeType: 'image/jpeg');
+      if (!mounted) {
+        await fixture.delete();
+        return;
+      }
+      setState(() {
+        _photo = photo;
+        _photoCapturedAt = DateTime.now();
+        _usingUatSimulatedPhoto = true;
+        _flow = CaptureFlowState.ready;
+        _message =
+            'Đã dùng ảnh mô phỏng để kiểm thử trên Mac. Đây không phải ảnh camera thật.';
+      });
+    } catch (_) {
+      if (fixture != null && await fixture.exists()) await fixture.delete();
+      if (!mounted) return;
+      setState(() {
+        _flow = CaptureFlowState.cameraFailure;
+        _message = 'Không tạo được ảnh mô phỏng UAT. Vui lòng thử lại.';
+      });
     }
   }
 
@@ -521,51 +590,61 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-              24, 4, 24, 24 + MediaQuery.viewInsetsOf(context).bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Nhờ giám sát hỗ trợ',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              Text(
-                'Chỉ dùng cách này khi cô/chú đã thử lại nhưng camera vẫn không mở được.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 12),
-              const _HelpLine(
-                  number: '1',
-                  text: 'Báo camera bị lỗi cho giám sát đang trực tại dự án.'),
-              const _HelpLine(
-                  number: '2',
-                  text: 'Giám sát xác nhận cô/chú có mặt và ghi nhận giúp.'),
-              const _HelpLine(
-                  number: '3',
-                  text:
-                      'Quay lại màn hình này và bấm “Kiểm tra lại chấm công”.'),
-              const SizedBox(height: 10),
-              Text(
-                'Không dùng ảnh cũ và không đưa tài khoản cho người khác.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 18),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  unawaited(_checkSupervisorRecord());
-                },
-                icon: const Icon(Icons.sync),
-                label: const Text('Kiểm tra lại chấm công'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Đóng'),
-              ),
-            ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .9,
+          ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              24,
+              4,
+              24,
+              24 + MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Nhờ giám sát hỗ trợ',
+                    style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                Text(
+                  'Chỉ dùng cách này khi cô/chú đã thử lại nhưng camera vẫn không mở được.',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 12),
+                const _HelpLine(
+                    number: '1',
+                    text:
+                        'Báo camera bị lỗi cho giám sát đang trực tại dự án.'),
+                const _HelpLine(
+                    number: '2',
+                    text: 'Giám sát xác nhận cô/chú có mặt và ghi nhận giúp.'),
+                const _HelpLine(
+                    number: '3',
+                    text:
+                        'Quay lại màn hình này và bấm “Kiểm tra lại chấm công”.'),
+                const SizedBox(height: 10),
+                Text(
+                  'Không dùng ảnh cũ và không đưa tài khoản cho người khác.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    unawaited(_checkSupervisorRecord());
+                  },
+                  icon: const Icon(Icons.sync),
+                  label: const Text('Kiểm tra lại chấm công'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Đóng'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -581,9 +660,8 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final action = widget.isCheckOut ? l.checkOut : l.checkIn;
     return Scaffold(
-      appBar: AppBar(title: Text(action)),
+      appBar: AppBar(title: Text(widget.isCheckOut ? 'Ra ca' : 'Vào ca')),
       body: SafeArea(
         top: false,
         child: Center(
@@ -592,17 +670,27 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
               children: [
+                _CheckFlowHero(
+                  isCheckOut: widget.isCheckOut,
+                  hasLocation: _position != null,
+                  hasPhoto: _photo != null,
+                ),
+                if (_uatSimulatedCameraEnabled) ...[
+                  const SizedBox(height: 14),
+                  const _UatModeBanner(),
+                ],
+                const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF6FF),
+                    color: const Color(0xFFF0F2E4),
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.verified_user_outlined,
-                          color: Color(0xFF0070CC), size: 30),
+                          color: Color(0xFF4F601A), size: 30),
                       const SizedBox(width: 13),
                       Expanded(
                         child: Text(
@@ -613,7 +701,7 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
                 _StepCard(
                   number: 1,
                   title: 'Vị trí',
@@ -647,21 +735,61 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
                   onPressed: _busy || _position == null ? null : _takePhoto,
                   preview: _photo == null
                       ? null
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: AspectRatio(
-                            aspectRatio: 4 / 3,
-                            child: Image.file(
-                              File(_photo!.path),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Center(
-                                child: Text(
-                                    'Không xem được ảnh. Vui lòng chụp lại.'),
+                      : Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: AspectRatio(
+                                aspectRatio: 4 / 3,
+                                child: Image.file(
+                                  File(_photo!.path),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                    child: Text(
+                                        'Không xem được ảnh. Vui lòng chụp lại.'),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            if (_usingUatSimulatedPhoto)
+                              Positioned(
+                                left: 10,
+                                bottom: 10,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1B2512),
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                  child: const Text(
+                                    'ẢNH MÔ PHỎNG UAT',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: .4,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                 ),
+                if (_uatSimulatedCameraEnabled && _position != null) ...[
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _useUatSimulatedPhoto,
+                    icon: const Icon(Icons.science_outlined),
+                    label: Text(
+                      _photo == null
+                          ? 'Dùng ảnh mô phỏng UAT'
+                          : 'Nạp lại ảnh mô phỏng UAT',
+                    ),
+                  ),
+                ],
                 if (_message != null) ...[
                   const SizedBox(height: 16),
                   _StatusPanel(
@@ -698,7 +826,9 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _hasFreshEvidence
-                      ? 'Hai bước đã đủ. Cô/chú kiểm tra rồi bấm nút bên dưới.'
+                      ? _usingUatSimulatedPhoto
+                          ? 'Đủ dữ liệu UAT. Kết quả sẽ mang ảnh mô phỏng, không dùng làm bằng chứng thực địa.'
+                          : 'Hai bước đã đủ. Cô/chú kiểm tra rồi bấm nút bên dưới.'
                       : 'Nút chỉ sáng khi đã có vị trí và ảnh mới.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
@@ -742,6 +872,173 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CheckFlowHero extends StatelessWidget {
+  const _CheckFlowHero({
+    required this.isCheckOut,
+    required this.hasLocation,
+    required this.hasPhoto,
+  });
+
+  final bool isCheckOut;
+  final bool hasLocation;
+  final bool hasPhoto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B2512),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isCheckOut ? Icons.logout_rounded : Icons.login_rounded,
+            color: const Color(0xFFC7DC50),
+            size: 32,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isCheckOut ? 'Xác nhận ra ca' : 'Xác nhận vào ca',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontSize: 27,
+                ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Hoàn thành lần lượt vị trí, ảnh mới và xác nhận.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFE7EAD9),
+                ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _HeroStep(
+                  number: '1',
+                  label: 'Vị trí',
+                  done: hasLocation,
+                ),
+              ),
+              const _HeroConnector(),
+              Expanded(
+                child: _HeroStep(
+                  number: '2',
+                  label: 'Ảnh mới',
+                  done: hasPhoto,
+                ),
+              ),
+              const _HeroConnector(),
+              const Expanded(
+                child: _HeroStep(number: '3', label: 'Gửi', done: false),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStep extends StatelessWidget {
+  const _HeroStep({
+    required this.number,
+    required this.label,
+    required this.done,
+  });
+
+  final String number;
+  final String label;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: done ? const Color(0xFFC7DC50) : Colors.white,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: done
+              ? const Icon(Icons.check, color: Color(0xFF1B2512), size: 21)
+              : Text(
+                  number,
+                  style: const TextStyle(
+                    color: Color(0xFF1B2512),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroConnector extends StatelessWidget {
+  const _HeroConnector();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 20,
+      height: 2,
+      margin: const EdgeInsets.fromLTRB(4, 0, 4, 24),
+      color: const Color(0xFF7E8860),
+    );
+  }
+}
+
+class _UatModeBanner extends StatelessWidget {
+  const _UatModeBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF2C7A5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.science_outlined, color: Color(0xFF9B3A10)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Đang bật mô phỏng camera cho UAT trên Mac. Chỉ bản debug mới có chế độ này.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF7A2E0B),
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -882,17 +1179,17 @@ class _StepCard extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: complete
-                        ? const Color(0xFFECFDF3)
-                        : const Color(0xFFEAF6FF),
+                        ? const Color(0xFFE8EDC8)
+                        : const Color(0xFFF0F2E4),
                     shape: BoxShape.circle,
                   ),
                   child: complete
                       ? const Icon(Icons.check,
-                          color: Color(0xFF176B3A), size: 24)
+                          color: Color(0xFF4F601A), size: 24)
                       : Text(
                           '$number',
                           style: const TextStyle(
-                            color: Color(0xFF0070CC),
+                            color: Color(0xFF4F601A),
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                           ),
@@ -934,13 +1231,13 @@ class _StatusPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = warning ? const Color(0xFF9B3A10) : const Color(0xFF176B3A);
+    final color = warning ? const Color(0xFF9B3A10) : const Color(0xFF4F601A);
     return Semantics(
       liveRegion: true,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: warning ? const Color(0xFFFFF4E8) : const Color(0xFFECFDF3),
+          color: warning ? const Color(0xFFFFF4E8) : const Color(0xFFF0F2E4),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withOpacity(.28)),
         ),
@@ -984,12 +1281,12 @@ class _HelpLine extends StatelessWidget {
             height: 30,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
-              color: Color(0xFFEAF6FF),
+              color: Color(0xFFF0F2E4),
               shape: BoxShape.circle,
             ),
             child: Text(number,
                 style: const TextStyle(
-                    color: Color(0xFF0070CC), fontWeight: FontWeight.w800)),
+                    color: Color(0xFF4F601A), fontWeight: FontWeight.w800)),
           ),
           const SizedBox(width: 10),
           Expanded(

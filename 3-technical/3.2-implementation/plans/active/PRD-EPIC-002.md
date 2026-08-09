@@ -29,7 +29,7 @@ related_ids:
   - CODE-BUG-021
   - CODE-BUG-022
 created: 2026-07-16
-updated: 2026-07-21
+updated: 2026-08-09
 priority: high
 owner: "@fullstack-engineer"
 phases:
@@ -113,7 +113,7 @@ Exploration ngày 2026-07-16 xác nhận:
 | --- | --- | --- |
 | Mobile | **Flutter 3.x (Dart)** | Một codebase cho iOS + Android, native perf, package camera/location đầy đủ, dev VN sẵn có |
 | Backend API | **Node.js 20 + Fastify + TypeScript** | Type-safe, ecosystem JWT/auth/ORM rộng, dev VN dễ tuyển, async I/O tốt cho 200 user đồng thời |
-| Web admin | **Next.js 14 (App Router) + TypeScript** | Cùng ecosystem TS, build nhanh, deploy Docker dễ |
+| Web admin | **Next.js 15 (App Router) + TypeScript** | Cùng ecosystem TS, build nhanh, deploy Docker dễ |
 | Database | **PostgreSQL 16** | Quan hệ chặt cho HR/payroll, JSONB cho metadata linh hoạt, mature |
 | Cache / auth state | **Redis 7** | OTP challenges and abuse controls; refresh-token families are hashed in PostgreSQL, and payroll calculation is transactional in the API |
 | Object storage (ảnh check-in) | **MinIO** (S3-compatible, self-hosted) | On-premise friendly, không phụ thuộc AWS, chi phí = 0 |
@@ -205,9 +205,9 @@ PRD-EPIC-002 (this epic)
 │   └── CODE-TASK-006: Docker Compose stack + Caddy reverse proxy
 │
 ├── PRD-SLICE-003: Attendance (Phase 2)
-│   ├── Backend Project, Shift, Employee, Schedule, Check-in/out, report APIs
-│   ├── Flutter login + today + check-in/out flow
-│   ├── Web-admin realtime attendance + audited override
+│   ├── Backend Project, Shift, Employee, monthly project schedule/copy, Check-in/out, report APIs
+│   ├── Flutter login + multi-assignment Today + check-in/out flow
+│   ├── Web-admin realtime attendance, monthly scheduling, copy preview, and audited override
 │   └── Unit/integration/mobile/browser regression coverage
 │
 ├── PRD-SLICE-004: Payroll (Phase 3)
@@ -264,7 +264,8 @@ PRD-EPIC-002 (this epic)
 
 ### Phase 2 — Attendance (3 tuần)
 **Priority:** High (core feature của MVP)
-**Goals:** Mobile app check-in/out bằng GPS + ảnh, web admin xem realtime + override
+**Goals:** Mobile app check-in/out bằng GPS + ảnh, web admin xem realtime + override,
+và lịch dự án theo tháng có copy lịch, xem trước, cảnh báo xung đột và xác nhận có audit.
 
 **Tracking:** PRD-SLICE-003
 **Coverage:** ≥90% (target 100%) cho schedule engine, GPS validation, attendance logic
@@ -411,8 +412,12 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - `systems/attendance/backend/tests/unit/schedule-service.test.ts`
 - `systems/shared/src/db/prisma/schema.prisma`
 - `systems/shared/src/db/prisma/migrations/`
+- `systems/shared/src/db/seeds/demo-accounts.ts`
+- `DEMO_ACCOUNTS.md`
+- `systems/shared/README.md`
 - `systems/shared/src/db/seeds/`
 - `systems/payroll/web-admin/app/attendance/page.tsx`
+- `systems/payroll/web-admin/app/login/page.tsx`
 - `systems/payroll/web-admin/app/globals.css`
 - `systems/payroll/web-admin/components/TopNav.tsx`
 - `systems/payroll/web-admin/next.config.js`
@@ -427,12 +432,12 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 
 1. BO/system admin can list/create active shift templates and list/filter/create/cancel dated assignments across their tenant.
 2. Supervisors can list/create/cancel only within explicit active project membership. Employees have no scheduling access.
-3. Shift templates are tenant-owned. Assignments require an active employee/user, active project, and active shift in the same tenant; the MVP permits exactly one non-cancelled assignment per employee/business date and also rejects adjacent-date overnight overlap.
+3. Shift templates are tenant-owned. Assignments require an active employee/user, active project, and active shift in the same tenant. This original single-assignment invariant is superseded by the approved monthly scheduling batch below: exact duplicates remain blocked, while genuine time conflicts require an explicit warning acknowledgement and audit.
 4. Cancellation requires a reason, is audited, and is rejected after check-in or any attendance record. Rescheduling is cancel then create; full template update/delete is deferred.
 5. BO UI exposes a dated scheduling form, project/employee/shift filters, operational status counts, clear empty/error states, and a roster with guarded cancellation.
 6. Local UAT proves BO assignment → employee mobile Today → GPS/photo check-in → BO visibility → GPS/photo check-out → checkout-complete (`checked_out`) state. Simulator evidence is development-only and does not replace physical-device or pilot acceptance.
 
-**Explicit exclusions:** recurring/bulk/drag-drop schedules, staffing optimization, leave workflow, notifications, multiple shifts per employee/day, offline behavior, payroll/report changes, production deploy/tunnel, real-site device reliability, signing, and pilot approval.
+**Explicit exclusions:** recurring-rule/drag-drop schedules, staffing optimization, leave workflow, notifications, offline behavior, payroll/report changes, production deploy/tunnel, real-site device reliability, signing, and pilot approval. Monthly same-project copy and multiple confirmed assignments per employee/day are included only by the later approved batch below.
 
 **Local completion evidence (2026-07-20):**
 
@@ -446,6 +451,126 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - A foreign-tenant seed sentinel remained untouched while the full attendance demo seed processed 13,800 AK assignments, confirming tenant-scoped demo writes. Independent final code re-review returned **GO** with no High/Medium findings.
 - The controlled-UAT aggregate seed now leaves the current Vietnam day open and schedules `NV-DEMO-01..05` for today plus 13 following Mon–Sat dates. It requires a process-local `ALLOW_DEMO_SEED=true` sentinel, rejects reserved demo identities that belong to another tenant/employee, preserves existing attendance on reruns, and writes historical shift times as Vietnam `+07:00` instants. An isolated API walkthrough using `NV-DEMO-01` passed password login, Today assignment lookup with no prefilled attendance, real JPEG/MinIO plus project-GPS check-in, immediate check-out, and final `checked_out` reconciliation.
 - Local gates pass: Attendance 47 unit tests and 9/9 full live integration tests, Payroll integration 1/1, Flutter 4 tests/analyze, web lint/typecheck/production build, focused BO Playwright schedule create/cancel E2E using the BO account, and OpenAPI YAML parse. No deployment, commit, push, or remote CI was performed in this batch.
+
+## Active Delivery Batch — Monthly Project Schedule and Copy (2026-07-24)
+
+**Owner:** `PRD-SLICE-003` — Attendance. Product validation: conditional GO;
+the required canonical conflict rules and contracts were updated before
+implementation.
+
+**Context allowlist:**
+
+- `systems/attendance/backend/src/routes/shifts.ts`
+- `systems/attendance/backend/src/routes/schedule-copy.ts`
+- `systems/attendance/backend/src/routes/attendance.ts`
+- `systems/attendance/backend/src/services/schedule-service.ts`
+- `systems/attendance/backend/src/services/schedule-copy-service.ts`
+- `systems/attendance/backend/src/services/reports/customer-report.ts`
+- `systems/attendance/backend/package.json`
+- `systems/attendance/backend/tests/unit/`
+- `systems/attendance/backend/tests/integration/`
+- `systems/shared/src/db/prisma/schema.prisma`
+- `systems/shared/src/db/prisma/migrations/`
+- `systems/payroll/web-admin/app/attendance/page.tsx`
+- `systems/payroll/web-admin/app/globals.css`
+- `systems/payroll/web-admin/lib/api.ts`
+- `systems/payroll/web-admin/e2e/auth.spec.ts`
+- `systems/attendance/mobile/lib/features/attendance/`
+- `systems/attendance/mobile/test/widget_test.dart`
+- `systems/payroll/backend/src/clients/attendance-client.ts`
+- `systems/payroll/backend/src/engine/calculator.ts`
+- `systems/payroll/backend/src/server.ts`
+- `systems/payroll/backend/tests/unit/attendance-client.test.ts`
+- `systems/payroll/backend/tests/unit/calculator.test.ts`
+- `systems/payroll/backend/tests/unit/health.test.ts`
+- `3-technical/3.1-system-foundation/architecture/domain-specs.md`
+- `3-technical/3.1-system-foundation/architecture/api-contracts/openapi.yaml`
+- Existing attendance READMEs, progress status, and changelog for delivery evidence.
+
+**Acceptance scope:**
+
+1. BO/system admin and an explicitly assigned supervisor can select one authorized
+   project and a Vietnam-calendar month, then list the complete paginated roster
+   for that project/month with employee, date, shift, status, and notes.
+2. An authorized scheduler can copy a non-cancelled source range of at most 31
+   days to a target start date in the same project. Target dates preserve the
+   source day offsets. Only employee, project, shift, and notes are copied;
+   attendance, cancellation state, and prior audit history are never copied.
+3. Copy always has a preview. Preview and create detect same-day and adjacent-day
+   overnight time conflicts. Genuine overlaps are soft warnings: saving requires
+   explicit confirmation and records actor, request, source, target, and conflict
+   evidence in immutable audit. The review displays every source→target mapping,
+   with warnings/blockers first, before confirmation.
+4. Exact duplicate employee/project/shift/date assignments, inactive or
+   cross-tenant resources, unauthorized project access, invalid dates, and dates
+   outside the active project contract remain hard failures.
+5. Bulk copy is atomic and accepts a client UUID idempotency key. Repeating a
+   completed request returns the original result and does not create duplicate
+   assignments.
+6. The employee Today contract and Flutter UI expose every non-cancelled
+   assignment for the Vietnam business date so each saved assignment has an
+   unambiguous check-in/out action.
+7. Regression coverage proves monthly range reads, preview-to-save parity,
+   warning confirmation, exact-duplicate blocking, supervisor scope,
+   idempotency, multi-assignment Today, audit, and web/mobile behavior.
+8. Payroll compatibility hardening groups multiple assignments by Vietnam
+   business date for workday units, allowance, and late-cap. More than one worked
+   attendance record on the same date fails payroll calculation for BO
+   reconciliation; the MVP does not invent a cross-shift OT or break rule.
+   Customer reports likewise reject multiple attended assignments for the same
+   employee/project/date instead of emitting duplicate days or hours.
+
+**Explicit exclusions:** recurring schedule rules, cross-project copy, drag/drop,
+staffing optimization, automatic conflict resolution, leave/availability,
+notifications, payroll/report changes beyond the required same-day aggregation
+and fail-closed multi-attendance guards above, production deployment, and pilot
+approval.
+
+**Compatibility, recovery, and rollback:**
+
+- Roll out the hybrid Today API before the new mobile client. New clients read
+  the full `data` array; the prior client receives the earliest assignment at the
+  legacy top level. Do not operationally rely on multiple daily assignments
+  until the employee client upgrade is confirmed.
+- Before pilot, take and verify a database backup, deploy the server/API contract
+  first, then the upgraded mobile client, and confirm client adoption before
+  enabling confirmed multiple assignments in operations.
+- Payroll and customer report generation return actionable reconciliation
+  errors when multiple assignments were attended on one date. Timestamp/status
+  correction is available through the existing authorized attendance override
+  API; a guided BO reconciliation UI is deferred and remains a pilot blocker.
+- The schema migration is forward-only in normal operation. App rollback after
+  multi-assignment data exists requires maintenance mode, an audited decision to
+  cancel/reconcile extra active employee/date rows, verification that no group
+  has more than one active row, and only then restoration of the former partial
+  unique index. Restore from the verified backup if reconciliation cannot be
+  completed safely. Never deploy the old mobile/API blindly against the new data;
+  rolling backend/app downgrade is unsafe after the first confirmed multi-shift row.
+
+**Local completion evidence (2026-07-24):**
+
+- The BO/supervisor operations board now selects an authorized project and month,
+  queries the complete monthly range, and exposes create/cancel plus same-project
+  copy preview and confirmation. Exact duplicates remain blocked; overlaps and
+  multiple same-day shifts require an explicit warning acknowledgement.
+- Copy is limited to 1–31 source days, preserves calendar offsets and notes, and
+  creates only fresh assignments. A transaction, project/employee advisory locks,
+  and a request-scoped idempotency lock keep the batch atomic and make concurrent
+  retries return the original result. Mismatched reuse of a request UUID fails.
+- The employee Today API returns every non-cancelled assignment, and Flutter
+  renders an independent state and action for each assignment.
+- The database migration replaces the former employee/date uniqueness rule with
+  an exact active employee/project/shift/date invariant and adds the copy audit
+  action. All seven migrations applied cleanly to an isolated PostgreSQL database;
+  the pre-existing legacy development database was not reset or reconciled.
+- Local gates pass: Attendance 56/56 unit tests, 13/13 full integration tests
+  including resource-fingerprint, cancel-lock, concurrent idempotency, and
+  mismatched-replay regressions; covered core services have 100%
+  statements/lines/functions and 97.59% branches; Payroll typecheck and 112/112
+  unit tests; Flutter analyze and 19/19 tests; web lint/typecheck/production build, focused
+  Chromium E2E, OpenAPI YAML parsing, and a real seeded monthly-roster smoke test
+  returning 293 rows. The isolated local demo is available on loopback only; no
+  commit, push, deployment, remote CI, or pilot approval belongs to this batch.
 
 ## Active Delivery Batch — Employee Mobile Ease-of-Use and Camera Failure (2026-07-20)
 
@@ -491,7 +616,100 @@ Mỗi phase có test riêng. End-to-end verification cho toàn bộ hệ thống
 - The employee manual-attendance badge now requires an authorized actor plus a structured camera-failure reason code, preventing unrelated BO overrides from being mislabeled.
 - Flutter analyze and 16/16 tests pass, including reduced-motion semantics and recovery-state coverage. The iOS debug Simulator build passes. The Android resources validate, but this Mac cannot rerun APK packaging because no Android SDK is installed; physical-device camera/GPS UAT remains a release gate. Independent targeted re-review returned **GO** with no High/Medium/Low findings.
 
+**Controlled-UAT follow-up evidence (2026-08-07):**
+
+- Today now combines shift state, project, working time, progress, and the next
+  check action in one senior-friendly card. Check-in/out uses a compact three-step
+  header while preserving large-text wrapping and one primary action per state.
+- `UAT_SIMULATED_CAMERA=true` replaces only the camera input when the client is a
+  debug build running on the iOS Simulator. The default, profile, release, Android,
+  and physical-iPhone paths remain camera-only and fail closed. Assignment/date/state
+  checks, fresh geofence GPS, full JPEG validation, MinIO storage, and backend
+  attendance rules are unchanged.
+- The controlled seed rerun repaired all 13 reserved demo identities to the documented
+  password/status without creating schedules. First-factor login passed for all eight
+  named CEO/BO/supervisor demo operators. The web login now defaults to the documented
+  `ops@ak.local` demo identity and lists every named operator instead of pre-filling the
+  incompatible base-development admin. Flutter analyze and 20/20 tests pass.
+  Simulator UI UAT completed check-in and check-out with fresh GPS and the opt-in
+  simulated JPEG; PostgreSQL confirms `checked_out` plus both stored photo keys.
+  This verifies the normal data path only; physical-device camera/GPS UAT remains
+  a release and pilot gate.
+
+**Corporate-aligned employee-mobile UI follow-up (2026-08-08):**
+
+- Work remains owned by `PRD-SLICE-003`. The context allowlist is limited to the
+  existing employee-mobile source, tests, assets, Flutter manifest and README;
+  `systems/attendance/README.md`;
+  `3-technical/3.2-implementation/plans/README.md`;
+  `docs/style-system/STYLE_GUIDE.md`; `4-marketing/brand-guidelines.md` as a
+  read-only visual reference; `shared/assets/README.md`; and the existing
+  progress/changelog documents. `shared/context/current-scope.md` continues to
+  describe `PRD-EPIC-003` and is not the owner of this mobile delivery.
+- Login, Today, and check-in/out may inherit the corporate olive/paper/forest
+  palette, disciplined editorial hierarchy, Manrope headings, and Be Vietnam Pro
+  body/control typography. They must not inherit marketing hero scale,
+  image-led layouts, parallax, decorative motion, unverifiable claims, or public
+  lead-conversion patterns.
+- Acceptance requires preserving every current auth, multi-assignment,
+  reconciled non-working, GPS, fresh-camera, simulator-guard, recovery, and
+  submit/reconciliation behavior; one clear primary action per state; at least
+  16sp body text and 48/52dp touch targets; reduced-motion support; 200% text
+  scaling; Vietnamese-first copy; and passing Flutter analysis/widget tests.
+- Android debug packaging and emulator launch are verified against the intended
+  `https://akaios.prismate.vn/api/attendance` base. The live HPC still returns a
+  route-level 404 for that mobile prefix, so the artifact does not claim live UAT,
+  physical-device camera/GPS acceptance, release signing, deployment, pilot
+  approval, or a change to backend/API semantics.
+- The 2026-08-09 full local gate reapplied all seven migrations on an isolated
+  PostgreSQL database, passed 14 integration and 9 Playwright scenarios, fixed a
+  calendar-dependent E2E fixture, and passed Flutter format/analyze plus 22/22
+  tests. The rebuilt debug APK installed and cold-launched on Android with SHA-256
+  `33a9a8fb2cf64493702db647138f94b4baa1b8e97a2b1b8c71c2e527b5ca4b55`.
+  Read-only HPC inspection confirmed the host remains on the older `cbb3a96`
+  corporate branch; no remote mutation or deployment occurred.
+- Rollback is presentation-only: revert the mobile theme, presentation widgets,
+  font manifest entries, and bundled font/license assets together. It requires no
+  data migration and must retain the current auth/session, API contract,
+  multi-assignment, GPS, fresh-camera, simulator guard, and reconciliation logic.
+
 **Explicit exclusions:** offline queue, gallery-photo fallback, face recognition/liveness, device attestation, push notifications, full-app redesign outside boot/login/Today/check flow, automatic payroll approval of manual exceptions, production rollout, and claims of physical-device reliability before field UAT.
+
+## Active Delivery Batch — Production Dependency Security Remediation (2026-08-09)
+
+- **Owner and scope:** `PRD-EPIC-002` owns remediation of the 43 findings from
+  `pnpm audit --prod` across the four pnpm workspaces. The context allowlist is
+  limited to the root/workspace manifests and lockfile; Fastify compatibility
+  bootstrap/config files; the three application Dockerfiles; dependency-related
+  architecture/runbook/system READMEs; the existing progress/changelog/plan
+  documents; and the CI configuration required to prevent runtime-closure
+  regressions. Tests may be read and executed as evidence.
+- **Approved implementation:** move both APIs to Fastify 5 and compatible plugin
+  majors, web admin to Next.js 15, and attendance image processing to Sharp
+  0.35 with Node >=20.9. Preserve React 18.3.1 because the installed Next.js
+  peer range accepts it and the complete production build/Playwright suite
+  verifies the App Router flows; React 19 is a separate future migration.
+- **Intentional compatibility exceptions:** pin only the three transitive fixes
+  that cross parent-declared ranges: `next>postcss=8.5.23`,
+  `next>sharp=0.35.0`, and `exceljs>uuid=11.1.1`. The lockfile owns safe
+  in-range nanoid, fast-uri, find-my-way, and brace-expansion resolutions.
+- **Acceptance:** zero production audit findings; frozen-lockfile install;
+  lint/typecheck; 170 unit tests and >=90% core coverage; fresh seven-migration
+  integration 14/14; Playwright 9/9; all package and Node 20 Alpine image builds;
+  production-only non-root closure for all three long-running images; in-image
+  Prisma/native-module checks with no development-tool packages or broken
+  symlinks; API readiness, web `/login`, and image-based Playwright 9/9; final
+  exact-SHA review; and green remote CI before merge to `akaios/main`.
+- **Rollback:** manifests, lockfile, compatibility changes, and rebuilt images
+  move together. Prefer fix-forward; any short-lived rollback image restores the
+  known-vulnerable dependency graph and therefore is operational recovery only.
+- **Exclusions:** corporate website's separate npm audit, Flutter package audit,
+  React 19 migration, a separate minimal package for the non-exposed one-shot
+  migration image, live HPC/Cloudflare mutation, deployment, and pilot
+  acceptance. The migration target may retain its build-time CLI/tooling but is
+  never a long-running or exposed service. Deployment remains gated by the
+  mobile route repair, reviewed clean main SHA, backup/restore readiness, and
+  physical-device validation.
 
 ## Resolved Decisions and Remaining Pilot Inputs
 

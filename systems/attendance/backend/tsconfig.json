@@ -3,6 +3,10 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "sharp": ["node_modules/sharp/lib/index.d.ts"]
+    },
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",

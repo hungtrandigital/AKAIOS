@@ -2,6 +2,7 @@
 # Save build time + reduce image size
 
 **/node_modules
+**/.pnpm-store
 **/dist
 **/.turbo
 **/.next

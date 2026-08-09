@@ -1,11 +1,12 @@
 # AKAIUNSAN Web Admin
 
-Next.js 14 internal dashboard for attendance operations, payroll, projects,
+Next.js 15 internal dashboard for attendance operations, payroll, projects,
 employees, executive reporting, and RBAC administration.
 
-**Status:** Production build and live Playwright gate pass locally and in
-[GitHub Actions run 29670131275](https://github.com/hungtrandigital/AKAIOS/actions/runs/29670131275)
-for commit `056a769`; pilot evidence is pending.
+**Status:** The 2026-08-09 dependency-security candidate passes the production
+build, 9/9 live Playwright scenarios, and a Node 20 Alpine `/login` container
+smoke locally. Remote CI and exact-SHA merge evidence remain pending; pilot
+evidence is not claimed.
 
 ## Quick Start
 
@@ -40,9 +41,10 @@ verifier flag outside an explicitly local/test API process.
 ## Implemented Surfaces
 
 - Realtime attendance view with audited manual override.
-- Daily tenant-scoped shift planning with searchable employee selection,
-  paginated assignment filters and full-result operational totals, guarded
-  cancellation, and BO/admin shift-template creation.
+- Project/month shift planning with searchable employee selection, paginated
+  full-range operational totals, guarded cancellation, BO/admin shift-template
+  creation, and same-project copy preview that shows every mapping. Conflict
+  acknowledgement is fingerprint-bound and requires re-review after any change.
 - Payroll period open/calculate/approve/export flow.
 - Projects and employees views.
 - Executive dashboard and recent customer reports.
@@ -60,13 +62,18 @@ pnpm test:e2e
 ```
 
 The current E2E suite covers unauthenticated redirect, invalid password, five
-independent TOTP logins, attendance, shift assignment create/cancel behavior,
-payroll, projects, logout, and opening a payroll period.
+independent TOTP logins, attendance, monthly shift assignment create/cancel and
+copy-warning behavior, payroll, projects, logout, and opening a payroll period.
 
 ## Production
 
 The production image and service are defined in
 `systems/payroll/web-admin/Dockerfile` and `systems/shared/docker-compose.yml`.
+The image copies Next.js `output: 'standalone'` plus static/public assets, runs
+as the non-root Node user on port 3002, and excludes Playwright, ESLint, and the
+rest of the development dependency graph. `@ak/shared` is retained only as an
+E2E development dependency; production source must not import it without an
+explicit runtime-closure change and matching container test.
 Use the canonical on-premise runbook at
 `3-technical/3.3-devops/server-steps.md`; do not start the web image with
 localhost API rewrite destinations.

@@ -115,6 +115,10 @@ so the day under test stays open. Rerunning the seed keeps active employee/date
 assignments unique and preserves every existing UAT attendance record, including
 records that have since moved into the historical window. This dataset is
 forbidden for production or pilot data.
+The named credential list lives in [DEMO_ACCOUNTS.md](../../DEMO_ACCOUNTS.md).
+Its demo-account stage also repairs the documented password hash and active
+status for reserved demo identities on rerun, after the ownership/linkage
+collision preflight; it does not provision pilot or production operators.
 
 Windows Docker Desktop must merge the base and Windows files; using the base file
 alone retains Linux `/data` bind mounts and is unsupported. The canonical

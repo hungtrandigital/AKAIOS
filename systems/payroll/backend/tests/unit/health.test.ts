@@ -353,6 +353,58 @@ describe('payroll calculation transaction and recalculation', () => {
     await app.close()
   })
 
+  it('returns actionable reconciliation details for multiple worked assignments in one day', async () => {
+    grantPermissions('payroll.calculate')
+    vi.spyOn(prisma.payrollPeriod, 'findFirst').mockResolvedValue(basePeriod as never)
+    vi.spyOn(prisma.payrollRule, 'findFirst').mockResolvedValue(mvpRule as never)
+    vi.spyOn(prisma.employee, 'findMany').mockResolvedValue([{
+      id: ENTITY_ID,
+      tenantId: TENANT_ID,
+      baseSalary: '10000000',
+      salaryType: 'monthly',
+      hourlyRate: null,
+    }] as never)
+    vi.spyOn(prisma.payrollLine, 'findMany').mockResolvedValue([])
+    const transaction = vi.spyOn(prisma, '$transaction')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: ['1', '2'].map((suffix, index) => ({
+          id: `record-${suffix}`,
+          shiftAssignmentId: `assignment-${suffix}`,
+          employeeId: ENTITY_ID,
+          workDate: '2026-07-13',
+          checkInAt: `2026-07-13T${index === 0 ? '01' : '09'}:00:00.000Z`,
+          checkOutAt: `2026-07-13T${index === 0 ? '09' : '17'}:00:00.000Z`,
+          totalMinutesWorked: 480,
+          overtimeMinutes: 0,
+          lateMinutes: 0,
+          status: 'present',
+        })),
+      }),
+    }))
+
+    const { app } = await buildServer()
+    const response = await app.inject({
+      method: 'POST',
+      url: `/v1/payroll/periods/${ENTITY_ID}/calculate`,
+      headers: { authorization: authorizationHeader() },
+    })
+
+    expect(response.statusCode).toBe(422)
+    expect(response.json().error).toMatchObject({
+      code: 'BUSINESS_RULE_VIOLATION',
+      details: {
+        employeeId: ENTITY_ID,
+        workDate: '2026-07-13',
+        shiftAssignmentIds: ['assignment-1', 'assignment-2'],
+      },
+    })
+    expect(transaction).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it('atomically recalculates a calculated period and writes an audit event', async () => {
     grantPermissions('payroll.calculate')
     vi.spyOn(prisma.payrollPeriod, 'findFirst').mockResolvedValue({
