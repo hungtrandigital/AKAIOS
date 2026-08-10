@@ -45,6 +45,19 @@ Demo@2026
 
 **Mobile login flow:** Use the employee phone number with password `Demo@2026`.
 
+### Physical Android UAT — 33 Phan Bá Vành, Cát Lái
+
+These accounts receive one assignment on every calendar date in the current
+Vietnam month at the dedicated `UAT-CAT-LAI` project. Its controlled-UAT
+geofence is centered on 33 Phan Bá Vành with a 250 m radius for indoor GPS
+variance; camera and geofence validation remain enabled.
+
+| Phone | Name | Shift |
+| --- | --- | --- |
+| `+84900000201` | Nguyễn Văn An (UAT Cát Lái) | Ca sáng |
+| `+84900000202` | Trần Thị Bình (UAT Cát Lái) | Ca chiều |
+| `+84900000203` | Lê Văn Cường (UAT Cát Lái) | Ca hành chính |
+
 ## 🔧 Setup
 
 ### Run seeds (in order)
@@ -63,7 +76,7 @@ ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:all
 (From `/Users/hungtran/Projects/AKAIUNSAN` after `pnpm install && pnpm prisma:generate`.)
 
 Rerunning `db:seed:demo` reasserts the documented password hash and active
-user/employee status for these 13 reserved demo identities only. The seed still
+user/employee status for these 16 reserved demo identities only. The seed still
 requires `ALLOW_DEMO_SEED=true`, preflights tenant/employee linkage collisions,
 and refuses to take ownership of a reserved phone/code that belongs elsewhere.
 

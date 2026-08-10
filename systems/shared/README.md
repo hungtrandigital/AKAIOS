@@ -108,9 +108,11 @@ ALLOW_DEMO_SEED=true pnpm --filter @ak/shared db:seed:all
 ```
 
 Without that process-local flag, the development, demo-account, and attendance
-seed scripts refuse to write. The aggregate seed creates five fixed demo
-employees and gives each one an open assignment on every calendar date in the
-current Vietnam month. Historical attendance generation stops at yesterday, so
+seed scripts refuse to write. The aggregate seed creates eight fixed demo
+employees, including three physical Android UAT accounts assigned to the
+dedicated 33 Phan Bá Vành project, and gives each one an open assignment on
+every calendar date in the current Vietnam month. Historical attendance
+generation stops at yesterday, so
 the day under test stays open. Rerunning the seed keeps active employee/date
 assignments unique and preserves every existing UAT attendance record, including
 records that have since moved into the historical window. This dataset is

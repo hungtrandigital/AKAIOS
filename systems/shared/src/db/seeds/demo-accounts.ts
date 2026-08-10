@@ -9,6 +9,8 @@
 //   - 3 Senior Supervisors (tên VN thật) — 1 cho mỗi dự án flagship
 //   - 5 Demo Employees (NV-DEMO-01..05) — each receives an open UAT schedule
 //     for every calendar date in the current Vietnam month.
+//   - 3 Cat Lai field-test employees — scheduled at the dedicated UAT project
+//     at 33 Phan Bá Vành for every calendar date in the current Vietnam month.
 //
 // All passwords are simple + memorable for showcase (NHƯNG KHÔNG dùng production).
 
@@ -20,6 +22,15 @@ const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 
 const DEMO_PASSWORD = 'Demo@2026' // Uniform password for ALL demo accounts
 const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000
+const CAT_LAI_UAT_PROJECT = {
+  code: 'UAT-CAT-LAI',
+  name: 'UAT - 33 Phan Bá Vành',
+  clientName: 'AKAIUNSAN UAT',
+  address: '33 Phan Bá Vành, Phường Cát Lái, TP. Hồ Chí Minh',
+  latitude: 10.7676806,
+  longitude: 106.6884969,
+  geofenceRadiusMeters: 250,
+} as const
 
 const DEMO_EMPLOYEE_SCHEDULES = [
   { employeeCode: 'NV-DEMO-01', projectCode: 'PRJ001', shiftName: 'Ca sáng' },
@@ -27,6 +38,9 @@ const DEMO_EMPLOYEE_SCHEDULES = [
   { employeeCode: 'NV-DEMO-03', projectCode: 'PRJ007', shiftName: 'Ca hành chính' },
   { employeeCode: 'NV-DEMO-04', projectCode: 'PRJ001', shiftName: 'Ca tối' },
   { employeeCode: 'NV-DEMO-05', projectCode: 'PRJ004', shiftName: 'Ca sáng' },
+  { employeeCode: 'NV-UAT-CL-01', projectCode: CAT_LAI_UAT_PROJECT.code, shiftName: 'Ca sáng' },
+  { employeeCode: 'NV-UAT-CL-02', projectCode: CAT_LAI_UAT_PROJECT.code, shiftName: 'Ca chiều' },
+  { employeeCode: 'NV-UAT-CL-03', projectCode: CAT_LAI_UAT_PROJECT.code, shiftName: 'Ca hành chính' },
 ] as const
 
 function assertDemoSeedAllowed(): void {
@@ -246,6 +260,32 @@ const DEMO_ACCOUNTS = [
     baseSalary: 8_000_000,
     note: 'Demo NV #5 — new hire demo',
   },
+
+  // ===== CÁT LÁI FIELD UAT (physical Android GPS/camera walkthrough) =====
+  {
+    phone: '+84900000201',
+    fullName: 'Nguyễn Văn An (UAT Cát Lái)',
+    role: UserRole.employee,
+    employeeCode: 'NV-UAT-CL-01',
+    baseSalary: 8_500_000,
+    note: 'Physical Android UAT at 33 Phan Bá Vành — morning shift',
+  },
+  {
+    phone: '+84900000202',
+    fullName: 'Trần Thị Bình (UAT Cát Lái)',
+    role: UserRole.employee,
+    employeeCode: 'NV-UAT-CL-02',
+    baseSalary: 8_500_000,
+    note: 'Physical Android UAT at 33 Phan Bá Vành — afternoon shift',
+  },
+  {
+    phone: '+84900000203',
+    fullName: 'Lê Văn Cường (UAT Cát Lái)',
+    role: UserRole.employee,
+    employeeCode: 'NV-UAT-CL-03',
+    baseSalary: 8_500_000,
+    note: 'Physical Android UAT at 33 Phan Bá Vành — office shift',
+  },
 ]
 
 async function assertDemoIdentityReservations(): Promise<void> {
@@ -299,6 +339,39 @@ async function createDemoAccounts() {
     orderBy: { createdAt: 'asc' },
   })
   if (!membershipAdmin) throw new Error('Seeded system admin required before demo project memberships')
+
+  const vietnamToday = currentVietnamDateOnly()
+  const uatContractStartDate = new Date(Date.UTC(vietnamToday.getUTCFullYear(), 0, 1))
+  const uatContractEndDate = new Date(Date.UTC(vietnamToday.getUTCFullYear(), 11, 31))
+
+  await prisma.project.upsert({
+    where: {
+      tenantId_code: { tenantId: AK_TENANT_ID, code: CAT_LAI_UAT_PROJECT.code },
+    },
+    update: {
+      name: CAT_LAI_UAT_PROJECT.name,
+      clientName: CAT_LAI_UAT_PROJECT.clientName,
+      address: CAT_LAI_UAT_PROJECT.address,
+      latitude: CAT_LAI_UAT_PROJECT.latitude,
+      longitude: CAT_LAI_UAT_PROJECT.longitude,
+      geofenceRadiusMeters: CAT_LAI_UAT_PROJECT.geofenceRadiusMeters,
+      contractStartDate: uatContractStartDate,
+      contractEndDate: uatContractEndDate,
+      status: 'active',
+      deletedAt: null,
+    },
+    create: {
+      tenantId: AK_TENANT_ID,
+      ...CAT_LAI_UAT_PROJECT,
+      contractStartDate: uatContractStartDate,
+      contractEndDate: uatContractEndDate,
+      status: 'active',
+      reportTemplateConfig: {
+        headerText: 'UAT CHẤM CÔNG - 33 PHAN BÁ VÀNH',
+        footerText: 'Chỉ sử dụng cho kiểm thử có kiểm soát',
+      },
+    },
+  })
 
   const identities = await prisma.$transaction(async (tx) => {
     const seeded = []
@@ -420,6 +493,9 @@ async function createDemoAccounts() {
   console.log('   📱 NV Demo #3 (mobile):          +84900000103          / Demo@2026')
   console.log('   📱 NV Demo #4 (mobile):          +84900000104          / Demo@2026')
   console.log('   📱 NV Demo #5 (mobile):          +84900000105          / Demo@2026')
+  console.log('   📍 UAT Cát Lái #1 (morning):     +84900000201          / Demo@2026')
+  console.log('   📍 UAT Cát Lái #2 (afternoon):   +84900000202          / Demo@2026')
+  console.log('   📍 UAT Cát Lái #3 (office):      +84900000203          / Demo@2026')
   console.log('')
 }
 

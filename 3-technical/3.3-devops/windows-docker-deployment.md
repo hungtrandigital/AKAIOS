@@ -247,8 +247,8 @@ explicitly approved cleanup after the new UAT passes.
 
 ### Seeded employee UAT window
 
-`db:seed:all` gives each fixed demo employee one open assignment on the current
-Vietnam date and the next 13 Mon–Sat dates. Historical attendance ends at
+`db:seed:all` gives each fixed demo employee one open assignment on every
+calendar date in the current Vietnam month. Historical attendance ends at
 yesterday, so the seed does not prefill check-in or check-out for today.
 Rerunning the seed retains the unique active employee/date assignment and leaves
 all existing UAT attendance records untouched, even after a tested date becomes
@@ -266,12 +266,16 @@ not persist the flag in `.env` and never use it for production or pilot data.
 | `NV-DEMO-03` | `+84900000103` | `Demo@2026` | `PRJ007` / Ca hành chính |
 | `NV-DEMO-04` | `+84900000104` | `Demo@2026` | `PRJ001` / Ca tối |
 | `NV-DEMO-05` | `+84900000105` | `Demo@2026` | `PRJ004` / Ca sáng |
+| `NV-UAT-CL-01` | `+84900000201` | `Demo@2026` | `UAT-CAT-LAI` / Ca sáng |
+| `NV-UAT-CL-02` | `+84900000202` | `Demo@2026` | `UAT-CAT-LAI` / Ca chiều |
+| `NV-UAT-CL-03` | `+84900000203` | `Demo@2026` | `UAT-CAT-LAI` / Ca hành chính |
 
-Start the employee walkthrough with `NV-DEMO-01`. Password login does not need
+For an onsite Android walkthrough at 33 Phan Bá Vành, start with
+`NV-UAT-CL-01`. The dedicated project uses coordinates `10.7676806,
+106.6884969` and a controlled-UAT 250 m geofence. Password login does not need
 admin TOTP. GPS still must be inside the assigned project geofence and photos
-must come from the live camera; use an onsite device or an explicitly controlled
-simulator location matching the project. Do not weaken geofence or camera checks
-to make UAT pass.
+must come from the live camera. Do not weaken geofence or camera checks to make
+UAT pass.
 
 ## 6C. Update While Keeping UAT Data
 
