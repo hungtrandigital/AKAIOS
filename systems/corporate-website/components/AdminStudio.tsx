@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 import type { ContentRecord } from "@/lib/seed-content";
 
@@ -85,11 +87,11 @@ export function AdminStudio({
   const placeholderMedia = media.filter((item) => item.isPlaceholder).length;
 
   const nav: Array<[Tab, string, string]> = [
-    ["overview", "Tổng quan", "⌂"],
-    ["content", "Nội dung", "Aa"],
-    ["media", "Hình ảnh", "▧"],
-    ["leads", "Yêu cầu", "◎"],
-    ["settings", "Cài đặt", "⚙"],
+    ["overview", "Tổng quan", "01"],
+    ["content", "Nội dung", "02"],
+    ["media", "Hình ảnh", "03"],
+    ["leads", "Yêu cầu", "04"],
+    ["settings", "Cài đặt", "05"],
   ];
 
   async function refreshContent() {
@@ -179,25 +181,34 @@ export function AdminStudio({
   return (
     <div className="admin-page">
       <aside className="admin-sidebar">
-        <div className="admin-logo"><span>AK</span><div><strong>AKAIUNSAN</strong><small>Content Studio</small></div></div>
-        <nav>
-          {nav.map(([key, label, icon]) => (
-            <button className={tab === key ? "active" : ""} key={key} onClick={() => setTab(key)} type="button"><span>{icon}</span>{label}{key === "leads" && newLeads > 0 ? <b>{newLeads}</b> : null}</button>
+        <div className="admin-brand-lockup">
+          <Link aria-label="AKAIUNSAN — Trang chủ" href="/">
+            <Image alt="" className="admin-brand-logo" height={737} priority src="/brand-logo.png" unoptimized width={1194} />
+          </Link>
+          <span>Content Studio</span>
+        </div>
+        <div className="admin-sidebar-note">
+          <small>Operations system</small>
+          <p>Một nơi để kiểm soát nội dung, hình ảnh và yêu cầu khách hàng.</p>
+        </div>
+        <nav aria-label="Điều hướng Content Studio">
+          {nav.map(([key, label, index]) => (
+            <button aria-pressed={tab === key} className={tab === key ? "active" : ""} key={key} onClick={() => setTab(key)} type="button"><span>{index}</span><strong>{label}</strong>{key === "leads" && newLeads > 0 ? <b>{newLeads}</b> : null}</button>
           ))}
         </nav>
-        <a className="admin-view-site" href="/" target="_blank">Xem website ↗</a>
+        <Link className="admin-view-site" href="/" rel="noreferrer" target="_blank"><span>Xem website</span><b aria-hidden="true">↗</b></Link>
       </aside>
 
       <section className="admin-main">
         <header className="admin-topbar">
-          <div><span>{isLocalDemo ? "Local demo" : "Review environment"}</span><strong>{notice || "Mọi thay đổi được lưu vào CMS."}</strong></div>
-          <div className="admin-user"><span>{userName.slice(0, 1).toUpperCase()}</span><div><strong>{userName}</strong><small>{userEmail}</small></div>{!isLocalDemo ? <form action="/api/admin/session" method="post"><input name="action" type="hidden" value="logout" /><button type="submit">Đăng xuất</button></form> : null}</div>
+          <div className="admin-environment"><span><i aria-hidden="true" />{isLocalDemo ? "Local demo" : "Review environment"}</span><strong aria-live="polite" role="status">{notice || "Mọi thay đổi được lưu vào CMS."}</strong></div>
+          <div className="admin-user"><span aria-hidden="true">{userName.slice(0, 1).toUpperCase()}</span><div><strong>{userName}</strong><small>{userEmail}</small></div>{!isLocalDemo ? <form action="/api/admin/session" method="post"><input name="action" type="hidden" value="logout" /><button type="submit">Đăng xuất</button></form> : null}</div>
         </header>
 
         <div className="admin-content">
           {tab === "overview" && (
-            <div>
-              <div className="admin-heading"><div><span>Dashboard</span><h1>Chào buổi làm việc.</h1><p>Kiểm tra nội dung, ảnh placeholder và yêu cầu mới từ website.</p></div></div>
+            <div className="admin-view">
+              <div className="admin-heading admin-heading-hero"><div><span>01 — Dashboard</span><h1>Chào buổi làm việc.</h1><p>Kiểm tra nội dung, ảnh placeholder và yêu cầu mới từ website.</p></div><small>AKAIUNSAN<br />Content operations</small></div>
               <div className="admin-stats">
                 <article><span>Nội dung đã xuất bản</span><strong>{published}</strong><small>{content.length - published} bản nháp</small></article>
                 <article><span>Yêu cầu mới</span><strong>{newLeads}</strong><small>{leadRows.length} tổng yêu cầu</small></article>
@@ -208,8 +219,8 @@ export function AdminStudio({
           )}
 
           {tab === "content" && (
-            <div>
-              <div className="admin-heading admin-heading-row"><div><span>CMS</span><h1>Nội dung</h1><p>Quản lý dịch vụ, giải pháp, xử lý sự vụ, bài viết và FAQ.</p></div><button className="admin-primary" onClick={() => setEditing({ ...emptyContent })} type="button">+ Tạo nội dung</button></div>
+            <div className="admin-view">
+              <div className="admin-heading admin-heading-row"><div><span>02 — CMS</span><h1>Nội dung</h1><p>Quản lý dịch vụ, giải pháp, xử lý sự vụ, bài viết và FAQ.</p></div><button className="admin-primary" onClick={() => setEditing({ ...emptyContent })} type="button">+ Tạo nội dung</button></div>
               <div className="content-studio">
                 <aside className="content-index">
                   {Object.entries(groupedContent).map(([group, items]) => <div key={group}><h2>{group.replace(":", " · ").toUpperCase()}</h2>{items.map((item) => <button className={editing.id === item.id ? "active" : ""} key={item.id} onClick={() => setEditing(item)} type="button"><span>{item.status === "published" ? "●" : "○"}</span><div><strong>{item.title}</strong><small>{item.locale.toUpperCase()} · /{item.slug}</small></div></button>)}</div>)}
@@ -228,23 +239,23 @@ export function AdminStudio({
           )}
 
           {tab === "media" && (
-            <div>
-              <div className="admin-heading"><div><span>Media Library</span><h1>Hình ảnh</h1><p>Ảnh AI/stock được đánh dấu để thay bằng ảnh dự án thật sau này.</p></div></div>
+            <div className="admin-view">
+              <div className="admin-heading"><div><span>03 — Media Library</span><h1>Hình ảnh</h1><p>Ảnh AI/stock được đánh dấu để thay bằng ảnh dự án thật sau này.</p></div></div>
               <form className="media-upload" onSubmit={uploadMedia}><label>Chọn ảnh<input accept="image/jpeg,image/png,image/webp,image/avif" name="file" required type="file" /></label><label>Tên ảnh<input name="title" required placeholder="Ví dụ: Sảnh chung cư dự án A" /></label><label>Alt text<input name="altText" required placeholder="Mô tả nội dung ảnh" /></label><div className="editor-row"><label>Category<select name="category"><option value="condominium">Tòa nhà / Chung cư</option><option value="factory">Nhà xưởng</option><option value="apartment">Căn hộ</option><option value="general">Khác</option></select></label><label>Nguồn<select name="sourceType"><option value="original">Ảnh thật</option><option value="stock">Stock</option><option value="ai-generated">AI-generated</option></select></label></div><label>Nguồn / license<input name="sourceReference" placeholder="Mã license hoặc nguồn ảnh" /></label><label className="checkbox-label"><input name="isPlaceholder" type="checkbox" value="true" /> Đây là ảnh placeholder</label><button className="admin-primary" type="submit">Tải lên Media Library</button></form>
-              <div className="media-grid">{media.map((item) => <article key={item.id}><div className="media-thumb"><img alt={item.altText} src={item.publicPath ?? `/api/media/${item.id}`} />{item.isPlaceholder && <span>Placeholder</span>}</div><h2>{item.title}</h2><p>{item.category} • {item.sourceType}</p><small>{item.altText}</small></article>)}</div>
+              <div className="media-grid">{media.map((item) => <article key={item.id}><div className="media-thumb"><Image alt={item.altText} fill sizes="(max-width: 760px) 50vw, (max-width: 1060px) 33vw, 25vw" src={item.publicPath ?? `/api/media/${item.id}`} unoptimized />{item.isPlaceholder && <span>Placeholder</span>}</div><h2>{item.title}</h2><p>{item.category} • {item.sourceType}</p><small>{item.altText}</small></article>)}</div>
             </div>
           )}
 
           {tab === "leads" && (
-            <div>
-              <div className="admin-heading"><div><span>Lead inbox</span><h1>Yêu cầu từ website</h1><p>Theo dõi từ lúc tiếp nhận đến khảo sát, báo giá và hoàn tất.</p></div></div>
+            <div className="admin-view">
+              <div className="admin-heading"><div><span>04 — Lead inbox</span><h1>Yêu cầu từ website</h1><p>Theo dõi từ lúc tiếp nhận đến khảo sát, báo giá và hoàn tất.</p></div></div>
               <div className="lead-table"><div className="lead-table-head"><span>Khách hàng</span><span>Nhu cầu</span><span>Liên hệ</span><span>Trạng thái</span></div>{leadRows.length ? leadRows.map((lead) => <article key={lead.id}><div><strong>{lead.name}</strong><small>{lead.locale?.toUpperCase() || "VI"} · {lead.location || "Chưa có khu vực"}</small></div><div><strong>{lead.leadType === "apartment" ? "Căn hộ" : lead.leadType === "factory" ? "Nhà xưởng" : lead.leadType === "building" ? "Tòa nhà" : "Dự án"}</strong><small>{[lead.propertyType, lead.area, lead.frequency].filter(Boolean).join(" • ")}</small></div><div><strong>{lead.phone}</strong><small>{lead.email}</small></div><select value={lead.status} onChange={(event) => updateLeadStatus(lead.id, event.target.value)}><option value="new">Mới</option><option value="contacted">Đã liên hệ</option><option value="surveying">Đang khảo sát</option><option value="quoted">Đã báo giá</option><option value="won">Thành công</option><option value="closed">Đóng</option></select>{lead.message && <p>{lead.message}</p>}</article>) : <div className="empty-state">Chưa có yêu cầu nào. Chạy demo seed hoặc gửi form trên website để kiểm tra.</div>}</div>
             </div>
           )}
 
           {tab === "settings" && (
-            <div>
-              <div className="admin-heading"><div><span>Website settings</span><h1>Cài đặt</h1><p>Thông tin dùng chung trên public website.</p></div></div>
+            <div className="admin-view">
+              <div className="admin-heading"><div><span>05 — Website settings</span><h1>Cài đặt</h1><p>Thông tin dùng chung trên public website.</p></div></div>
               <form className="settings-form" onSubmit={saveSettings}>{[["siteName","Tên thương hiệu"],["tagline","Tagline"],["promise","Lời hứa thương hiệu"],["phone","Hotline"],["email","Email"],["address","Địa chỉ"]].map(([key,label]) => <label key={key}>{label}<input value={settings[key] ?? ""} onChange={(event) => setSettings({ ...settings, [key]: event.target.value })} /></label>)}<button className="admin-primary" type="submit">Lưu cài đặt</button></form>
             </div>
           )}
