@@ -198,6 +198,22 @@ void main() {
     expect(hasJpegSignature([]), isFalse);
   });
 
+  test('explains a geofence rejection with distance and allowed radius', () {
+    final message = friendlyAttendanceError(ApiException(
+      code: 'BUSINESS_RULE_VIOLATION',
+      message: 'Check-in location is 7480m from project (max 250m)',
+      statusCode: 422,
+      details: const {
+        'distanceMeters': 7480,
+        'allowedRadiusMeters': 250,
+      },
+    ));
+
+    expect(message, contains('7,5 km'));
+    expect(message, contains('250 m'));
+    expect(message, contains('Vị trí chính xác'));
+  });
+
   test('UAT simulated camera is impossible outside debug builds', () {
     expect(
       allowsUatSimulatedCamera(

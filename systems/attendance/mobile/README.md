@@ -51,9 +51,9 @@ flutter build apk --debug \
 ```
 
 The ignored local artifact is
-`build/app/outputs/flutter-apk/app-debug.apk` (94,843,852 bytes; about 90.45 MiB), package
+`build/app/outputs/flutter-apk/app-debug.apk` (94,844,367 bytes; about 90.45 MiB), package
 `vn.akaiunsan.ak_attendance_mobile`, version `0.1.0+1`, minSdk 21, targetSdk 34,
-SHA-256 `1ba7f5ba67af1f4ebf2e9652dc5ddc46119a3f396f3deb95b2562fa90057d6f3`.
+SHA-256 `dc38296149ce67c204088fb2f95daec4cb010ff89fa45611c2ae5bc6eb7c1d7d`.
 It is signed only with the Android debug certificate and is for controlled
 device testing, not distribution.
 
@@ -63,11 +63,10 @@ tunnel profile active, testers can download the current build from
 `https://akaios.prismate.vn/downloads/akaios-attendance-debug.apk`; the local
 tunnel origin is `http://127.0.0.1:8081/downloads/akaios-attendance-debug.apk`.
 
-The public host currently serves the application but still routes the mobile
-prefix through the old web rewrite, producing backend path
-`/v1/attendance/v1/...` and HTTP 404. Update the HPC to a reviewed release that
-contains the committed Caddy prefix handling before testing Login against this
-APK; the unauthenticated `my-today` smoke request should then return 401, not 404.
+The public Caddy route serves the APK with `application/vnd.android.package-archive`
+and routes the mobile API prefix directly to the attendance backend. Verify the
+published content length and SHA-256 after every rebuild so field devices do not
+reuse an older debug artifact.
 
 ## Brand and loading
 
