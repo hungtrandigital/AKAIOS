@@ -8,7 +8,7 @@
 //   - 1 Junior BO (Nguyễn Trang Junior BO)
 //   - 3 Senior Supervisors (tên VN thật) — 1 cho mỗi dự án flagship
 //   - 5 Demo Employees (NV-DEMO-01..05) — each receives an open UAT schedule
-//     on today plus 13 following Mon-Sat working dates.
+//     for every calendar date in the current Vietnam month.
 //
 // All passwords are simple + memorable for showcase (NHƯNG KHÔNG dùng production).
 
@@ -19,7 +19,6 @@ const prisma = new PrismaClient()
 const AK_TENANT_ID = 'c0ffee00-0000-4000-8000-000000000001'
 
 const DEMO_PASSWORD = 'Demo@2026' // Uniform password for ALL demo accounts
-const UAT_SCHEDULE_DAYS = 14
 const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000
 
 const DEMO_EMPLOYEE_SCHEDULES = [
@@ -39,28 +38,29 @@ function assertDemoSeedAllowed(): void {
 function currentVietnamDateOnly(): Date {
   const vietnamNow = new Date(Date.now() + VIETNAM_UTC_OFFSET_MS)
   return new Date(Date.UTC(
-    vietnamNow.getUTCFullYear(),
-    vietnamNow.getUTCMonth(),
-    vietnamNow.getUTCDate(),
+    vietnamNow.getUTCFullYear(), vietnamNow.getUTCMonth(), vietnamNow.getUTCDate(),
   ))
 }
 
-function uatScheduleDates(start: Date, count: number): Date[] {
+function currentVietnamMonthDates(): Date[] {
+  const vietnamNow = currentVietnamDateOnly()
+  const monthStart = new Date(Date.UTC(
+    vietnamNow.getUTCFullYear(), vietnamNow.getUTCMonth(), 1,
+  ))
+  const nextMonthStart = new Date(Date.UTC(
+    vietnamNow.getUTCFullYear(), vietnamNow.getUTCMonth() + 1, 1,
+  ))
   const dates: Date[] = []
-  const candidate = new Date(start)
-  while (dates.length < count) {
-    // Always include the requested start date so a Sunday deployment can still
-    // be exercised immediately; subsequent Sundays follow the Mon-Sat calendar.
-    if (dates.length === 0 || candidate.getUTCDay() !== 0) {
-      dates.push(new Date(candidate))
-    }
+  const candidate = new Date(monthStart)
+  while (candidate < nextMonthStart) {
+    dates.push(new Date(candidate))
     candidate.setUTCDate(candidate.getUTCDate() + 1)
   }
   return dates
 }
 
 async function seedEmployeeUatSchedules(assignedById: string): Promise<number> {
-  const dates = uatScheduleDates(currentVietnamDateOnly(), UAT_SCHEDULE_DAYS)
+  const dates = currentVietnamMonthDates()
   let created = 0
 
   for (const schedule of DEMO_EMPLOYEE_SCHEDULES) {
@@ -117,7 +117,7 @@ async function seedEmployeeUatSchedules(assignedById: string): Promise<number> {
     }
   }
 
-  console.log(`Created ${created} missing open UAT assignments for today plus 13 following Mon-Sat dates`)
+  console.log(`Created ${created} missing open UAT assignments across all ${dates.length} dates in the current Vietnam month`)
   return created
 }
 
