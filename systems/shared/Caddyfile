@@ -10,6 +10,20 @@ http://{$CADDY_STORAGE_HOST:storage.localhost} {
 
 # Application origin (HTTP only; Cloudflare owns public TLS).
 :80 {
+	# Controlled UAT download. Local/Windows compose profiles mount the ignored
+	# Flutter build output at /srv/apk; production returns 404 when it is absent.
+	handle /downloads/akaios-attendance-debug.apk {
+		root * /srv/apk
+		rewrite * /app-debug.apk
+		header {
+			Cache-Control "no-store"
+			Content-Disposition "attachment; filename=akaios-attendance-debug.apk"
+			Content-Type "application/vnd.android.package-archive"
+			X-Content-Type-Options "nosniff"
+		}
+		file_server
+	}
+
 	# Mobile clients use /api/attendance/v1/* as a stable public prefix. Strip
 	# only /api/attendance so Fastify receives its canonical /v1/* route.
 	# Web-admin aliases such as /api/attendance/auth/* intentionally fall

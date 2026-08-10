@@ -82,6 +82,7 @@ services:
       - "8080:80"
     volumes: !override
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../attendance/mobile/build/app/outputs/flutter-apk:/srv/apk:ro
       - caddy_data_local:/data
       - caddy_config_local:/config
 

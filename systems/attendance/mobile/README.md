@@ -42,7 +42,7 @@ The CI `Flutter mobile` job repeats these checks and builds an Android debug APK
 
 ### Latest Android UAT artifact
 
-On 2026-08-09, the current worktree built and launched on a Google APIs Android
+On 2026-08-10, the current worktree built and launched on a Google APIs Android
 emulator using:
 
 ```bash
@@ -51,11 +51,17 @@ flutter build apk --debug \
 ```
 
 The ignored local artifact is
-`build/app/outputs/flutter-apk/app-debug.apk` (114,236,964 bytes; about 109 MiB), package
+`build/app/outputs/flutter-apk/app-debug.apk` (94,843,852 bytes; about 90.45 MiB), package
 `vn.akaiunsan.ak_attendance_mobile`, version `0.1.0+1`, minSdk 21, targetSdk 34,
-SHA-256 `33a9a8fb2cf64493702db647138f94b4baa1b8e97a2b1b8c71c2e527b5ca4b55`.
+SHA-256 `1ba7f5ba67af1f4ebf2e9652dc5ddc46119a3f396f3deb95b2562fa90057d6f3`.
 It is signed only with the Android debug certificate and is for controlled
 device testing, not distribution.
+
+The local/UAT Caddy profiles expose that ignored build output read-only at
+`/downloads/akaios-attendance-debug.apk` with `no-store` caching. With the
+tunnel profile active, testers can download the current build from
+`https://akaios.prismate.vn/downloads/akaios-attendance-debug.apk`; the local
+tunnel origin is `http://127.0.0.1:8081/downloads/akaios-attendance-debug.apk`.
 
 The public host currently serves the application but still routes the mobile
 prefix through the old web rewrite, producing backend path
