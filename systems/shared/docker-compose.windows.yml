@@ -40,6 +40,7 @@ services:
       - "127.0.0.1:80:80"
     volumes: !override
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../attendance/mobile/build/app/outputs/flutter-apk:/srv/apk:ro
       - akaios-caddy-data:/data
       - akaios-caddy-config:/config
 
