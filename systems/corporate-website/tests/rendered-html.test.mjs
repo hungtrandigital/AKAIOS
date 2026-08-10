@@ -135,8 +135,20 @@ test("ships the corporate homepage instead of the starter preview", async () => 
   );
 });
 
-test("keeps persistence and hosting capabilities explicit", async () => {
-  const [hosting, schema, migration, packageJson, nextConfig, worker, dockerfile, runtimeConfig] = await Promise.all([
+test("keeps production runtime, persistence, and recovery explicit", async () => {
+  const [
+    hosting,
+    schema,
+    migration,
+    packageJson,
+    nextConfig,
+    worker,
+    dockerfile,
+    runtimeConfig,
+    productionServer,
+    healthcheck,
+    compose,
+  ] = await Promise.all([
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(
@@ -148,6 +160,9 @@ test("keeps persistence and hosting capabilities explicit", async () => {
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../Dockerfile", import.meta.url), "utf8"),
     readFile(new URL("../wrangler.runtime.jsonc", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/production-server.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/docker-healthcheck.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../docker-compose.local.yml", import.meta.url), "utf8"),
   ]);
   assert.match(hosting, /"d1": "DB"/);
   assert.match(hosting, /"r2": "MEDIA"/);
@@ -162,8 +177,17 @@ test("keeps persistence and hosting capabilities explicit", async () => {
   assert.match(nextConfig, /images:\s*\{\s*unoptimized:\s*true/);
   assert.match(worker, /if \(!assets \|\| !images\)/);
   assert.match(worker, /Response\.redirect\(target\.toString\(\), 307\)/);
-  assert.match(dockerfile, /npx wrangler dev --config wrangler\.runtime\.jsonc/);
-  assert.doesNotMatch(dockerfile, /npm run dev/);
+  assert.match(dockerfile, /exec node scripts\/production-server\.mjs/);
+  assert.match(dockerfile, /scripts\/docker-healthcheck\.mjs/);
+  assert.doesNotMatch(dockerfile, /wrangler dev|npm run dev/);
+  assert.match(packageJson, /"start": "node scripts\/production-server\.mjs"/);
+  assert.match(productionServer, /new Miniflare/);
+  assert.match(productionServer, /d1Persist: path\.join\(stateRoot, "d1"\)/);
+  assert.match(productionServer, /r2Persist: path\.join\(stateRoot, "r2"\)/);
+  assert.match(healthcheck, /HEALTHCHECK_RESTART_AFTER/);
+  assert.match(healthcheck, /process\.kill\(1, "SIGTERM"\)/);
+  assert.match(compose, /restart: unless-stopped/);
+  assert.match(compose, /HEALTHCHECK_RESTART_AFTER: \$\{HEALTHCHECK_RESTART_AFTER:-5\}/);
   assert.match(runtimeConfig, /"main": "dist\/server\/index\.js"/);
   assert.match(runtimeConfig, /"directory": "dist\/client"/);
 });
