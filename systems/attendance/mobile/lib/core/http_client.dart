@@ -11,9 +11,13 @@ class ApiException implements Exception {
   final String code;
   final String message;
   final int statusCode;
+  final Map<String, dynamic>? details;
 
   ApiException(
-      {required this.code, required this.message, required this.statusCode});
+      {required this.code,
+      required this.message,
+      required this.statusCode,
+      this.details});
 
   @override
   String toString() => '$code: $message';
@@ -78,6 +82,9 @@ class HttpClient {
               code: e['code'] as String? ?? 'UNKNOWN',
               message: e['message'] as String? ?? 'Unknown error',
               statusCode: status,
+              details: e['details'] is Map
+                  ? Map<String, dynamic>.from(e['details'] as Map)
+                  : null,
             ),
           ));
           return;

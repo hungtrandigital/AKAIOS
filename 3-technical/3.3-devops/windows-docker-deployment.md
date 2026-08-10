@@ -271,8 +271,8 @@ not persist the flag in `.env` and never use it for production or pilot data.
 | `NV-UAT-CL-03` | `+84900000203` | `Demo@2026` | `UAT-CAT-LAI` / Ca hành chính |
 
 For an onsite Android walkthrough at 33 Phan Bá Vành, start with
-`NV-UAT-CL-01`. The dedicated project uses coordinates `10.7676806,
-106.6884969` and a controlled-UAT 250 m geofence. Password login does not need
+`NV-UAT-CL-01`. The dedicated project uses coordinates `10.7727537,
+106.7572902` and a controlled-UAT 250 m geofence. Password login does not need
 admin TOTP. GPS still must be inside the assigned project geofence and photos
 must come from the live camera. Do not weaken geofence or camera checks to make
 UAT pass.

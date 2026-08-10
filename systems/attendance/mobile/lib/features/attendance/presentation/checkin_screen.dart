@@ -100,6 +100,37 @@ bool hasRecordedAttendanceEvent(
       : assignment.checkInAt != null;
 }
 
+String friendlyAttendanceError(ApiException error) {
+  if (error.statusCode == 403 || error.statusCode == 404) {
+    return 'Ca này không còn hợp lệ cho tài khoản. Cô/chú quay lại và nhờ giám sát kiểm tra.';
+  }
+  if (error.statusCode == 422) {
+    final distance = _detailNumber(error.details, 'distanceMeters');
+    final allowed = _detailNumber(error.details, 'allowedRadiusMeters');
+    if (distance != null && allowed != null) {
+      return 'Điện thoại đang báo cách điểm làm việc khoảng '
+          '${_formatDistance(distance)}. Cần ở trong phạm vi '
+          '${allowed.round()} m. Cô/chú bật “Vị trí chính xác”, '
+          'đứng gần cửa hoặc sân thoáng, rồi bấm lấy lại vị trí.';
+    }
+    return 'Vị trí hoặc dữ liệu chấm công chưa hợp lệ. Cô/chú kiểm tra lại từng bước.';
+  }
+  return 'Hệ thống chưa ghi nhận chấm công. Cô/chú vui lòng thử lại hoặc nhờ giám sát hỗ trợ.';
+}
+
+double? _detailNumber(Map<String, dynamic>? details, String key) {
+  final value = details?[key];
+  if (value is num) return value.toDouble();
+  return value is String ? double.tryParse(value) : null;
+}
+
+String _formatDistance(double meters) {
+  if (meters >= 1000) {
+    return '${(meters / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+  }
+  return '${meters.round()} m';
+}
+
 class CheckScreen extends ConsumerStatefulWidget {
   const CheckScreen({
     super.key,
@@ -435,7 +466,7 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
       } else if (mounted) {
         setState(() {
           _flow = CaptureFlowState.failure;
-          _message = _friendlyAttendanceError(error);
+          _message = friendlyAttendanceError(error);
         });
       }
     } on FormatException {
@@ -562,16 +593,6 @@ class _CheckScreenState extends ConsumerState<CheckScreen> {
     } else {
       context.go('/today');
     }
-  }
-
-  String _friendlyAttendanceError(ApiException error) {
-    if (error.statusCode == 403 || error.statusCode == 404) {
-      return 'Ca này không còn hợp lệ cho tài khoản. Cô/chú quay lại và nhờ giám sát kiểm tra.';
-    }
-    if (error.statusCode == 422) {
-      return 'Vị trí hoặc dữ liệu chấm công chưa hợp lệ. Cô/chú kiểm tra lại từng bước.';
-    }
-    return 'Hệ thống chưa ghi nhận chấm công. Cô/chú vui lòng thử lại hoặc nhờ giám sát hỗ trợ.';
   }
 
   Future<void> _deletePhoto(XFile? photo) async {

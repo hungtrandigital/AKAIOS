@@ -27,8 +27,8 @@ const CAT_LAI_UAT_PROJECT = {
   name: 'UAT - 33 Phan Bá Vành',
   clientName: 'AKAIUNSAN UAT',
   address: '33 Phan Bá Vành, Phường Cát Lái, TP. Hồ Chí Minh',
-  latitude: 10.7676806,
-  longitude: 106.6884969,
+  latitude: 10.7727537,
+  longitude: 106.7572902,
   geofenceRadiusMeters: 250,
 } as const
 
