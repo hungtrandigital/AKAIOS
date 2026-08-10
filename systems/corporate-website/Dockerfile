@@ -22,6 +22,6 @@ COPY --from=build /app ./
 
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
-  CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD ["node", "scripts/docker-healthcheck.mjs"]
 
-CMD ["sh", "-c", "npm run db:bootstrap && npm run db:demo && exec npx wrangler dev --config wrangler.runtime.jsonc --local --ip 0.0.0.0 --port 3000 --persist-to .wrangler/state --var \"ADMIN_PREVIEW_PASSWORD:$ADMIN_PREVIEW_PASSWORD\" --show-interactive-dev-session false"]
+CMD ["sh", "-c", "npm run db:bootstrap && npm run db:demo && exec node scripts/production-server.mjs"]

@@ -187,7 +187,9 @@ Build the production bundle, then start the Cloudflare-compatible local runtime 
 docker compose -f docker-compose.local.yml up -d --build
 ```
 
-The container applies D1 migrations and the idempotent local demo seed before startup. D1 and R2 local state is stored in the dedicated `akaiunsan-corporate-local-state` volume, separate from every AKAIOS service and volume.
+The container applies D1 migrations and the idempotent local demo seed before startup. It then serves the built Worker bundle directly with `workerd` through Miniflare's programmatic API; production does not run Vite, HMR, or `wrangler dev`. D1 and R2 local state remains under `.wrangler/state/v3` in the dedicated `akaiunsan-corporate-local-state` volume, separate from every AKAIOS service and volume.
+
+Docker probes the homepage every 15 seconds. After five consecutive failures, the healthcheck terminates PID 1 and the `unless-stopped` policy restarts the container. Set `HEALTHCHECK_RESTART_AFTER` to a positive integer only when an environment needs a different failure threshold; invalid values safely fall back to five.
 
 Check status and logs:
 

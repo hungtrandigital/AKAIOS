@@ -13,6 +13,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      HEALTHCHECK_RESTART_AFTER: ${HEALTHCHECK_RESTART_AFTER:-5}
     volumes:
       - corporate-website-state:/app/.wrangler
 
